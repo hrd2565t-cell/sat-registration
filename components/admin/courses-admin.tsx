@@ -4,6 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { CourseEditDialog } from "@/components/admin/course-edit-dialog";
+import {
+  DEFAULT_TARGET_QUOTAS,
+  TARGET_GROUPS,
+  getTargetGroupKey,
+} from "@/lib/courses";
 import { useApplications } from "@/lib/applications-store";
 import {
   updateCourse,
@@ -208,6 +213,23 @@ export function CoursesAdmin() {
             (item) => item.status === "reserve"
           ).length;
 
+          const quotas = course.targetQuotas ?? DEFAULT_TARGET_QUOTAS;
+          const groupStats = TARGET_GROUPS.map((g) => {
+            const groupApps = courseApplications.filter(
+              (a) => getTargetGroupKey(a.affiliation) === g.key
+            );
+            const groupApproved = groupApps.filter(
+              (a) => a.status === "approved"
+            ).length;
+            const target = quotas[g.key] ?? 0;
+            return {
+              ...g,
+              target,
+              applicants: groupApps.length,
+              approved: groupApproved,
+            };
+          });
+
           return (
             <section
               key={course.id}
@@ -288,6 +310,54 @@ export function CoursesAdmin() {
                       {course.seatsLeft ?? 0}
                     </p>
                     <p className="mt-1 text-[9px] text-[#6b7280]">ว่าง</p>
+                  </div>
+                </div>
+
+                {/* สัดส่วน 5 กลุ่มเป้าหมาย (เป้าหมาย vs อนุมัติจริง) */}
+                <div className="mt-2.5 rounded-[6px] border border-[#e2e8f0] bg-[#f8fbff] p-2 text-[10px]">
+                  <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-1 font-semibold text-[#1e3a8a]">
+                    <span className="text-[10.5px]">เป้าหมายสัดส่วน 5 กลุ่ม</span>
+                    <span className="text-[9px] text-[#6b7280]">
+                      ตัวจริง / เป้า (สมัคร)
+                    </span>
+                  </div>
+                  <div className="mt-1.5 space-y-1.5">
+                    {groupStats.map((item) => {
+                      const pct =
+                        item.target > 0
+                          ? Math.min(
+                              100,
+                              Math.round((item.approved / item.target) * 100)
+                            )
+                          : 0;
+                      return (
+                        <div key={item.key} className="space-y-0.5">
+                          <div className="flex items-center justify-between text-[9.5px]">
+                            <span className="max-w-[150px] truncate font-medium text-[#374151]">
+                              {item.label}
+                            </span>
+                            <span className="font-semibold text-[#111827]">
+                              {item.approved}/{item.target} คน{" "}
+                              <span className="font-normal text-[#6b7280]">
+                                ({item.applicants})
+                              </span>
+                            </span>
+                          </div>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#e2e8f0]">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                pct >= 100
+                                  ? "bg-[#10b981]"
+                                  : pct >= 60
+                                    ? "bg-[#3b82f6]"
+                                    : "bg-[#f59e0b]"
+                              }`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 

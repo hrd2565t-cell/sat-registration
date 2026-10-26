@@ -12,7 +12,11 @@ import type { FileItem } from "@/components/ui/file-upload";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { IdCardInput } from "@/components/ui/id-card-input";
-import { getCourseById, getDefaultCourse } from "@/lib/courses";
+import {
+  getCourseById,
+  getDefaultCourse,
+  TARGET_GROUPS,
+} from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
 import {
   checkRegistrationEligibility,
@@ -25,13 +29,6 @@ import {
 import { ConflictDialog } from "@/components/register/conflict-dialog";
 
 const labelClass = "text-[12.5px] font-medium text-[#1f2937]";
-
-const affiliations = [
-  "สมาคมกีฬาแห่งประเทศไทย",
-  "การกีฬาแห่งประเทศไทย",
-  "สมาคมกีฬาจังหวัด",
-  "อื่น ๆ",
-];
 
 import { saveDocumentToStorage } from "@/lib/document-storage";
 
@@ -85,7 +82,12 @@ function RegistrationContent() {
   ];
   const [name, setName] = useState("นาย สมชาย สิงห์");
   const [idCard, setIdCard] = useState("1100912345678");
-  const [affiliation, setAffiliation] = useState(affiliations[0]);
+  const [affiliation, setAffiliation] = useState<string>(
+    TARGET_GROUPS[1].label // "สมาคมกีฬาแห่งประเทศไทย"
+  );
+  const [subAffiliation, setSubAffiliation] = useState(
+    "สมาคมกีฬาว่ายน้ำแห่งประเทศไทย"
+  );
   const [position, setPosition] = useState("ผู้ฝึกสอนชำนาญการ");
   const [phone, setPhone] = useState("080-267-5323");
   const [email, setEmail] = useState("emsak.info@sat.com");
@@ -120,7 +122,15 @@ function RegistrationContent() {
         if (prior.name) setName(prior.name);
         if (prior.phone) setPhone(prior.phone);
         if (prior.email) setEmail(prior.email);
-        if (prior.affiliation) setAffiliation(prior.affiliation);
+        if (prior.affiliation) {
+          const match = prior.affiliation.match(/^(.*?)\s*\((.*?)\)$/);
+          if (match) {
+            setAffiliation(match[1]);
+            setSubAffiliation(match[2]);
+          } else {
+            setAffiliation(prior.affiliation);
+          }
+        }
         if (prior.position) setPosition(prior.position);
         setHasAutofilled(true);
       }
@@ -193,13 +203,17 @@ function RegistrationContent() {
       ...sakaFiles.map((file, index) => toDocument("saka", file, index)),
     ];
 
+    const fullAffiliation = subAffiliation.trim()
+      ? `${affiliation} (${subAffiliation.trim()})`
+      : affiliation;
+
     setSubmitting(true);
     const record = createApplication({
       name,
       idCard,
       email,
       phone,
-      affiliation,
+      affiliation: fullAffiliation,
       position,
       courseId: course.id,
       documents,
@@ -309,7 +323,7 @@ function RegistrationContent() {
 
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="affiliation" className={labelClass}>
-                  3. สังกัด (ชื่อหน่วยงาน / ชื่อสมาคมกีฬา)
+                  3. กลุ่มเป้าหมาย / สังกัดหลัก
                 </label>
                 <div className="relative">
                   <select
@@ -318,9 +332,9 @@ function RegistrationContent() {
                     onChange={(event) => setAffiliation(event.target.value)}
                     className="block h-9 w-full appearance-none rounded-[4px] border border-[#d1d5db] bg-white px-3 pr-8 text-[13px] text-[#1f2937] transition-all focus:border-[#1e3a8a] focus:outline-none focus:ring-2 focus:ring-[#1e3a8a]/20"
                   >
-                    {affiliations.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
+                    {TARGET_GROUPS.map((option) => (
+                      <option key={option.key} value={option.label}>
+                        {option.label}
                       </option>
                     ))}
                   </select>
@@ -338,6 +352,16 @@ function RegistrationContent() {
                     />
                   </svg>
                 </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Input
+                  fullWidth
+                  label="3.1 ระบุชื่อหน่วยงาน / ชื่อสมาคมกีฬา (เฉพาะเจาะจง)"
+                  placeholder="เช่น สมาคมกีฬาว่ายน้ำแห่งประเทศไทย, สมาคมกีฬาแห่งจังหวัดเชียงใหม่, ฝ่ายวิทยาศาสตร์การกีฬา"
+                  value={subAffiliation}
+                  onChange={(event) => setSubAffiliation(event.target.value)}
+                />
               </div>
 
               <Input

@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS public.courses (
     image TEXT NOT NULL,
     image_alt TEXT,
     warning_message TEXT,
+    target_quotas JSONB DEFAULT '{"sat": 10, "nationalAssoc": 15, "provincialAssoc": 15, "nsdf": 5, "external": 5}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );

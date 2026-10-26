@@ -8,7 +8,12 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from "react";
-import type { Course } from "@/lib/courses";
+import {
+  DEFAULT_TARGET_QUOTAS,
+  TARGET_GROUPS,
+  type Course,
+  type TargetGroupQuotas,
+} from "@/lib/courses";
 import { getSeedCourse, type CourseUpdate } from "@/lib/courses-store";
 import {
   ACCEPTED_IMAGE_TYPES,
@@ -67,6 +72,9 @@ export function CourseEditDialog({
   );
   const [warningMessage, setWarningMessage] = useState(
     course.warningMessage ?? ""
+  );
+  const [quotas, setQuotas] = useState<TargetGroupQuotas>(
+    course.targetQuotas ?? { ...DEFAULT_TARGET_QUOTAS }
   );
   const [error, setError] = useState("");
 
@@ -183,6 +191,7 @@ export function CourseEditDialog({
       status,
       seatsLeft: status === "full" ? undefined : remaining,
       warningMessage: trimmedWarning || undefined,
+      targetQuotas: quotas,
       ...(image !== course.image ? { image } : {}),
     });
     if (typeof result === "string") setError(result);
@@ -423,6 +432,62 @@ export function CourseEditDialog({
                   }}
                   className={fieldClass}
                 />
+              </div>
+            </div>
+
+            {/* เป้าหมายสัดส่วนกลุ่มเป้าหมาย (5 กลุ่ม) */}
+            <div className="rounded-[7px] border border-[#dbe4ef] bg-[#f8fbff] p-3 text-[12px]">
+              <div className="flex flex-wrap items-center justify-between gap-1 border-b border-[#e2e8f0] pb-2">
+                <div>
+                  <h3 className="font-semibold text-[#1e3a8a] text-[12.5px]">
+                    เป้าหมายเชิงสัดส่วน 5 กลุ่มเป้าหมาย (คน)
+                  </h3>
+                  <p className="text-[10px] text-[#6b7280]">
+                    กำหนดเป้าหมายเพื่อช่วยมองเห็นภาพรวมและกำกับสัดส่วนการอนุมัติตัวจริง
+                  </p>
+                </div>
+                <span className="rounded bg-[#dbeafe] px-2 py-0.5 text-[11px] font-bold text-[#1e40af]">
+                  รวมเป้าหมาย:{" "}
+                  {quotas.sat +
+                    quotas.nationalAssoc +
+                    quotas.provincialAssoc +
+                    quotas.nsdf +
+                    quotas.external}{" "}
+                  คน
+                </span>
+              </div>
+
+              <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {TARGET_GROUPS.map((group) => (
+                  <div
+                    key={group.key}
+                    className="flex items-center justify-between gap-2 rounded bg-white px-2.5 py-1.5 border border-[#e5e7eb]"
+                  >
+                    <label
+                      htmlFor={`quota-${group.key}`}
+                      className="text-[11px] font-medium text-[#374151]"
+                    >
+                      {group.label}
+                    </label>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <input
+                        id={`quota-${group.key}`}
+                        type="number"
+                        min={0}
+                        value={quotas[group.key]}
+                        onChange={(e) => {
+                          const val = Math.max(
+                            0,
+                            parseInt(e.target.value, 10) || 0
+                          );
+                          setQuotas((prev) => ({ ...prev, [group.key]: val }));
+                        }}
+                        className="h-7 w-16 rounded border border-[#d1d5db] bg-white text-center text-[12px] font-semibold text-[#111827] outline-none focus:border-[#1e3a8a]"
+                      />
+                      <span className="text-[10px] text-[#6b7280]">คน</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 

@@ -76,6 +76,7 @@ function mergeStoredCourses(stored: Course[]) {
       imageAlt: seed.imageAlt,
       shortTitle:
         saved.shortTitle !== undefined ? saved.shortTitle : seed.shortTitle,
+      targetQuotas: saved.targetQuotas ?? seed.targetQuotas,
       status: saved.status === "full" ? "full" : "open",
     };
   });
@@ -110,6 +111,9 @@ function hydrate() {
                 image: c.image,
                 imageAlt: c.image_alt || `${c.title} - รูปประกอบ`,
                 warningMessage: c.warning_message || undefined,
+                targetQuotas:
+                  (c as { target_quotas?: import("@/lib/courses").TargetGroupQuotas })
+                    .target_quotas || undefined,
               }));
               state = {
                 courses: cloudCourses,
@@ -169,6 +173,9 @@ function hydrate() {
             image: c.image,
             imageAlt: c.image_alt || `${c.title} - รูปประกอบ`,
             warningMessage: c.warning_message || undefined,
+            targetQuotas:
+              (c as { target_quotas?: import("@/lib/courses").TargetGroupQuotas })
+                .target_quotas || undefined,
           }));
           state = {
             courses: cloudCourses,
@@ -222,6 +229,7 @@ export type CourseUpdate = Partial<
     | "seats"
     | "warningMessage"
     | "image"
+    | "targetQuotas"
   >
 >;
 
@@ -257,6 +265,10 @@ export function updateCourse(
         patch.shortTitle !== undefined
           ? patch.shortTitle.trim() || undefined
           : course.shortTitle,
+      targetQuotas:
+        patch.targetQuotas !== undefined
+          ? patch.targetQuotas
+          : course.targetQuotas,
       seatsLeft:
         patch.status === "full"
           ? undefined
@@ -299,6 +311,7 @@ export function updateCourse(
         status: updated.status,
         image: updated.image,
         warning_message: updated.warningMessage ?? null,
+        target_quotas: (updated.targetQuotas as unknown as import("@/lib/supabase/types").Json) ?? null,
       })
       .eq("id", id)
       .then();

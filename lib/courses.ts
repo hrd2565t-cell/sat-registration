@@ -1,3 +1,29 @@
+export interface TargetGroupQuotas {
+  sat: number; // การกีฬาแห่งประเทศไทย
+  nationalAssoc: number; // สมาคมกีฬาแห่งประเทศไทย
+  provincialAssoc: number; // สมาคมกีฬาแห่งจังหวัด
+  nsdf: number; // กองทุนพัฒนาการกีฬาแห่งชาติ
+  external: number; // หน่วยงานภายนอก
+}
+
+export const TARGET_GROUPS = [
+  { key: "sat", label: "การกีฬาแห่งประเทศไทย" },
+  { key: "nationalAssoc", label: "สมาคมกีฬาแห่งประเทศไทย" },
+  { key: "provincialAssoc", label: "สมาคมกีฬาแห่งจังหวัด" },
+  { key: "nsdf", label: "กองทุนพัฒนาการกีฬาแห่งชาติ" },
+  { key: "external", label: "หน่วยงานภายนอก / บุคคลทั่วไป" },
+] as const;
+
+export type TargetGroupKey = (typeof TARGET_GROUPS)[number]["key"];
+
+export const DEFAULT_TARGET_QUOTAS: TargetGroupQuotas = {
+  sat: 10,
+  nationalAssoc: 15,
+  provincialAssoc: 15,
+  nsdf: 5,
+  external: 5,
+};
+
 export interface Course {
   id: number;
   image: string;
@@ -11,6 +37,7 @@ export interface Course {
   location: string;
   seats: string;
   warningMessage?: string;
+  targetQuotas?: TargetGroupQuotas;
 }
 
 export const DEFAULT_COURSE_ID = 2;
@@ -29,6 +56,7 @@ export const courses: Course[] = [
     location: "สนามกีฬาสถาบันการกีฬาแห่งชาติ กทม.",
     seats: "จำนวนที่นั่ง 50 คน",
     warningMessage: "ต้องมีใบประกอบวิชาชีพในระดับสากล",
+    targetQuotas: { ...DEFAULT_TARGET_QUOTAS },
   },
   {
     id: 2,
@@ -43,6 +71,7 @@ export const courses: Course[] = [
     location: "สนามกีฬาสถาบันการกีฬาแห่งชาติ กทม.",
     seats: "จำนวนที่นั่ง 50 คน",
     warningMessage: "ยังมีข้อมูลผู้ฝึกสอนไม่ครบถ้วน",
+    targetQuotas: { ...DEFAULT_TARGET_QUOTAS },
   },
   {
     id: 3,
@@ -56,6 +85,7 @@ export const courses: Course[] = [
     date: "1-5 ส.ค. 2569",
     location: "สนามกีฬาสถาบันการกีฬาแห่งชาติ กทม.",
     seats: "จำนวนที่นั่ง 50 คน",
+    targetQuotas: { ...DEFAULT_TARGET_QUOTAS },
   },
   {
     id: 4,
@@ -70,6 +100,7 @@ export const courses: Course[] = [
     location: "สนามกีฬาสถาบันการกีฬาแห่งชาติ กทม.",
     seats: "จำนวนที่นั่ง 50 คน",
     warningMessage: "มีคุณสมบัติเฉพาะสำหรับผู้ฝึกสอน",
+    targetQuotas: { ...DEFAULT_TARGET_QUOTAS },
   },
   {
     id: 5,
@@ -84,6 +115,7 @@ export const courses: Course[] = [
     location: "สนามกีฬาสถาบันการกีฬาแห่งชาติ กทม.",
     seats: "จำนวนที่นั่ง 50 คน",
     warningMessage: "มีคุณสมบัติเฉพาะสำหรับผู้ฝึกสอน",
+    targetQuotas: { ...DEFAULT_TARGET_QUOTAS },
   },
 ];
 
@@ -239,5 +271,30 @@ export function isCourseDateOverlapping(
   if (!r1 || !r2) return false;
   return r1.start <= r2.end && r1.end >= r2.start;
 }
+
+/**
+ * ระบุ TargetGroupKey จากข้อความสังกัดของผู้สมัคร
+ */
+export function getTargetGroupKey(
+  affiliation: string | undefined | null
+): TargetGroupKey {
+  if (!affiliation) return "external";
+  if (affiliation.includes("กองทุน")) return "nsdf";
+  if (
+    affiliation.includes("สมาคมกีฬาแห่งจังหวัด") ||
+    affiliation.includes("สมาคมกีฬาจังหวัด")
+  ) {
+    return "provincialAssoc";
+  }
+  if (affiliation.includes("สมาคมกีฬาแห่งประเทศไทย")) return "nationalAssoc";
+  if (
+    affiliation.includes("การกีฬาแห่งประเทศไทย") ||
+    affiliation.includes("กกท")
+  ) {
+    return "sat";
+  }
+  return "external";
+}
+
 
 
