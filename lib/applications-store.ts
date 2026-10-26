@@ -9,7 +9,7 @@ import {
   type ApplicantStatus,
 } from "@/lib/admin-data";
 import { courses } from "@/lib/courses";
-import { getCoursesSnapshot } from "@/lib/courses-store";
+import { getCoursesSnapshot, syncCourseSeatsWithApprovedCounts } from "@/lib/courses-store";
 import { MOCK_ID_CARD } from "@/lib/registration";
 import {
   isSupabaseConfigured,
@@ -40,7 +40,7 @@ export interface ReviewNote {
   id: string;
   at: string;
   author: string;
-  kind: "created" | "note" | "approved" | "rejected";
+  kind: "created" | "note" | "approved" | "rejected" | "reserve";
   text: string;
 }
 
@@ -63,6 +63,7 @@ export interface ApplicantRecord {
   documents: ApplicantDocument[];
   ai: AiVerdict;
   status: ApplicantStatus;
+  reserveOrder?: number;
   reviewReason?: string;
   reviewedAt?: string;
   reviewedBy?: string;
@@ -203,7 +204,8 @@ function buildNotes(
   index: number,
   status: ApplicantStatus,
   submittedAt: string,
-  ai: AiVerdict
+  ai: AiVerdict,
+  reserveOrder?: number
 ): ReviewNote[] {
   const notes: ReviewNote[] = [
     {
@@ -216,17 +218,21 @@ function buildNotes(
   ];
 
   if (status !== "pending") {
+    const text =
+      status === "approved"
+        ? "ตรวจสอบคุณสมบัติและเอกสารครบถ้วน อนุมัติเข้ารับการอบรม (ตัวจริง)"
+        : status === "reserve"
+          ? `ผ่านการตรวจสอบคุณสมบัติ จัดให้อยู่ในบัญชีรายชื่อสำรอง ลำดับที่ ${reserveOrder ?? 1}`
+          : `ไม่ผ่านการตรวจสอบ: ${
+              ai.line2 || AI_FAIL_REASONS[index % AI_FAIL_REASONS.length]
+            }`;
+
     notes.push({
       id: `${index}-review`,
       at: new Date(Date.parse(submittedAt) + DAY).toISOString(),
       author: SEED_REVIEWER,
-      kind: status === "approved" ? "approved" : "rejected",
-      text:
-        status === "approved"
-          ? "ตรวจสอบคุณสมบัติและเอกสารครบถ้วน อนุมัติเข้ารับการอบรม"
-          : `ไม่ผ่านการตรวจสอบ: ${
-              ai.line2 || AI_FAIL_REASONS[index % AI_FAIL_REASONS.length]
-            }`,
+      kind: status,
+      text,
     });
   }
 
@@ -312,8 +318,9 @@ function buildSeedApplications(): ApplicantRecord[] {
   });
 
   const extraStatuses: ApplicantStatus[] = [
-    ...(Array(25).fill("pending") as ApplicantStatus[]),
-    ...(Array(115).fill("approved") as ApplicantStatus[]),
+    ...(Array(20).fill("pending") as ApplicantStatus[]),
+    ...(Array(108).fill("approved") as ApplicantStatus[]),
+    ...(Array(12).fill("reserve") as ApplicantStatus[]),
     ...(Array(3).fill("rejected") as ApplicantStatus[]),
   ];
 
@@ -327,7 +334,11 @@ function buildSeedApplications(): ApplicantRecord[] {
     const ai = buildExtraAi(index, status);
     const hasFiles = status !== "rejected" && index % 9 !== 4;
     const documents = buildDocuments(index, courseId, hasFiles, status === "rejected");
-    const notes = buildNotes(index, status, submittedAt, ai);
+    const reserveOrder =
+      status === "reserve"
+        ? records.filter((r) => r.courseId === courseId && r.status === "reserve").length + 1
+        : undefined;
+    const notes = buildNotes(index, status, submittedAt, ai, reserveOrder);
     const ref = buildRef(index);
 
     records.push({
@@ -349,6 +360,7 @@ function buildSeedApplications(): ApplicantRecord[] {
       documents,
       ai,
       status,
+      reserveOrder,
       reviewReason: status === "rejected" ? ai.line2 : undefined,
       reviewedAt: status === "pending" ? undefined : notes.at(-1)?.at,
       reviewedBy: status === "pending" ? undefined : SEED_REVIEWER,
@@ -394,6 +406,16 @@ function persist() {
   }
 }
 
+export function syncCourseSeats() {
+  const counts: Record<number, number> = {};
+  for (const app of state.applications) {
+    if (app.status === "approved") {
+      counts[app.courseId] = (counts[app.courseId] || 0) + 1;
+    }
+  }
+  syncCourseSeatsWithApprovedCounts(counts);
+}
+
 function hydrate() {
   if (hydrateStarted || typeof window === "undefined") return;
   hydrateStarted = true;
@@ -401,6 +423,7 @@ function hydrate() {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) {
+      syncCourseSeats();
       return;
     }
     const parsed = JSON.parse(raw) as Partial<ApplicationsState>;
@@ -423,6 +446,7 @@ function hydrate() {
   }
 
   emit();
+  syncCourseSeats();
 
   if (isSupabaseConfigured()) {
     fetchApplicationsFromSupabase().then((cloudApps) => {
@@ -433,6 +457,7 @@ function hydrate() {
         };
         persist();
         emit();
+        syncCourseSeats();
       }
     });
   }
@@ -538,6 +563,7 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
   };
   persist();
   emit();
+  syncCourseSeats();
 
   if (isSupabaseConfigured()) {
     syncApplicationToSupabase(record);
@@ -550,7 +576,8 @@ export function reviewApplication(
   ref: string,
   status: Exclude<ApplicantStatus, "pending">,
   reason: string,
-  reviewer: string = SEED_REVIEWER
+  reviewer: string = SEED_REVIEWER,
+  customReserveOrder?: number
 ) {
   const now = new Date().toISOString();
 
@@ -558,14 +585,29 @@ export function reviewApplication(
     applications: state.applications.map((item) => {
       if (item.ref !== ref) return item;
 
+      let reserveOrder = item.reserveOrder;
+      if (status === "reserve") {
+        const courseReserves = state.applications.filter(
+          (a) => a.courseId === item.courseId && a.status === "reserve" && a.ref !== ref
+        );
+        reserveOrder =
+          customReserveOrder ??
+          (Math.max(0, ...courseReserves.map((a) => a.reserveOrder ?? 0)) + 1);
+      } else {
+        reserveOrder = undefined;
+      }
+
       const noteText =
         status === "approved"
-          ? reason.trim() || "อนุมัติคุณสมบัติและเอกสารครบถ้วน"
-          : reason.trim() || "ไม่ผ่านการตรวจสอบคุณสมบัติ";
+          ? reason.trim() || "อนุมัติคุณสมบัติและเอกสารครบถ้วน (ตัวจริง)"
+          : status === "reserve"
+            ? reason.trim() || `ผ่านการตรวจสอบคุณสมบัติ จัดให้อยู่ในบัญชีรายชื่อสำรอง ลำดับที่ ${reserveOrder}`
+            : reason.trim() || "ไม่ผ่านการตรวจสอบคุณสมบัติ";
 
       return {
         ...item,
         status,
+        reserveOrder,
         reviewReason: status === "rejected" ? noteText : undefined,
         reviewedAt: now,
         reviewedBy: reviewer,
@@ -586,13 +628,79 @@ export function reviewApplication(
   };
   persist();
   emit();
+  syncCourseSeats();
 
   if (isSupabaseConfigured()) {
     const noteText =
       status === "approved"
         ? reason.trim() || "อนุมัติคุณสมบัติและเอกสารครบถ้วน"
-        : reason.trim() || "ไม่ผ่านการตรวจสอบคุณสมบัติ";
+        : status === "reserve"
+          ? reason.trim() || "ผ่านการตรวจสอบคุณสมบัติ (บัญชีสำรอง)"
+          : reason.trim() || "ไม่ผ่านการตรวจสอบคุณสมบัติ";
     syncReviewToSupabase(ref, status, noteText, reviewer, now);
+  }
+}
+
+export function promoteReserveToApproved(
+  ref: string,
+  reviewer: string = SEED_REVIEWER
+) {
+  const now = new Date().toISOString();
+  const target = state.applications.find((item) => item.ref === ref);
+  if (!target) return;
+
+  const formerOrder = target.reserveOrder ?? 1;
+
+  state = {
+    applications: state.applications.map((item) => {
+      if (item.ref === ref) {
+        return {
+          ...item,
+          status: "approved" as const,
+          reserveOrder: undefined,
+          reviewedAt: now,
+          reviewedBy: reviewer,
+          updatedAt: now,
+          notes: [
+            ...item.notes,
+            {
+              id: `${ref}-promoted-${Date.now()}`,
+              at: now,
+              author: reviewer,
+              kind: "approved" as const,
+              text: `เลื่อนลำดับจากรายชื่อสำรอง (เดิมลำดับที่ ${formerOrder}) เป็นผู้มีสิทธิ์เข้ารับการอบรมตัวจริง`,
+            },
+          ],
+        };
+      }
+      if (
+        item.courseId === target.courseId &&
+        item.status === "reserve" &&
+        item.reserveOrder &&
+        item.reserveOrder > formerOrder
+      ) {
+        return {
+          ...item,
+          reserveOrder: item.reserveOrder - 1,
+          updatedAt: now,
+        };
+      }
+      return item;
+    }),
+    revision: state.revision + 1,
+  };
+  persist();
+  emit();
+  syncCourseSeats();
+
+  if (isSupabaseConfigured()) {
+    syncReviewToSupabase(
+      ref,
+      "approved",
+      `เลื่อนลำดับจากรายชื่อสำรอง (เดิมลำดับที่ ${formerOrder}) เป็นตัวจริง`,
+      reviewer,
+      now
+    );
   }
 }
 
@@ -657,6 +765,7 @@ export function resetDemoData() {
     }
   }
   emit();
+  syncCourseSeats();
 }
 
 export function getApplicationByIdCard(

@@ -1,4 +1,4 @@
-export type ApplicantStatus = "pending" | "approved" | "rejected";
+export type ApplicantStatus = "pending" | "approved" | "rejected" | "reserve";
 
 export type AiTone = "pass" | "fail" | "review";
 
@@ -17,6 +17,7 @@ export interface AdminApplicant {
   fileSize: number | null;
   ai: AiVerdict;
   status: ApplicantStatus;
+  reserveOrder?: number;
 }
 
 export const adminUser = {
@@ -217,9 +218,8 @@ export const adminApplicants: AdminApplicant[] = [
 ];
 
 export function statusLabel(status: ApplicantStatus) {
-  return status === "approved"
-    ? "อนุมัติแล้ว"
-    : status === "rejected"
-      ? "ไม่ผ่านอนุมัติ"
-      : "รอตรวจสอบ";
+  if (status === "approved") return "อนุมัติแล้ว";
+  if (status === "reserve") return "บัญชีสำรอง";
+  if (status === "rejected") return "ไม่ผ่านอนุมัติ";
+  return "รอตรวจสอบ";
 }

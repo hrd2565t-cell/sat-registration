@@ -14,6 +14,11 @@ const styles: Record<
     dot: "bg-[#2f9e57]",
     label: "อนุมัติแล้ว",
   },
+  reserve: {
+    wrapper: "border-[#93c5fd] bg-[#eff6ff] text-[#1e40af]",
+    dot: "bg-[#2563eb]",
+    label: "บัญชีสำรอง",
+  },
   rejected: {
     wrapper: "border-[#d8a0a3] bg-[#fce8e9] text-[#9e2a30]",
     dot: "bg-[#cf3d45]",
@@ -23,12 +28,18 @@ const styles: Record<
 
 export function StatusBadge({
   status,
+  reserveOrder,
   className,
 }: {
   status: ApplicantStatus;
+  reserveOrder?: number;
   className?: string;
 }) {
-  const style = styles[status];
+  const style = styles[status] || styles.pending;
+  const labelText =
+    status === "reserve" && reserveOrder
+      ? `สำรอง #${reserveOrder}`
+      : style.label;
 
   return (
     <span
@@ -37,7 +48,7 @@ export function StatusBadge({
       }`}
     >
       <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
-      {style.label}
+      {labelText}
     </span>
   );
 }

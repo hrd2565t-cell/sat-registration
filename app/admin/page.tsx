@@ -13,6 +13,9 @@ export default function AdminDashboardPage() {
   const approved = applications.filter(
     (item) => item.status === "approved"
   ).length;
+  const reserve = applications.filter(
+    (item) => item.status === "reserve"
+  ).length;
   const rejected = applications.filter(
     (item) => item.status === "rejected"
   ).length;
@@ -32,10 +35,16 @@ export default function AdminDashboardPage() {
       tone: "warning" as const,
     },
     {
-      label: "ผ่านคุณสมบัติแล้ว",
+      label: "ผ่านคุณสมบัติ (ตัวจริง)",
       value: String(approved),
       suffix: "คน",
       tone: "success" as const,
+    },
+    {
+      label: "บัญชีสำรอง",
+      value: String(reserve),
+      suffix: "คน",
+      tone: "info" as const,
     },
     {
       label: "ไม่ผ่านคุณสมบัติ",
@@ -52,7 +61,7 @@ export default function AdminDashboardPage() {
       activeKey="dashboard"
     >
       <div className="mx-auto w-full max-w-[1440px]">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 sm:gap-3">
           {stats.map((stat) => (
             <StatCard
               key={stat.label}

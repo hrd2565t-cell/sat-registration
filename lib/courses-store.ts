@@ -100,6 +100,7 @@ function hydrate() {
                 date: c.date,
                 location: c.location,
                 seats: c.seats,
+                capacity: 50,
                 seatsLeft: c.status === "full" ? undefined : c.seats_left,
                 status: c.status === "full" ? "full" : "open",
                 image: c.image,
@@ -156,6 +157,7 @@ function hydrate() {
             date: c.date,
             location: c.location,
             seats: c.seats,
+            capacity: 50,
             seatsLeft: c.status === "full" ? undefined : c.seats_left,
             status: c.status === "full" ? "full" : "open",
             image: c.image,
@@ -312,4 +314,39 @@ export function resetCourses() {
 
 export function getCoursesSnapshot() {
   return state.courses;
+}
+
+export function syncCourseSeatsWithApprovedCounts(
+  countsByCourseId: Record<number, number>
+) {
+  let changed = false;
+  const nextCourses = state.courses.map((course) => {
+    const approvedCount = countsByCourseId[course.id] ?? 0;
+    const capacity = course.capacity || 50;
+    const computedSeatsLeft = Math.max(0, capacity - approvedCount);
+    const computedStatus: "open" | "full" =
+      computedSeatsLeft === 0 ? "full" : "open";
+
+    if (
+      course.seatsLeft !== computedSeatsLeft ||
+      course.status !== computedStatus
+    ) {
+      changed = true;
+      return {
+        ...course,
+        seatsLeft: computedSeatsLeft,
+        status: computedStatus,
+      };
+    }
+    return course;
+  });
+
+  if (changed) {
+    state = {
+      courses: nextCourses,
+      revision: state.revision + 1,
+    };
+    persist();
+    emit();
+  }
 }

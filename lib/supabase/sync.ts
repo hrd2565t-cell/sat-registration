@@ -142,7 +142,7 @@ export async function syncApplicationToSupabase(
  */
 export async function syncReviewToSupabase(
   ref: string,
-  status: "approved" | "rejected",
+  status: "approved" | "reserve" | "rejected",
   reason: string,
   reviewer: string,
   updatedAt: string
@@ -254,6 +254,7 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
           line2: "อยู่ระหว่างตรวจเอกสารโดยเจ้าหน้าที่",
         },
         status: app.status as ApplicantRecord["status"],
+        reserveOrder: app.reserve_order ?? undefined,
         reviewReason: app.review_reason ?? undefined,
         reviewedAt: app.reviewed_at ?? undefined,
         reviewedBy: app.reviewed_by ?? undefined,

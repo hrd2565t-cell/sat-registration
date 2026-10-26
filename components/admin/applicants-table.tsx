@@ -28,7 +28,8 @@ const courseOptions = [
 const statusOptions = [
   { value: "all", label: "แสดง: ทั้งหมด" },
   { value: "pending", label: "แสดง: รอตรวจสอบ" },
-  { value: "approved", label: "แสดง: อนุมัติแล้ว" },
+  { value: "approved", label: "แสดง: อนุมัติแล้ว (ตัวจริง)" },
+  { value: "reserve", label: "แสดง: บัญชีสำรอง" },
   { value: "rejected", label: "แสดง: ไม่ผ่าน" },
 ];
 
@@ -422,7 +423,7 @@ export function ApplicantsTable({
                         </button>
                       </>
                     ) : (
-                      <StatusBadge status={row.status} className="h-5 text-[8px]" />
+                      <StatusBadge status={row.status} reserveOrder={row.reserveOrder} className="h-5 text-[8px]" />
                     )}
                     <Link
                       href={`/admin/applicants/${row.ref}`}
@@ -433,7 +434,7 @@ export function ApplicantsTable({
                     </Link>
                   </div>
                   <div className="hidden print:block">
-                    <StatusBadge status={row.status} />
+                    <StatusBadge status={row.status} reserveOrder={row.reserveOrder} />
                   </div>
                 </td>
               </tr>
@@ -472,7 +473,7 @@ export function ApplicantsTable({
                   {row.ref} · {formatThaiDate(row.submittedAt)}
                 </p>
               </div>
-              <StatusBadge status={row.status} />
+              <StatusBadge status={row.status} reserveOrder={row.reserveOrder} />
             </div>
 
             <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-[#374151]">

@@ -1,7 +1,7 @@
 import Image from "next/image";
 import type { ReactNode } from "react";
 
-export type StatusTone = "pending" | "approved" | "rejected";
+export type StatusTone = "pending" | "approved" | "rejected" | "reserve";
 
 const toneStyles: Record<
   StatusTone,
@@ -27,6 +27,15 @@ const toneStyles: Record<
       src: "/assets/icon-status-approved.png",
       width: 24,
       height: 27,
+    },
+  },
+  reserve: {
+    header: "bg-[#dbeafe]",
+    border: "border-[#93c5fd]",
+    icon: {
+      src: "/assets/icon-status-pending.png",
+      width: 19,
+      height: 23,
     },
   },
   rejected: {

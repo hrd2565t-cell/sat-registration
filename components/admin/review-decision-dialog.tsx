@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export type ReviewDecision = "approved" | "rejected";
+export type ReviewDecision = "approved" | "reserve" | "rejected";
 
 export function ReviewDecisionDialog({
   open,
@@ -41,10 +41,12 @@ export function ReviewDecisionDialog({
   if (!open) return null;
 
   const approved = decision === "approved";
+  const reserve = decision === "reserve";
+  const rejected = decision === "rejected";
 
   const handleSubmit = () => {
     const trimmed = reason.trim();
-    if (!approved && trimmed.length < 3) {
+    if (rejected && trimmed.length < 3) {
       setError("กรุณาระบุเหตุผลที่ไม่อนุมัติอย่างน้อย 3 ตัวอักษร");
       return;
     }
@@ -70,10 +72,12 @@ export function ReviewDecisionDialog({
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
               approved
                 ? "bg-[#e8f8ee] text-[#176c3a]"
-                : "bg-[#fce8e9] text-[#9e2a30]"
+                : reserve
+                  ? "bg-[#eff6ff] text-[#1e3a8a]"
+                  : "bg-[#fce8e9] text-[#9e2a30]"
             }`}
           >
-            {approved ? (
+            {approved && (
               <svg
                 className="h-5 w-5"
                 viewBox="0 0 24 24"
@@ -88,7 +92,20 @@ export function ReviewDecisionDialog({
                   d="M5 12.5l4.2 4.2L19 7"
                 />
               </svg>
-            ) : (
+            )}
+            {reserve && (
+              <svg
+                className="h-5 w-5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="9" strokeWidth="2" />
+                <path strokeLinecap="round" strokeWidth="2" d="M12 7v5l3 3" />
+              </svg>
+            )}
+            {rejected && (
               <svg
                 className="h-5 w-5"
                 viewBox="0 0 24 24"
@@ -109,12 +126,18 @@ export function ReviewDecisionDialog({
               id="decision-dialog-title"
               className="text-[16px] font-semibold text-[#111827]"
             >
-              {approved ? "ยืนยันการอนุมัติ" : "ยืนยันการไม่อนุมัติ"}
+              {approved
+                ? "ยืนยันการอนุมัติ (ตัวจริง)"
+                : reserve
+                  ? "ยืนยันจัดเข้าบัญชีสำรอง"
+                  : "ยืนยันการไม่อนุมัติ"}
             </h2>
             <p className="mt-1 text-[12px] leading-relaxed text-[#4b5563]">
               {approved
-                ? `อนุมัติคุณสมบัติของ ${applicantName} และเปิดให้ดาวน์โหลดใบยืนยัน`
-                : `ผู้สมัคร ${applicantName} จะเห็นสถานะไม่ผ่านและเหตุผลที่ระบุ`}
+                ? `อนุมัติคุณสมบัติของ ${applicantName} และเปิดให้พิมพ์บัตรเข้าร่วมอบรม`
+                : reserve
+                  ? `จัด ${applicantName} เข้าสู่บัญชีรายชื่อสำรอง (ระบบจะรันลำดับสำรองให้อัตโนมัติ)`
+                  : `ผู้สมัคร ${applicantName} จะเห็นสถานะไม่ผ่านและเหตุผลที่ระบุ`}
             </p>
           </div>
         </div>
@@ -123,7 +146,7 @@ export function ReviewDecisionDialog({
           htmlFor="review-reason"
           className="mt-4 block text-[12px] font-medium text-[#1f2937]"
         >
-          {approved ? "หมายเหตุ (ไม่บังคับ)" : "เหตุผลที่ไม่อนุมัติ"}
+          {rejected ? "เหตุผลที่ไม่อนุมัติ *" : "หมายเหตุการพิจารณา (ไม่บังคับ)"}
         </label>
         <textarea
           id="review-reason"
@@ -136,8 +159,10 @@ export function ReviewDecisionDialog({
           rows={3}
           placeholder={
             approved
-              ? "เช่น เอกสารครบถ้วน ผ่านเกณฑ์คุณสมบัติ"
-              : "เช่น ขาดเอกสาร ส.ฬ.8 หรือหนังสือนำส่งไม่ชัดเจน"
+              ? "เช่น เอกสารครบถ้วน ผ่านเกณฑ์คุณสมบัติตัวจริง"
+              : reserve
+                ? "เช่น ผ่านคุณสมบัติ จัดให้อยู่ในบัญชีสำรองเพื่อรอเรียกตัว"
+                : "เช่น ขาดเอกสาร ส.ฬ.8 หรือหนังสือนำส่งไม่ชัดเจน"
           }
           className="mt-1.5 w-full resize-y rounded-[6px] border border-[#d1d5db] bg-white px-3 py-2 text-[13px] leading-relaxed text-[#1f2937] outline-none transition focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/20"
         />
@@ -161,10 +186,16 @@ export function ReviewDecisionDialog({
             className={`inline-flex h-10 items-center justify-center rounded-[6px] px-4 text-[12px] font-semibold text-white transition-colors sm:h-9 ${
               approved
                 ? "bg-[#078A43] hover:bg-[#067537]"
-                : "bg-[#c2242c] hover:bg-[#a91d24]"
+                : reserve
+                  ? "bg-[#1e3a8a] hover:bg-[#1e40af]"
+                  : "bg-[#c2242c] hover:bg-[#a91d24]"
             }`}
           >
-            {approved ? "ยืนยันอนุมัติ" : "ยืนยันไม่อนุมัติ"}
+            {approved
+              ? "ยืนยันอนุมัติตัวจริง"
+              : reserve
+                ? "ยืนยันเข้าบัญชีสำรอง"
+                : "ยืนยันไม่อนุมัติ"}
           </button>
         </div>
       </div>

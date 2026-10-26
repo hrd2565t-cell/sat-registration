@@ -293,6 +293,24 @@ function StatusContent() {
                       }
                     />
                   )}
+                  {result.status === "reserve" && (
+                    <StatusPanel
+                      tone="reserve"
+                      title={`ผ่านการตรวจสอบคุณสมบัติ (รายชื่อสำรอง ลำดับที่ ${result.reserveOrder ?? 1})`}
+                      description={`คุณสมบัติของท่านผ่านเกณฑ์การพิจารณา และได้รับการจัดให้อยู่ในบัญชีรายชื่อสำรองลำดับที่ ${result.reserveOrder ?? 1} หากมีผู้สละสิทธิ์ เจ้าหน้าที่จะติดต่อและเลื่อนลำดับให้ท่านตามคิวการคัดเลือก`}
+                      action={
+                        <a
+                          href={`/print/receipt?ref=${encodeURIComponent(result.ref)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex h-7 w-full items-center justify-center gap-1.5 rounded-[4px] border border-[#1e3a8a] bg-white text-[11px] font-semibold text-[#1e3a8a] transition-colors hover:bg-[#eff6ff]"
+                        >
+                          <DownloadIcon />
+                          พิมพ์ใบรับการสมัคร / ยืนยันสถานะสำรอง (A4 PDF)
+                        </a>
+                      }
+                    />
+                  )}
                   {result.status === "rejected" && (
                     <StatusPanel
                       tone="rejected"

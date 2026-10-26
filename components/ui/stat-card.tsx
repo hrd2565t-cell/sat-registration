@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-type StatTone = "default" | "warning" | "success" | "danger";
+type StatTone = "default" | "warning" | "success" | "danger" | "info";
 
 interface StatCardProps {
   label: string;
@@ -16,6 +16,7 @@ const toneStyles: Record<StatTone, string> = {
   warning: "text-[#E68A00]",
   success: "text-[#0E7F3C]",
   danger: "text-[#B02730]",
+  info: "text-[#1e40af]",
 };
 
 export function StatCard({

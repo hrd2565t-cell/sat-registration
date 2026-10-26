@@ -378,9 +378,14 @@ export function CourseEditDialog({
                 />
               </div>
               <div>
-                <label htmlFor="course-seats-left" className={labelClass}>
-                  ที่นั่งคงเหลือ
-                </label>
+                <div className="flex items-center justify-between">
+                  <label htmlFor="course-seats-left" className={labelClass}>
+                    ที่นั่งคงเหลือ
+                  </label>
+                  <span className="rounded bg-[#eff6ff] px-1.5 py-0.5 text-[9.5px] font-medium text-[#1e40af]">
+                    คำนวณให้อัตโนมัติ
+                  </span>
+                </div>
                 <input
                   id="course-seats-left"
                   type="number"

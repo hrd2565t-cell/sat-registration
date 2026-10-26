@@ -16,6 +16,7 @@ import {
   formatThaiDate,
   formatThaiDateTime,
   getDocumentLabel,
+  promoteReserveToApproved,
   reviewApplication,
   useApplication,
   type ApplicantDocument,
@@ -261,9 +262,17 @@ export function ApplicantDetail({
     setNotice(
       decision === "approved"
         ? "อนุมัติผู้สมัครเรียบร้อยแล้ว"
-        : "บันทึกผลไม่อนุมัติเรียบร้อยแล้ว"
+        : decision === "reserve"
+          ? "จัดเข้าบัญชีรายชื่อสำรองเรียบร้อยแล้ว"
+          : "บันทึกผลไม่อนุมัติเรียบร้อยแล้ว"
     );
     setDecision(null);
+  };
+
+  const handlePromote = () => {
+    if (!applicant) return;
+    promoteReserveToApproved(applicant.ref, adminUser.name);
+    setNotice(`เลื่อนคุณสมบัติ ${applicant.name} จากรายชื่อสำรองเป็นตัวจริงเรียบร้อยแล้ว`);
   };
 
   const handleAddNote = () => {
@@ -335,7 +344,7 @@ export function ApplicantDetail({
               <h1 className="text-[20px] font-semibold leading-tight text-[#111827]">
                 {applicant.name}
               </h1>
-              <StatusBadge status={applicant.status} />
+              <StatusBadge status={applicant.status} reserveOrder={applicant.reserveOrder} />
             </div>
             <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[#4b5563]">
               {applicant.courseTitle}
@@ -358,6 +367,18 @@ export function ApplicantDetail({
           </div>
 
           <div className="hidden shrink-0 flex-wrap gap-2 sm:flex">
+            {applicant.status === "reserve" && (
+              <button
+                type="button"
+                onClick={handlePromote}
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[6px] bg-[#1e3a8a] px-3.5 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1e40af] sm:h-9"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                </svg>
+                เลื่อนเป็นตัวจริง
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setDecision("approved")}
@@ -365,6 +386,17 @@ export function ApplicantDetail({
             >
               <CheckIcon />
               อนุมัติ
+            </button>
+            <button
+              type="button"
+              onClick={() => setDecision("reserve")}
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[6px] border border-[#93c5fd] bg-[#eff6ff] px-3 text-[12px] font-semibold text-[#1e40af] transition-colors hover:bg-[#dbeafe] sm:h-9"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <circle cx="12" cy="12" r="9" strokeWidth="2" />
+                <path strokeLinecap="round" strokeWidth="2" d="M12 7v5l3 3" />
+              </svg>
+              บัญชีสำรอง
             </button>
             <button
               type="button"
@@ -644,18 +676,34 @@ export function ApplicantDetail({
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#dbe2ea] bg-white/95 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2.5 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur lg:hidden print:hidden">
         <div className="flex gap-2">
+          {applicant.status === "reserve" && (
+            <button
+              type="button"
+              onClick={handlePromote}
+              className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[7px] bg-[#1e3a8a] text-[12px] font-semibold text-white"
+            >
+              เลื่อนตัวจริง
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setDecision("approved")}
-            className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[7px] bg-[#078A43] text-[13px] font-semibold text-white"
+            className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[7px] bg-[#078A43] text-[12px] font-semibold text-white"
           >
             <CheckIcon />
             อนุมัติ
           </button>
           <button
             type="button"
+            onClick={() => setDecision("reserve")}
+            className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[7px] border border-[#93c5fd] bg-[#eff6ff] text-[12px] font-semibold text-[#1e40af]"
+          >
+            สำรอง
+          </button>
+          <button
+            type="button"
             onClick={() => setDecision("rejected")}
-            className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[7px] border border-[#d8a0a3] bg-[#fce8e9] text-[13px] font-semibold text-[#9e2a30]"
+            className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[7px] border border-[#d8a0a3] bg-[#fce8e9] text-[12px] font-semibold text-[#9e2a30]"
           >
             <XIcon />
             ไม่อนุมัติ

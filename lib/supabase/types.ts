@@ -67,7 +67,8 @@ export interface Database {
           phone: string;
           affiliation: string;
           position: string;
-          status: "pending" | "approved" | "rejected";
+          status: "pending" | "approved" | "rejected" | "reserve";
+          reserve_order: number | null;
           review_reason: string | null;
           reviewed_at: string | null;
           reviewed_by: string | null;
@@ -89,7 +90,8 @@ export interface Database {
           phone: string;
           affiliation?: string;
           position?: string;
-          status?: "pending" | "approved" | "rejected";
+          status?: "pending" | "approved" | "rejected" | "reserve";
+          reserve_order?: number | null;
           review_reason?: string | null;
           reviewed_at?: string | null;
           reviewed_by?: string | null;
@@ -110,7 +112,8 @@ export interface Database {
           phone?: string;
           affiliation?: string;
           position?: string;
-          status?: "pending" | "approved" | "rejected";
+          status?: "pending" | "approved" | "rejected" | "reserve";
+          reserve_order?: number | null;
           review_reason?: string | null;
           reviewed_at?: string | null;
           reviewed_by?: string | null;
@@ -157,7 +160,7 @@ export interface Database {
           id: string;
           application_ref: string;
           author: string;
-          kind: "created" | "note" | "approved" | "rejected";
+          kind: "created" | "note" | "approved" | "rejected" | "reserve";
           text: string;
           created_at: string;
         };
@@ -165,13 +168,13 @@ export interface Database {
           id?: string;
           application_ref: string;
           author: string;
-          kind?: "created" | "note" | "approved" | "rejected";
+          kind?: "created" | "note" | "approved" | "rejected" | "reserve";
           text: string;
           created_at?: string;
         };
         Update: {
           author?: string;
-          kind?: "created" | "note" | "approved" | "rejected";
+          kind?: "created" | "note" | "approved" | "rejected" | "reserve";
           text?: string;
         };
         Relationships: [];

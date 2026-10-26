@@ -204,6 +204,9 @@ export function CoursesAdmin() {
           const approved = courseApplications.filter(
             (item) => item.status === "approved"
           ).length;
+          const reserve = courseApplications.filter(
+            (item) => item.status === "reserve"
+          ).length;
 
           return (
             <section
@@ -237,7 +240,7 @@ export function CoursesAdmin() {
                   }`}
                 >
                   {course.status === "open"
-                    ? `เหลือ ${course.seatsLeft} ที่นั่ง`
+                    ? `เหลือ ${course.seatsLeft} ที่นั่ง (Auto)`
                     : "เต็มแล้ว"}
                 </span>
               </div>
@@ -261,24 +264,30 @@ export function CoursesAdmin() {
                   </p>
                 </div>
 
-                <div className="mt-2.5 grid grid-cols-3 gap-1 rounded-[5px] bg-[#f8fafc] px-2 py-2 text-center">
+                <div className="mt-2.5 grid grid-cols-4 gap-1 rounded-[5px] bg-[#f8fafc] px-2 py-2 text-center">
                   <div>
-                    <p className="text-[14px] font-semibold leading-none text-[#111827]">
+                    <p className="text-[13px] font-semibold leading-none text-[#111827]">
                       {courseApplications.length}
                     </p>
                     <p className="mt-1 text-[9px] text-[#6b7280]">ผู้สมัคร</p>
                   </div>
-                  <div className="border-x border-[#e5e7eb]">
-                    <p className="text-[14px] font-semibold leading-none text-[#9a5c00]">
-                      {pending}
-                    </p>
-                    <p className="mt-1 text-[9px] text-[#6b7280]">รอตรวจ</p>
-                  </div>
-                  <div>
-                    <p className="text-[14px] font-semibold leading-none text-[#176c3a]">
+                  <div className="border-l border-[#e5e7eb]">
+                    <p className="text-[13px] font-semibold leading-none text-[#176c3a]">
                       {approved}
                     </p>
-                    <p className="mt-1 text-[9px] text-[#6b7280]">อนุมัติ</p>
+                    <p className="mt-1 text-[9px] font-medium text-[#176c3a]">ตัวจริง</p>
+                  </div>
+                  <div className="border-l border-[#e5e7eb]">
+                    <p className="text-[13px] font-semibold leading-none text-[#1e40af]">
+                      {reserve}
+                    </p>
+                    <p className="mt-1 text-[9px] font-medium text-[#1e40af]">สำรอง</p>
+                  </div>
+                  <div className="border-l border-[#e5e7eb]">
+                    <p className="text-[13px] font-semibold leading-none text-[#d97706]">
+                      {course.seatsLeft ?? 0}
+                    </p>
+                    <p className="mt-1 text-[9px] text-[#6b7280]">ว่าง</p>
                   </div>
                 </div>
 
