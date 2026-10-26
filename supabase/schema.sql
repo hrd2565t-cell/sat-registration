@@ -11,6 +11,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS public.courses (
     id SERIAL PRIMARY KEY,
     title TEXT NOT NULL,
+    short_title TEXT,
     date TEXT NOT NULL,
     location TEXT NOT NULL,
     seats TEXT NOT NULL,
@@ -188,11 +189,12 @@ CREATE POLICY "Authorized can view applicant documents"
 -- ==============================================================================
 -- SEED DATA: ข้อมูลเริ่มต้น 5 หลักสูตรของ กกท.
 -- ==============================================================================
-INSERT INTO public.courses (id, title, date, location, seats, seats_left, status, image, image_alt, warning_message)
+INSERT INTO public.courses (id, title, short_title, date, location, seats, seats_left, status, image, image_alt, warning_message)
 VALUES 
 (
     1,
     'หลักสูตรผู้ฝึกสอนกีฬาระดับชาติ (National Coach)',
+    'ผู้ฝึกสอน',
     '15-20 พ.ค. 2569',
     'สนามกีฬาสถาบันการกีฬาแห่งชาติ กทม.',
     'จำนวนที่นั่ง 50 คน',
@@ -205,6 +207,7 @@ VALUES
 (
     2,
     'หลักสูตรผู้ตัดสินกีฬาอาชีพ (Professional Referee)',
+    'ผู้ตัดสิน',
     '18-22 พ.ค. 2569',
     'สนามกีฬาสถาบันการกีฬาแห่งชาติ กทม.',
     'จำนวนที่นั่ง 50 คน',
@@ -217,6 +220,7 @@ VALUES
 (
     3,
     'วิทยาศาสตร์การกีฬาขั้นพื้นฐาน (Basic Sports Science)',
+    'วิทยาศาสตร์การกีฬา',
     '1-5 ส.ค. 2569',
     'สนามกีฬาสถาบันการกีฬาแห่งชาติ กทม.',
     'จำนวนที่นั่ง 50 คน',
@@ -229,6 +233,7 @@ VALUES
 (
     4,
     'หลักสูตรการจัดการองค์การกีฬา (Sports Management)',
+    'การจัดการ',
     '8-12 ส.ค. 2569',
     'สนามกีฬาสถาบันการกีฬาแห่งชาติ กทม.',
     'จำนวนที่นั่ง 50 คน',
@@ -241,6 +246,7 @@ VALUES
 (
     5,
     'จิตวิทยาการกีฬาสำหรับผู้ฝึกสอน (Sports Psychology)',
+    'จิตวิทยา',
     '14-18 ต.ค. 2569',
     'สนามกีฬาสถาบันการกีฬาแห่งชาติ กทม.',
     'จำนวนที่นั่ง 50 คน',
@@ -252,6 +258,7 @@ VALUES
 )
 ON CONFLICT (id) DO UPDATE SET
     title = EXCLUDED.title,
+    short_title = EXCLUDED.short_title,
     date = EXCLUDED.date,
     location = EXCLUDED.location,
     seats = EXCLUDED.seats,

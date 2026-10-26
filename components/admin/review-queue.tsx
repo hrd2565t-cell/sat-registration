@@ -7,21 +7,14 @@ import { AiVerdictBadge } from "@/components/admin/ai-verdict-badge";
 import { Pagination } from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
 import { Select } from "@/components/ui/select";
-import { adminCourseOptions } from "@/lib/admin-data";
+import { getCourseKeyword } from "@/lib/courses";
+import { useCourses } from "@/lib/courses-store";
 import {
   formatThaiDateTime,
   useApplications,
 } from "@/lib/applications-store";
 
 const PAGE_SIZE = 8;
-
-const courseOptions = [
-  { value: "", label: "ทุกหลักสูตร" },
-  ...adminCourseOptions.map((course) => ({
-    value: String(course.id),
-    label: course.label,
-  })),
-];
 
 const aiPriority = { fail: 0, review: 1, pass: 2 } as const;
 
@@ -113,9 +106,21 @@ function ArrowIcon() {
 
 export function ReviewQueue() {
   const { applications } = useApplications();
+  const { courses } = useCourses();
   const [search, setSearch] = useState("");
   const [course, setCourse] = useState("");
   const [page, setPage] = useState(1);
+
+  const courseOptions = useMemo(
+    () => [
+      { value: "", label: "ทุกหลักสูตร" },
+      ...courses.map((c) => ({
+        value: String(c.id),
+        label: getCourseKeyword(c),
+      })),
+    ],
+    [courses]
+  );
 
   const pending = useMemo(
     () =>
@@ -139,14 +144,17 @@ export function ReviewQueue() {
     const query = search.trim().toLowerCase();
     return pending.filter((item) => {
       const matchesCourse = !course || String(item.courseId) === course;
+      const courseTitle =
+        courses.find((c) => c.id === item.courseId)?.title ?? item.courseTitle;
       const matchesQuery =
         !query ||
         item.name.toLowerCase().includes(query) ||
         item.ref.toLowerCase().includes(query) ||
+        courseTitle.toLowerCase().includes(query) ||
         item.courseTitle.toLowerCase().includes(query);
       return matchesCourse && matchesQuery;
     });
-  }, [pending, search, course]);
+  }, [pending, courses, search, course]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -283,7 +291,8 @@ export function ReviewQueue() {
                     </span>
                   </div>
                   <p className="mt-0.5 truncate text-[10.5px] text-[#4b5563]">
-                    {item.courseTitle}
+                    {courses.find((c) => c.id === item.courseId)?.title ??
+                      item.courseTitle}
                   </p>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[9.5px] text-[#6b7280]">
                     <span>ยื่น {formatThaiDateTime(item.submittedAt)}</span>

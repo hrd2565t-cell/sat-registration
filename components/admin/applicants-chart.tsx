@@ -1,20 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { adminCourseOptions } from "@/lib/admin-data";
+import { useMemo } from "react";
+import { getCourseKeyword } from "@/lib/courses";
+import { useCourses } from "@/lib/courses-store";
 import { useApplications } from "@/lib/applications-store";
 
 const colors = ["#328FDD", "#FE9732", "#47B471", "#7755B3", "#DD3942"];
 
 export function ApplicantsChart() {
   const { applications } = useApplications();
+  const { courses } = useCourses();
 
-  const chart = adminCourseOptions.map((course, index) => ({
-    id: course.id,
-    label: course.label,
-    value: applications.filter((item) => item.courseId === course.id).length,
-    color: colors[index % colors.length],
-  }));
+  const chart = useMemo(
+    () =>
+      courses.map((course, index) => ({
+        id: course.id,
+        label: getCourseKeyword(course),
+        value: applications.filter((item) => item.courseId === course.id).length,
+        color: colors[index % colors.length],
+      })),
+    [courses, applications]
+  );
 
   const maxValue = Math.max(10, ...chart.map((item) => item.value));
   const axisMax = Math.ceil(maxValue / 10) * 10;

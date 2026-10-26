@@ -57,6 +57,7 @@ export function CourseEditDialog({
   const [imageInfo, setImageInfo] = useState("");
   const [imageBusy, setImageBusy] = useState(false);
   const [title, setTitle] = useState(course.title);
+  const [shortTitle, setShortTitle] = useState(course.shortTitle ?? "");
   const [date, setDate] = useState(course.date);
   const [location, setLocation] = useState(course.location);
   const [seats, setSeats] = useState(course.seats);
@@ -136,6 +137,7 @@ export function CourseEditDialog({
     if (imageBusy) return;
 
     const trimmedTitle = title.trim();
+    const trimmedShortTitle = shortTitle.trim();
     const trimmedDate = date.trim();
     const trimmedLocation = location.trim();
     const trimmedSeats = seats.trim();
@@ -174,6 +176,7 @@ export function CourseEditDialog({
 
     const result = onSave({
       title: trimmedTitle,
+      shortTitle: trimmedShortTitle || undefined,
       date: trimmedDate,
       location: trimmedLocation,
       seats: trimmedSeats,
@@ -297,7 +300,7 @@ export function CourseEditDialog({
 
             <div>
               <label htmlFor="course-title" className={labelClass}>
-                ชื่อหลักสูตร
+                ชื่อหลักสูตร (ชื่อเต็ม)
               </label>
               <input
                 id="course-title"
@@ -309,6 +312,28 @@ export function CourseEditDialog({
                 }}
                 className={fieldClass}
               />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between">
+                <label htmlFor="course-short-title" className={labelClass}>
+                  ชื่อย่อ / Keyword (สำหรับ Dropdown และตัวกรอง)
+                </label>
+                <span className="text-[10px] text-[#6b7280]">ไม่บังคับ</span>
+              </div>
+              <input
+                id="course-short-title"
+                value={shortTitle}
+                onChange={(event) => {
+                  setShortTitle(event.target.value);
+                  if (error) setError("");
+                }}
+                placeholder="ปล่อยว่างเพื่อให้ระบบสกัดอัตโนมัติจากชื่อหลักสูตร"
+                className={fieldClass}
+              />
+              <p className="mt-1 text-[10.5px] leading-relaxed text-[#6b7280]">
+                ใช้แสดงใน Dropdown คัดกรองผู้สมัครและแผนภูมิให้กระชับ ไม่ยาวรกตา (เช่น &quot;ผู้ฝึกสอน&quot;, &quot;ผู้ตัดสิน&quot;) หากปล่อยว่างระบบจะดึงคำสำคัญอัตโนมัติ
+              </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">

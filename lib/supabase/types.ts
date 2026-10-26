@@ -13,6 +13,7 @@ export interface Database {
         Row: {
           id: number;
           title: string;
+          short_title?: string | null;
           date: string;
           location: string;
           seats: string;
@@ -27,6 +28,7 @@ export interface Database {
         Insert: {
           id?: number;
           title: string;
+          short_title?: string | null;
           date: string;
           location: string;
           seats: string;
@@ -41,6 +43,7 @@ export interface Database {
         Update: {
           id?: number;
           title?: string;
+          short_title?: string | null;
           date?: string;
           location?: string;
           seats?: string;

@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { adminCourseOptions, statusLabel } from "@/lib/admin-data";
+import { statusLabel } from "@/lib/admin-data";
+import { getCourseKeyword } from "@/lib/courses";
+import { useCourses } from "@/lib/courses-store";
 import {
   formatThaiDate,
   reviewApplication,
@@ -16,14 +18,6 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Select } from "@/components/ui/select";
 
 const DEFAULT_PAGE_SIZE = 5;
-
-const courseOptions = [
-  { value: "", label: "ทุกหลักสูตร" },
-  ...adminCourseOptions.map((course) => ({
-    value: String(course.id),
-    label: course.label,
-  })),
-];
 
 const statusOptions = [
   { value: "all", label: "แสดง: ทั้งหมด" },
@@ -130,6 +124,7 @@ export function ApplicantsTable({
   showTitle = true,
 }: ApplicantsTableProps) {
   const { applications } = useApplications();
+  const { courses } = useCourses();
   const [search, setSearch] = useState("");
   const [courseFilter, setCourseFilter] = useState(initialCourse);
   const [statusFilter, setStatusFilter] = useState(initialStatus);
@@ -139,6 +134,17 @@ export function ApplicantsTable({
     ref: string;
     name: string;
   } | null>(null);
+
+  const courseOptions = useMemo(
+    () => [
+      { value: "", label: "ทุกหลักสูตร" },
+      ...courses.map((course) => ({
+        value: String(course.id),
+        label: getCourseKeyword(course),
+      })),
+    ],
+    [courses]
+  );
 
   const rows = useMemo(
     () =>
@@ -157,16 +163,19 @@ export function ApplicantsTable({
         courseFilter === "" || row.courseId === Number(courseFilter);
       const matchesStatus =
         statusFilter === "all" || row.status === statusFilter;
+      const courseTitle =
+        courses.find((c) => c.id === row.courseId)?.title ?? row.course;
       const matchesQuery =
         query === "" ||
         row.name.toLowerCase().includes(query) ||
         row.ref.toLowerCase().includes(query) ||
         row.idCard.includes(query) ||
+        courseTitle.toLowerCase().includes(query) ||
         row.course.toLowerCase().includes(query);
 
       return matchesCourse && matchesStatus && matchesQuery;
     });
-  }, [courseFilter, rows, search, statusFilter]);
+  }, [courseFilter, courses, rows, search, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -201,7 +210,7 @@ export function ApplicantsTable({
       row.ref,
       row.name,
       row.idCard,
-      row.course,
+      courses.find((c) => c.id === row.courseId)?.title ?? row.course,
       row.fileSize ? `เปิดไฟล์ (${row.fileSize} MB)` : "ไม่มีไฟล์",
       `${row.ai.line1} ${row.ai.line2}`,
       statusLabel(row.status),
@@ -377,7 +386,10 @@ export function ApplicantsTable({
                   </p>
                 </td>
                 <td className="px-1.5 py-1 pr-1">
-                  <div className="line-clamp-2 leading-[1.3]">{row.course}</div>
+                  <div className="line-clamp-2 leading-[1.3]">
+                    {courses.find((c) => c.id === row.courseId)?.title ??
+                      row.course}
+                  </div>
                 </td>
                 <td className="py-1 pl-0.5 pr-1.5">
                   {row.fileSize ? (
@@ -477,7 +489,7 @@ export function ApplicantsTable({
             </div>
 
             <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-[#374151]">
-              {row.course}
+              {courses.find((c) => c.id === row.courseId)?.title ?? row.course}
             </p>
 
             <div className="mt-2">

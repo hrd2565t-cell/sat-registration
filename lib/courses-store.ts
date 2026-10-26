@@ -74,6 +74,8 @@ function mergeStoredCourses(stored: Course[]) {
       id: seed.id,
       image: customImage ?? seed.image,
       imageAlt: seed.imageAlt,
+      shortTitle:
+        saved.shortTitle !== undefined ? saved.shortTitle : seed.shortTitle,
       status: saved.status === "full" ? "full" : "open",
     };
   });
@@ -97,6 +99,8 @@ function hydrate() {
               const cloudCourses: Course[] = data.map((c) => ({
                 id: c.id,
                 title: c.title,
+                shortTitle:
+                  (c as { short_title?: string }).short_title || undefined,
                 date: c.date,
                 location: c.location,
                 seats: c.seats,
@@ -154,6 +158,8 @@ function hydrate() {
           const cloudCourses: Course[] = data.map((c) => ({
             id: c.id,
             title: c.title,
+            shortTitle:
+              (c as { short_title?: string }).short_title || undefined,
             date: c.date,
             location: c.location,
             seats: c.seats,
@@ -210,6 +216,7 @@ export type CourseUpdate = Partial<
     | "status"
     | "seatsLeft"
     | "title"
+    | "shortTitle"
     | "date"
     | "location"
     | "seats"
@@ -246,6 +253,10 @@ export function updateCourse(
       id: course.id,
       image: nextImage,
       imageAlt: course.imageAlt,
+      shortTitle:
+        patch.shortTitle !== undefined
+          ? patch.shortTitle.trim() || undefined
+          : course.shortTitle,
       seatsLeft:
         patch.status === "full"
           ? undefined
@@ -280,6 +291,7 @@ export function updateCourse(
       ?.from("courses")
       .update({
         title: updated.title,
+        short_title: updated.shortTitle ?? null,
         date: updated.date,
         location: updated.location,
         seats: updated.seats,
