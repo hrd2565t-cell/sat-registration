@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
@@ -15,10 +15,14 @@ import { IdCardInput } from "@/components/ui/id-card-input";
 import { getCourseById, getDefaultCourse } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
 import {
+  checkRegistrationEligibility,
   createApplication,
+  useApplications,
   type ApplicantDocument,
   type ApplicantDocumentKind,
+  type RegistrationEligibility,
 } from "@/lib/applications-store";
+import { ConflictDialog } from "@/components/register/conflict-dialog";
 
 const labelClass = "text-[12.5px] font-medium text-[#1f2937]";
 
@@ -70,6 +74,7 @@ function RegistrationContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { courses } = useCourses();
+  const { applications } = useApplications();
   const course =
     getCourseById(searchParams.get("course"), courses) ??
     getDefaultCourse(courses);
@@ -88,8 +93,39 @@ function RegistrationContent() {
   const [confirmed, setConfirmed] = useState(true);
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [conflictModal, setConflictModal] =
+    useState<RegistrationEligibility | null>(null);
+  const [hasAutofilled, setHasAutofilled] = useState(false);
 
   const isCourseFull = course.status === "full";
+
+  // ตรวจสอบความถูกต้องของการสมัคร (ห้ามวิชาเดิม และห้ามวันอบรมซ้อนทับกัน)
+  const eligibility = useMemo(() => {
+    return checkRegistrationEligibility(
+      idCard,
+      course.id,
+      applications,
+      courses
+    );
+  }, [idCard, course.id, applications, courses]);
+
+  // ดึงข้อมูลส่วนตัวจากการสมัครก่อนหน้ามาเติมให้อัตโนมัติ เพื่ออำนวยความสะดวก
+  useEffect(() => {
+    const digits = idCard.replace(/\D/g, "");
+    if (digits.length === 13 && !hasAutofilled) {
+      const prior = applications.find(
+        (a) => a.idCard === digits && a.status !== "rejected"
+      );
+      if (prior) {
+        if (prior.name) setName(prior.name);
+        if (prior.phone) setPhone(prior.phone);
+        if (prior.email) setEmail(prior.email);
+        if (prior.affiliation) setAffiliation(prior.affiliation);
+        if (prior.position) setPosition(prior.position);
+        setHasAutofilled(true);
+      }
+    }
+  }, [idCard, applications, hasAutofilled]);
 
   const [photoFiles, setPhotoFiles] = useState<FileItem[]>([
     { name: "แนบรูปถ่ายสำเร็จ.jpg", size: "1.1 MB" },
@@ -110,6 +146,19 @@ function RegistrationContent() {
       setFormError("หลักสูตรนี้เต็มแล้ว กรุณาเลือกหลักสูตรอื่น");
       return;
     }
+
+    // ตรวจสอบเงื่อนไขการสมัครซ้ำและเวลาซ้อนทับ
+    const check = checkRegistrationEligibility(
+      idCard,
+      course.id,
+      applications,
+      courses
+    );
+    if (!check.allowed && check.existingRecord) {
+      setConflictModal(check);
+      return;
+    }
+
     if (name.trim().length < 3) {
       setFormError("กรุณากรอกชื่อ-นามสกุลให้ครบถ้วน");
       return;
@@ -223,6 +272,39 @@ function RegistrationContent() {
                   2. หมายเลขบัตรประจำตัวประชาชน (13 หลัก)
                 </label>
                 <IdCardInput value={idCard} onChange={setIdCard} />
+
+                {!eligibility.allowed && eligibility.existingRecord && (
+                  <div
+                    role="alert"
+                    className="mt-1 rounded-lg border border-[#f59e0b] bg-[#fffbeb] p-3 text-[12px] text-[#92400e]"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-bold flex items-center gap-1.5">
+                          <span className="inline-block h-2 w-2 rounded-full bg-[#f59e0b]" />
+                          {eligibility.reason === "duplicate_course"
+                            ? "ท่านได้ยื่นสมัครในหลักสูตรนี้แล้ว"
+                            : "ช่วงเวลาการอบรมซ้อนทับกับหลักสูตรที่เคยสมัคร"}
+                        </p>
+                        <p className="mt-0.5 text-[11px] leading-relaxed text-[#b45309]">
+                          {eligibility.reason === "duplicate_course"
+                            ? `รหัสอ้างอิง: ${eligibility.existingRecord.ref} (อยู่ระหว่างดำเนินการ)`
+                            : `ซ้อนทับกับ: ${
+                                eligibility.conflictingCourse?.title ??
+                                eligibility.existingRecord.courseTitle
+                              } (${eligibility.conflictingCourse?.date})`}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setConflictModal(eligibility)}
+                        className="shrink-0 rounded-[4px] bg-[#b45309] px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-[#92400e]"
+                      >
+                        ดูรายละเอียด
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col gap-1.5">
@@ -413,6 +495,17 @@ function RegistrationContent() {
           </Button>
         </form>
       </main>
+
+      {conflictModal && conflictModal.existingRecord && (
+        <ConflictDialog
+          isOpen={true}
+          reason={conflictModal.reason || "duplicate_course"}
+          existingRecord={conflictModal.existingRecord}
+          targetCourse={course}
+          conflictingCourse={conflictModal.conflictingCourse}
+          onClose={() => setConflictModal(null)}
+        />
+      )}
     </div>
   );
 }

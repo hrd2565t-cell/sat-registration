@@ -8,7 +8,11 @@ import {
   type AiVerdict,
   type ApplicantStatus,
 } from "@/lib/admin-data";
-import { courses } from "@/lib/courses";
+import {
+  courses,
+  isCourseDateOverlapping,
+  type Course,
+} from "@/lib/courses";
 import { getCoursesSnapshot, syncCourseSeatsWithApprovedCounts } from "@/lib/courses-store";
 import { MOCK_ID_CARD } from "@/lib/registration";
 import {
@@ -505,6 +509,15 @@ export function usePendingCount() {
 }
 
 export function createApplication(input: NewApplicationInput): ApplicantRecord {
+  const cleanIdCard = input.idCard.replace(/\D/g, "");
+  // ป้องกันการบันทึกซ้ำในระดับ Store (Idempotency)
+  const existing = state.applications.find(
+    (item) => item.idCard === cleanIdCard && item.courseId === input.courseId
+  );
+  if (existing && existing.status !== "rejected") {
+    return existing;
+  }
+
   const courseOption =
     adminCourseOptions.find((item) => item.id === input.courseId) ??
     adminCourseOptions[0];
@@ -779,6 +792,87 @@ export function getApplicationByIdCard(
       (left, right) =>
         Date.parse(right.submittedAt) - Date.parse(left.submittedAt)
     )[0];
+}
+
+/**
+ * ดึงรายการใบสมัครทั้งหมดของเลขบัตรประชาชนนี้ (เรียงจากล่าสุดไปเก่าสุด)
+ * รองรับกรณีผู้สมัครลงทะเบียนหลายหลักสูตร
+ */
+export function getApplicationsByIdCard(
+  applications: ApplicantRecord[],
+  idCard: string
+): ApplicantRecord[] {
+  const digits = idCard.replace(/\D/g, "");
+  if (!digits) return [];
+  return [...applications]
+    .filter((item) => item.idCard === digits)
+    .sort(
+      (left, right) =>
+        Date.parse(right.submittedAt) - Date.parse(left.submittedAt)
+    );
+}
+
+export interface RegistrationEligibility {
+  allowed: boolean;
+  reason?: "duplicate_course" | "date_conflict";
+  existingRecord?: ApplicantRecord;
+  conflictingCourse?: Course;
+}
+
+/**
+ * ตรวจสอบคุณสมบัติในการสมัครตามนโยบาย กกท.:
+ * 1. ผู้สมัครสามารถสมัครได้มากกว่า 1 หลักสูตร
+ * 2. ห้ามสมัครซ้ำในหลักสูตรเดิม (ยกเว้นเคยถูกปฏิเสธ)
+ * 3. ช่วงเวลาการจัดอบรมของแต่ละหลักสูตรที่สมัครต้องไม่ซ้อนทับกัน
+ */
+export function checkRegistrationEligibility(
+  idCard: string,
+  targetCourseId: number,
+  applications: ApplicantRecord[],
+  courseList: Course[] = courses
+): RegistrationEligibility {
+  const digits = idCard.replace(/\D/g, "");
+  if (!digits || digits.length !== 13) {
+    return { allowed: true };
+  }
+
+  const userApplications = applications.filter(
+    (app) => app.idCard === digits && app.status !== "rejected"
+  );
+
+  // 1. ตรวจสอบการสมัครซ้ำในหลักสูตรเดียวกัน
+  const duplicate = userApplications.find(
+    (app) => app.courseId === targetCourseId
+  );
+  if (duplicate) {
+    return {
+      allowed: false,
+      reason: "duplicate_course",
+      existingRecord: duplicate,
+    };
+  }
+
+  // 2. ตรวจสอบการซ้อนทับของวันอบรมกับหลักสูตรอื่นที่เคยสมัคร
+  const targetCourse = courseList.find((c) => c.id === targetCourseId);
+  if (targetCourse) {
+    for (const app of userApplications) {
+      const existingCourse = courseList.find((c) => c.id === app.courseId);
+      const existingDate = existingCourse?.date;
+      if (
+        existingDate &&
+        isCourseDateOverlapping(targetCourse.date, existingDate)
+      ) {
+        return {
+          allowed: false,
+          reason: "date_conflict",
+          existingRecord: app,
+          conflictingCourse: existingCourse,
+        };
+      }
+    }
+  }
+
+  return { allowed: true };
 }
 
 export function getLatestApplication(applications: ApplicantRecord[]) {

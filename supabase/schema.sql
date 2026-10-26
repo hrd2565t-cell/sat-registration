@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS public.applications (
         "checks": []
     }'::jsonb,
     submitted_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    CONSTRAINT unique_applicant_course UNIQUE (id_card, course_id)
 );
 
 -- 4. APPLICATION DOCUMENTS TABLE (ตารางเอกสารประกอบการสมัคร)

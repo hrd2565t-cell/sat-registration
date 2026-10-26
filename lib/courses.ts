@@ -161,3 +161,83 @@ export function getCourseKeyword(
   return cleaned || rawTitle;
 }
 
+export const THAI_MONTH_INDEX_MAP: Record<string, number> = {
+  "ม.ค.": 0,
+  "ก.พ.": 1,
+  "มี.ค.": 2,
+  "เม.ย.": 3,
+  "พ.ค.": 4,
+  "มิ.ย.": 5,
+  "ก.ค.": 6,
+  "ส.ค.": 7,
+  "ก.ย.": 8,
+  "ต.ค.": 9,
+  "พ.ย.": 10,
+  "ธ.ค.": 11,
+};
+
+export interface ParsedDateRange {
+  start: Date;
+  end: Date;
+}
+
+/**
+ * แปลงข้อความช่วงวันที่แบบไทย เช่น "15-20 พ.ค. 2569" หรือ "28 พ.ค. - 2 มิ.ย. 2569"
+ * เป็น Date object เพื่อนำไปคำนวณการซ้อนทับกันของเวลา
+ */
+export function parseThaiDateRange(
+  dateStr: string | null | undefined
+): ParsedDateRange | null {
+  if (!dateStr) return null;
+  const s = dateStr.trim();
+
+  // รูปแบบ 1: ภายในเดือนเดียวกัน เช่น "15-20 พ.ค. 2569"
+  const m1 = s.match(
+    /^(\d{1,2})\s*-\s*(\d{1,2})\s+([ก-๙\.]+)\s+(\d{4})$/
+  );
+  if (m1) {
+    const startDay = parseInt(m1[1], 10);
+    const endDay = parseInt(m1[2], 10);
+    const month = THAI_MONTH_INDEX_MAP[m1[3]] ?? 0;
+    const yearBE = parseInt(m1[4], 10);
+    const yearCE = yearBE > 2400 ? yearBE - 543 : yearBE;
+    return {
+      start: new Date(yearCE, month, startDay, 0, 0, 0),
+      end: new Date(yearCE, month, endDay, 23, 59, 59),
+    };
+  }
+
+  // รูปแบบ 2: ข้ามเดือน เช่น "28 พ.ค. - 2 มิ.ย. 2569"
+  const m2 = s.match(
+    /^(\d{1,2})\s+([ก-๙\.]+)\s*-\s*(\d{1,2})\s+([ก-๙\.]+)\s+(\d{4})$/
+  );
+  if (m2) {
+    const startDay = parseInt(m2[1], 10);
+    const startMonth = THAI_MONTH_INDEX_MAP[m2[2]] ?? 0;
+    const endDay = parseInt(m2[3], 10);
+    const endMonth = THAI_MONTH_INDEX_MAP[m2[4]] ?? 0;
+    const yearBE = parseInt(m2[5], 10);
+    const yearCE = yearBE > 2400 ? yearBE - 543 : yearBE;
+    return {
+      start: new Date(yearCE, startMonth, startDay, 0, 0, 0),
+      end: new Date(yearCE, endMonth, endDay, 23, 59, 59),
+    };
+  }
+
+  return null;
+}
+
+/**
+ * ตรวจสอบว่าช่วงวันที่ของหลักสูตร 2 รายการ มีการซ้อนทับกันหรือไม่
+ */
+export function isCourseDateOverlapping(
+  dateStr1: string | null | undefined,
+  dateStr2: string | null | undefined
+): boolean {
+  const r1 = parseThaiDateRange(dateStr1);
+  const r2 = parseThaiDateRange(dateStr2);
+  if (!r1 || !r2) return false;
+  return r1.start <= r2.end && r1.end >= r2.start;
+}
+
+
