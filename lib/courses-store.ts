@@ -6,6 +6,7 @@ import {
   DEFAULT_TARGET_QUOTAS,
   DEFAULT_SAT_SUPPORT,
   DEFAULT_EXPENSES_POLICY,
+  getGlobalCourseSchedule,
   type Course,
 } from "@/lib/courses";
 import { isSupabaseConfigured, getSupabaseClient } from "@/lib/supabase/client";
@@ -76,6 +77,10 @@ function mergeStoredCourses(stored: Course[]): Course[] {
       imageAlt: saved.imageAlt || seed?.imageAlt || `${saved.title} - รูปประกอบ`,
       shortTitle:
         saved.shortTitle !== undefined ? saved.shortTitle : seed?.shortTitle,
+      useCustomSchedule:
+        saved.useCustomSchedule !== undefined
+          ? saved.useCustomSchedule
+          : seed?.useCustomSchedule,
       registrationDate:
         saved.registrationDate !== undefined
           ? saved.registrationDate
@@ -248,6 +253,7 @@ export type CourseUpdate = Partial<
     | "seatsLeft"
     | "title"
     | "shortTitle"
+    | "useCustomSchedule"
     | "registrationDate"
     | "resultDate"
     | "date"
@@ -297,6 +303,10 @@ export function updateCourse(
         patch.shortTitle !== undefined
           ? patch.shortTitle.trim() || undefined
           : course.shortTitle,
+      useCustomSchedule:
+        patch.useCustomSchedule !== undefined
+          ? patch.useCustomSchedule
+          : course.useCustomSchedule,
       registrationDate:
         patch.registrationDate !== undefined
           ? patch.registrationDate.trim() || undefined
@@ -371,12 +381,20 @@ export function addCourse(
   const capacity = 50;
   const seatsLeft = data.status === "full" ? undefined : (data.seatsLeft ?? capacity);
 
+  const globalSched = getGlobalCourseSchedule(state.courses);
+  const useCustom = Boolean(data.useCustomSchedule);
+
   const newCourse: Course = {
     id: newId,
     title: data.title.trim(),
     shortTitle: data.shortTitle?.trim() || data.title.trim().slice(0, 20),
-    registrationDate: data.registrationDate?.trim() || undefined,
-    resultDate: data.resultDate?.trim() || undefined,
+    useCustomSchedule: useCustom,
+    registrationDate: useCustom
+      ? data.registrationDate?.trim() || globalSched.registrationDate
+      : globalSched.registrationDate,
+    resultDate: useCustom
+      ? data.resultDate?.trim() || globalSched.resultDate
+      : globalSched.resultDate,
     date: data.date?.trim() || "1 - 5 พ.ย. 2570",
     location: data.location?.trim() || "สนามกีฬาสถาบันการกีฬาแห่งชาติ กทม.",
     seats: data.seats?.trim() || "จำนวนที่นั่ง 50 คน",
@@ -431,6 +449,37 @@ export function addCourse(
   emit();
 
   return { course: newCourse, persisted };
+}
+
+export function updateGlobalCourseSchedule(
+  registrationDate: string,
+  resultDate: string,
+  resetCustomOverrides = false
+): { updatedCount: number; persisted: boolean } {
+  const reg = registrationDate.trim();
+  const res = resultDate.trim();
+  let updatedCount = 0;
+
+  const nextCourses = state.courses.map((course) => {
+    if (course.useCustomSchedule && !resetCustomOverrides) {
+      return course;
+    }
+    updatedCount += 1;
+    return {
+      ...course,
+      useCustomSchedule: false,
+      registrationDate: reg,
+      resultDate: res,
+    };
+  });
+
+  state = {
+    courses: nextCourses,
+    revision: state.revision + 1,
+  };
+  const persisted = persist();
+  emit();
+  return { updatedCount, persisted };
 }
 
 export function deleteCourse(id: number): boolean {

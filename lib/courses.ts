@@ -35,6 +35,7 @@ export interface Course {
   seatsLeft?: number;
   title: string;
   shortTitle?: string;
+  useCustomSchedule?: boolean;
   registrationDate?: string;
   resultDate?: string;
   date: string;
@@ -49,6 +50,9 @@ export interface Course {
   satSupport?: string[];
   expensesPolicy?: string;
 }
+
+export const DEFAULT_GLOBAL_REGISTRATION_DATE = "6-22 ม.ค. 2570";
+export const DEFAULT_GLOBAL_RESULT_DATE = "29 ม.ค. 2570";
 
 export const DEFAULT_SAT_SUPPORT: string[] = [
   "ที่พักตลอดระยะเวลาการอบรม (ห้องพักคู่ตามหลักเกณฑ์ระเบียบ กกท.)",
@@ -392,19 +396,54 @@ export function computeDefaultCourseSchedule(trainingDateStr: string): {
   };
 }
 
+export function getGlobalCourseSchedule(
+  courseList: Course[] = courses
+): {
+  registrationDate: string;
+  resultDate: string;
+} {
+  const sharedCourse =
+    courseList.find((c) => !c.useCustomSchedule && c.registrationDate?.trim()) ??
+    courseList.find((c) => c.registrationDate?.trim());
+
+  return {
+    registrationDate:
+      sharedCourse?.registrationDate?.trim() ||
+      DEFAULT_GLOBAL_REGISTRATION_DATE,
+    resultDate:
+      sharedCourse?.resultDate?.trim() || DEFAULT_GLOBAL_RESULT_DATE,
+  };
+}
+
 export function getCourseScheduleDates(
-  course: Pick<Course, "date" | "registrationDate" | "resultDate">
+  course: Pick<
+    Course,
+    "date" | "registrationDate" | "resultDate" | "useCustomSchedule"
+  >,
+  courseList?: Course[]
 ): {
   registrationDate: string;
   resultDate: string;
   trainingDate: string;
+  isCustom: boolean;
 } {
-  const defaults = computeDefaultCourseSchedule(course.date);
+  const isCustom = Boolean(course.useCustomSchedule);
+  if (isCustom && course.registrationDate?.trim() && course.resultDate?.trim()) {
+    return {
+      registrationDate: course.registrationDate.trim(),
+      resultDate: course.resultDate.trim(),
+      trainingDate: course.date,
+      isCustom: true,
+    };
+  }
+
+  const globalSched = getGlobalCourseSchedule(courseList);
   return {
     registrationDate:
-      course.registrationDate?.trim() || defaults.registrationDate,
-    resultDate: course.resultDate?.trim() || defaults.resultDate,
+      course.registrationDate?.trim() || globalSched.registrationDate,
+    resultDate: course.resultDate?.trim() || globalSched.resultDate,
     trainingDate: course.date,
+    isCustom,
   };
 }
 

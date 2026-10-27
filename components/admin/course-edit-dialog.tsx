@@ -14,6 +14,7 @@ import {
   computeDefaultCourseScheduleFields,
   formatCourseDateFields,
   formatCourseDateSessions,
+  getGlobalCourseSchedule,
   isCourseDateOverlapping,
   parseCourseDateFields,
   parseCourseDateSessions,
@@ -81,47 +82,31 @@ export function CourseEditDialog({
     formatCourseDateSessions(parseCourseDateSessions(course.date))
   );
 
+  // โหมดกำหนดการ: false = ใช้กำหนดการกลางร่วมกันทุกหลักสูตร, true = กำหนดวันแยกเฉพาะหลักสูตรนี้
+  const globalSched = getGlobalCourseSchedule(allCourses);
+  const [useCustomSchedule, setUseCustomSchedule] = useState<boolean>(() =>
+    Boolean(course.useCustomSchedule)
+  );
+
   // วันเปิดรับสมัคร (registrationDate) และ วันประกาศผล (resultDate)
   const [regFields, setRegFields] = useState<CourseDateFields>(() => {
-    if (course.registrationDate?.trim()) {
-      return parseCourseDateFields(course.registrationDate);
-    }
-    return computeDefaultCourseScheduleFields(
-      parseCourseDateSessions(course.date)
-    ).regFields;
+    const initialStr =
+      course.registrationDate?.trim() || globalSched.registrationDate;
+    return parseCourseDateFields(initialStr);
   });
   const [registrationDate, setRegistrationDate] = useState(() => {
-    if (course.registrationDate?.trim()) {
-      return formatCourseDateFields(
-        parseCourseDateFields(course.registrationDate),
-        true
-      );
-    }
-    const def = computeDefaultCourseScheduleFields(
-      parseCourseDateSessions(course.date)
-    ).regFields;
-    return formatCourseDateFields(def, true);
+    const initialStr =
+      course.registrationDate?.trim() || globalSched.registrationDate;
+    return formatCourseDateFields(parseCourseDateFields(initialStr), true);
   });
 
   const [resultFields, setResultFields] = useState<CourseDateFields>(() => {
-    if (course.resultDate?.trim()) {
-      return parseCourseDateFields(course.resultDate);
-    }
-    return computeDefaultCourseScheduleFields(
-      parseCourseDateSessions(course.date)
-    ).resultFields;
+    const initialStr = course.resultDate?.trim() || globalSched.resultDate;
+    return parseCourseDateFields(initialStr);
   });
   const [resultDate, setResultDate] = useState(() => {
-    if (course.resultDate?.trim()) {
-      return formatCourseDateFields(
-        parseCourseDateFields(course.resultDate),
-        true
-      );
-    }
-    const def = computeDefaultCourseScheduleFields(
-      parseCourseDateSessions(course.date)
-    ).resultFields;
-    return formatCourseDateFields(def, true);
+    const initialStr = course.resultDate?.trim() || globalSched.resultDate;
+    return formatCourseDateFields(parseCourseDateFields(initialStr), true);
   });
   const [location, setLocation] = useState(course.location);
   const [seats, setSeats] = useState(course.seats);
@@ -385,8 +370,13 @@ export function CourseEditDialog({
     const result = onSave({
       title: trimmedTitle,
       shortTitle: trimmedShortTitle || undefined,
-      registrationDate: registrationDate.trim() || undefined,
-      resultDate: resultDate.trim() || undefined,
+      useCustomSchedule,
+      registrationDate: useCustomSchedule
+        ? registrationDate.trim() || globalSched.registrationDate
+        : globalSched.registrationDate,
+      resultDate: useCustomSchedule
+        ? resultDate.trim() || globalSched.resultDate
+        : globalSched.resultDate,
       date: trimmedDate,
       location: trimmedLocation,
       seats: trimmedSeats,
@@ -555,50 +545,134 @@ export function CourseEditDialog({
 
             {/* ==================== 3-STEP COURSE SCHEDULE PICKER ==================== */}
             <div className="space-y-3 rounded-xl border border-[#cbd5e1] bg-[#f8fafc] p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e2e8f0] pb-2.5">
-                <div>
-                  <h3 className="text-[12.5px] font-bold text-[#16265E]">
-                    🗓️ กำหนดการหลักสูตร (รับสมัคร • ประกาศผล • จัดอบรม)
-                  </h3>
-                  <p className="text-[10px] text-[#64748b]">
-                    ปรับตั้งค่าทั้ง 3 ช่วงเวลาได้ด้วยตัวเอง หรือกดปุ่มคำนวณล่วงหน้าอัตโนมัติจากวันเริ่มอบรม
-                  </p>
+              <div className="border-b border-[#e2e8f0] pb-2.5">
+                <h3 className="text-[12.5px] font-bold text-[#16265E]">
+                  🗓️ กำหนดการหลักสูตร (รับสมัคร • ประกาศผล • จัดอบรม)
+                </h3>
+                <p className="mt-0.5 text-[10px] text-[#64748b]">
+                  เลือกใช้กำหนดการรับสมัครและประกาศผลร่วมกับทุกหลักสูตร หรือปลดล็อกเพื่อปรับแยกเฉพาะหลักสูตรนี้
+                </p>
+
+                {/* 2-Option Mode Switcher */}
+                <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setUseCustomSchedule(false)}
+                    className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-[11px] transition ${
+                      !useCustomSchedule
+                        ? "border-[#1e3a8a] bg-[#eff6ff] font-bold text-[#1e3a8a] shadow-2xs"
+                        : "border-[#cbd5e1] bg-white font-medium text-[#475569] hover:bg-[#f1f5f9]"
+                    }`}
+                  >
+                    <span className="text-sm">
+                      {!useCustomSchedule ? "🔘" : "⚪"}
+                    </span>
+                    <div>
+                      <div>🌐 ใช้กำหนดการเดียวกับทุกหลักสูตร</div>
+                      <div className="text-[9.5px] font-normal text-[#64748b]">
+                        อ้างอิงวันรับสมัคร &amp; วันประกาศผลส่วนกลาง
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setUseCustomSchedule(true)}
+                    className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-[11px] transition ${
+                      useCustomSchedule
+                        ? "border-[#d97706] bg-[#fffbeb] font-bold text-[#92400e] shadow-2xs"
+                        : "border-[#cbd5e1] bg-white font-medium text-[#475569] hover:bg-[#f1f5f9]"
+                    }`}
+                  >
+                    <span className="text-sm">
+                      {useCustomSchedule ? "🔘" : "⚪"}
+                    </span>
+                    <div>
+                      <div>✏️ กำหนดวันแยกเฉพาะหลักสูตรนี้</div>
+                      <div className="text-[9.5px] font-normal text-[#64748b]">
+                        ปรับเปลี่ยนวันรับสมัคร/ประกาศผลแยกอิสระ
+                      </div>
+                    </div>
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleAutoCalculateSchedule}
-                  className="inline-flex items-center gap-1 rounded-lg border border-[#3b82f6] bg-[#eff6ff] px-2.5 py-1 text-[10.5px] font-bold text-[#1d4ed8] shadow-2xs transition hover:bg-[#dbeafe] active:scale-[0.98]"
-                >
-                  <span>⚡ คำนวณวันรับสมัคร &amp; วันประกาศผลอัตโนมัติ</span>
-                </button>
               </div>
 
-              {/* 1. ช่วงวันเปิดรับสมัคร (registrationDate) */}
-              <ThaiCalendarRangePicker
-                value={regFields}
-                onChange={syncRegFields}
-                tone="blue"
-                badgeLabel="1. 📥 เปิดรับสมัคร"
-                presets={[
-                  { days: 7, label: "7 วัน" },
-                  { days: 14, label: "14 วัน" },
-                  { days: 17, label: "17 วัน (มาตรฐาน)" },
-                  { days: 30, label: "30 วัน" },
-                ]}
-              />
+              {!useCustomSchedule ? (
+                <div className="rounded-lg border border-[#bfdbfe] bg-white p-2.5 text-[11px]">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-bold text-[#1e3a8a]">
+                      🌐 กำลังใช้วันเปิด-ปิดรับสมัคร และวันประกาศผลร่วมกับทุกหลักสูตร:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setUseCustomSchedule(true)}
+                      className="text-[10px] font-semibold text-[#1d4ed8] hover:underline"
+                    >
+                      ต้องการปรับเฉพาะหลักสูตรนี้ ›
+                    </button>
+                  </div>
+                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="flex items-center justify-between rounded border border-[#dbeafe] bg-[#eff6ff]/60 px-2.5 py-1.5">
+                      <span className="font-semibold text-[#1869bc]">
+                        1. 📥 เปิดรับสมัคร:
+                      </span>
+                      <strong className="font-bold text-[#1e3a8a]">
+                        {globalSched.registrationDate}
+                      </strong>
+                    </div>
+                    <div className="flex items-center justify-between rounded border border-[#fecaca] bg-[#fef2f2]/60 px-2.5 py-1.5">
+                      <span className="font-semibold text-[#c4080f]">
+                        2. 📣 วันประกาศผล:
+                      </span>
+                      <strong className="font-bold text-[#991b1b]">
+                        {globalSched.resultDate}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2.5 rounded-lg border border-[#fde68a] bg-[#fffbeb]/40 p-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold text-[#92400e]">
+                      ✏️ กำหนดวันรับสมัครและวันประกาศผลเฉพาะหลักสูตรนี้:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAutoCalculateSchedule}
+                      className="inline-flex items-center gap-1 rounded-md border border-[#3b82f6] bg-[#eff6ff] px-2 py-0.5 text-[10px] font-bold text-[#1d4ed8] transition hover:bg-[#dbeafe]"
+                    >
+                      <span>⚡ คำนวณล่วงหน้าอัตโนมัติจากวันอบรม</span>
+                    </button>
+                  </div>
 
-              {/* 2. วันประกาศผลผู้มีสิทธิ์เข้าอบรม (resultDate) */}
-              <ThaiCalendarRangePicker
-                value={resultFields}
-                onChange={syncResultFields}
-                tone="red"
-                badgeLabel="2. 📣 วันประกาศผล"
-                presets={[
-                  { days: 1, label: "วันเดียว (1 วัน)" },
-                  { days: 2, label: "ช่วง 2 วัน" },
-                  { days: 3, label: "ช่วง 3 วัน" },
-                ]}
-              />
+                  {/* 1. ช่วงวันเปิดรับสมัคร (registrationDate) */}
+                  <ThaiCalendarRangePicker
+                    value={regFields}
+                    onChange={syncRegFields}
+                    tone="blue"
+                    badgeLabel="1. 📥 เปิดรับสมัคร (เฉพาะหลักสูตรนี้)"
+                    presets={[
+                      { days: 7, label: "7 วัน" },
+                      { days: 14, label: "14 วัน" },
+                      { days: 17, label: "17 วัน (มาตรฐาน)" },
+                      { days: 30, label: "30 วัน" },
+                    ]}
+                  />
+
+                  {/* 2. วันประกาศผลผู้มีสิทธิ์เข้าอบรม (resultDate) */}
+                  <ThaiCalendarRangePicker
+                    value={resultFields}
+                    onChange={syncResultFields}
+                    tone="red"
+                    badgeLabel="2. 📣 วันประกาศผล (เฉพาะหลักสูตรนี้)"
+                    presets={[
+                      { days: 1, label: "วันเดียว (1 วัน)" },
+                      { days: 2, label: "ช่วง 2 วัน" },
+                      { days: 3, label: "ช่วง 3 วัน" },
+                    ]}
+                  />
+                </div>
+              )}
 
               {/* 3. Multi-Session Smart Date Range Picker (ช่วงวันที่อบรม) */}
               <div className="rounded-lg border border-[#bbf7d0] bg-[#f0fdf4]/40 p-2.5">

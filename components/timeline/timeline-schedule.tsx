@@ -27,6 +27,7 @@ import {
   resetSportsEvents,
 } from "@/lib/sports-events-store";
 import { CourseEditDialog } from "@/components/admin/course-edit-dialog";
+import { GlobalScheduleCard } from "@/components/admin/global-schedule-card";
 import { AddSportsEventDialog } from "@/components/timeline/add-sports-event-dialog";
 import { EditSportsEventDialog } from "@/components/timeline/edit-sports-event-dialog";
 import { SyncDefaultsButton } from "@/components/admin/sync-defaults-button";
@@ -588,6 +589,12 @@ export function TimelineSchedule() {
             </div>
           )}
         </div>
+
+        {isAdmin && (
+          <div className="mb-3">
+            <GlobalScheduleCard />
+          </div>
+        )}
 
         <Legend
           showSportsEvents={showSportsEvents}

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { CourseEditDialog } from "@/components/admin/course-edit-dialog";
+import { GlobalScheduleCard } from "@/components/admin/global-schedule-card";
 import { SyncDefaultsButton } from "@/components/admin/sync-defaults-button";
 import {
   DEFAULT_EXPENSES_POLICY,
@@ -276,6 +277,10 @@ export function CoursesAdmin() {
         </div>
       </section>
 
+      <div className="mt-3">
+        <GlobalScheduleCard onSaved={(msg) => setNotice(msg)} />
+      </div>
+
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {courses.map((course) => {
           const courseApplications = applications.filter(
@@ -361,9 +366,23 @@ export function CoursesAdmin() {
                   {course.title}
                 </h2>
                 {(() => {
-                  const sched = getCourseScheduleDates(course);
+                  const sched = getCourseScheduleDates(course, courses);
                   return (
                     <div className="mt-1.5 rounded-[5px] border border-[#e2e8f0] bg-[#f8fafc] px-2 py-1.5 text-[10px] space-y-0.5">
+                      <div className="flex items-center justify-between border-b border-[#eef2f6] pb-0.5 mb-0.5">
+                        <span className="text-[9px] font-semibold text-[#64748b]">
+                          กำหนดการรับสมัคร/ประกาศผล
+                        </span>
+                        <span
+                          className={`rounded px-1.5 py-0.2 text-[8.5px] font-bold ${
+                            sched.isCustom
+                              ? "bg-[#fef3c7] text-[#92400e]"
+                              : "bg-[#dbeafe] text-[#1e40af]"
+                          }`}
+                        >
+                          {sched.isCustom ? "✏️ กำหนดแยกเฉพาะหลักสูตร" : "🌐 ใช้กำหนดการกลาง"}
+                        </span>
+                      </div>
                       <p className="flex items-center justify-between gap-1">
                         <span className="font-semibold text-[#1869bc]">
                           📥 เปิดรับสมัคร:
