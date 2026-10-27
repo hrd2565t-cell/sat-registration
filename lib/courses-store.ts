@@ -90,6 +90,11 @@ function mergeStoredCourses(stored: Course[]) {
         saved.evaluationCriteria && saved.evaluationCriteria.length > 0
           ? saved.evaluationCriteria
           : seed.evaluationCriteria,
+      satSupport:
+        saved.satSupport && saved.satSupport.length > 0
+          ? saved.satSupport
+          : seed.satSupport,
+      expensesPolicy: saved.expensesPolicy || seed.expensesPolicy,
       status: saved.status === "full" ? "full" : "open",
     };
   });
@@ -247,6 +252,8 @@ export type CourseUpdate = Partial<
     | "qualifications"
     | "requiredDocuments"
     | "evaluationCriteria"
+    | "satSupport"
+    | "expensesPolicy"
   >
 >;
 

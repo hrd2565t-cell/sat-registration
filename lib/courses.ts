@@ -42,7 +42,19 @@ export interface Course {
   qualifications?: string[];
   requiredDocuments?: string[];
   evaluationCriteria?: string[];
+  satSupport?: string[];
+  expensesPolicy?: string;
 }
+
+export const DEFAULT_SAT_SUPPORT: string[] = [
+  "ที่พักตลอดระยะเวลาการอบรม (ห้องพักคู่ตามหลักเกณฑ์ระเบียบ กกท.)",
+  "อาหารหลัก 3 มื้อ และอาหารว่าง/เครื่องดื่ม 2 มื้อต่อวัน ตลอดช่วงเวลาอบรม",
+  "เอกสารคู่มือหลักสูตร กระเป๋าเอกสาร และอุปกรณ์ประกอบการฝึกอบรม/ฝึกปฏิบัติ",
+  "วุฒิบัตรรับรองจาก กกท. (เมื่อผ่านเกณฑ์การประเมินตามที่กำหนด)",
+];
+
+export const DEFAULT_EXPENSES_POLICY =
+  "ค่าเบี้ยเลี้ยง ค่าพาหนะเดินทางไป-กลับ และค่าใช้จ่ายส่วนตัวอื่นๆ นอกเหนือจากที่ กกท. ให้การสนับสนุน ให้เบิกจ่ายจากหน่วยงานต้นสังกัดตามระเบียบ หรือรับผิดชอบชำระด้วยตนเอง";
 
 export const DEFAULT_COURSE_ID = 2;
 
@@ -81,6 +93,8 @@ export const courses: Course[] = [
       "ผ่านการทดสอบภาคทฤษฎีและภาคปฏิบัติไม่ต่ำกว่าร้อยละ 70",
       "ได้รับวุฒิบัตรรับรองผู้ฝึกสอนกีฬาระดับชาติจากการกีฬาแห่งประเทศไทย (กกท.)",
     ],
+    satSupport: [...DEFAULT_SAT_SUPPORT],
+    expensesPolicy: DEFAULT_EXPENSES_POLICY,
   },
   {
     id: 2,
@@ -115,6 +129,8 @@ export const courses: Course[] = [
       "ผ่านการทดสอบกติกาข้อเขียนและภาคสนามไม่ต่ำกว่าร้อยละ 75",
       "ได้รับวุฒิบัตรผู้ตัดสินกีฬาอาชีพจากการกีฬาแห่งประเทศไทย",
     ],
+    satSupport: [...DEFAULT_SAT_SUPPORT],
+    expensesPolicy: DEFAULT_EXPENSES_POLICY,
   },
   {
     id: 3,
@@ -147,6 +163,8 @@ export const courses: Course[] = [
       "ผ่านการทดสอบความรู้พื้นฐานวิทยาศาสตร์การกีฬาไม่ต่ำกว่าร้อยละ 60",
       "ได้รับวุฒิบัตรความรู้ด้านวิทยาศาสตร์การกีฬาขั้นพื้นฐาน",
     ],
+    satSupport: [...DEFAULT_SAT_SUPPORT],
+    expensesPolicy: DEFAULT_EXPENSES_POLICY,
   },
   {
     id: 4,
@@ -180,6 +198,8 @@ export const courses: Course[] = [
       "จัดทำและนำเสนอแผนแม่บทการจัดการองค์การกีฬา (Case Study) ผ่านเกณฑ์",
       "ได้รับวุฒิบัตรการจัดการองค์การกีฬาจากการกีฬาแห่งประเทศไทย",
     ],
+    satSupport: [...DEFAULT_SAT_SUPPORT],
+    expensesPolicy: DEFAULT_EXPENSES_POLICY,
   },
   {
     id: 5,
@@ -213,6 +233,8 @@ export const courses: Course[] = [
       "ผ่านการประเมินทักษะการให้คำปรึกษาและออกแบบโปรแกรมฝึกจิตวิทยาการกีฬา",
       "ได้รับวุฒิบัตรจิตวิทยาการกีฬาสำหรับผู้ฝึกสอนจากการกีฬาแห่งประเทศไทย",
     ],
+    satSupport: [...DEFAULT_SAT_SUPPORT],
+    expensesPolicy: DEFAULT_EXPENSES_POLICY,
   },
 ];
 

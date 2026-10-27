@@ -85,6 +85,12 @@ export function CourseEditDialog({
   const [evaluationCriteriaText, setEvaluationCriteriaText] = useState(
     (course.evaluationCriteria ?? []).join("\n")
   );
+  const [satSupportText, setSatSupportText] = useState(
+    (course.satSupport ?? []).join("\n")
+  );
+  const [expensesPolicy, setExpensesPolicy] = useState(
+    course.expensesPolicy ?? ""
+  );
   const [quotas, setQuotas] = useState<TargetGroupQuotas>(
     course.targetQuotas ?? { ...DEFAULT_TARGET_QUOTAS }
   );
@@ -206,6 +212,10 @@ export function CourseEditDialog({
       .split("\n")
       .map((s) => s.trim())
       .filter(Boolean);
+    const satSup = satSupportText
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
 
     const result = onSave({
       title: trimmedTitle,
@@ -221,6 +231,8 @@ export function CourseEditDialog({
       qualifications: quals.length > 0 ? quals : undefined,
       requiredDocuments: reqDocs.length > 0 ? reqDocs : undefined,
       evaluationCriteria: evalCrit.length > 0 ? evalCrit : undefined,
+      satSupport: satSup.length > 0 ? satSup : undefined,
+      expensesPolicy: expensesPolicy.trim() || undefined,
       ...(image !== course.image ? { image } : {}),
     });
     if (typeof result === "string") setError(result);
@@ -592,6 +604,40 @@ export function CourseEditDialog({
                 onChange={(event) => setEvaluationCriteriaText(event.target.value)}
                 rows={3}
                 placeholder="1. เวลาเข้าอบรมไม่น้อยกว่าร้อยละ 80...&#10;2. ผ่านการทดสอบ..."
+                className="mt-1 w-full resize-y rounded-[5px] border border-[#d1d5db] bg-white px-3 py-2 text-[12.5px] leading-relaxed text-[#1f2937] outline-none transition focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/20"
+              />
+            </div>
+
+            <div className="border-t border-[#e5e7eb] pt-3">
+              <h3 className="text-[12px] font-bold text-[#0369a1]">
+                🎁 สิ่งที่ กกท. สนับสนุน &amp; เงื่อนไขค่าใช้จ่าย
+              </h3>
+            </div>
+
+            <div>
+              <label htmlFor="course-support" className={labelClass}>
+                สิ่งที่ กกท. ให้การสนับสนุน (เช่น อาหาร 3 มื้อ / ที่พัก / เอกสาร - ขึ้นบรรทัดใหม่เพื่อแยกข้อ)
+              </label>
+              <textarea
+                id="course-support"
+                value={satSupportText}
+                onChange={(event) => setSatSupportText(event.target.value)}
+                rows={3}
+                placeholder="1. ที่พักตลอดระยะเวลาการอบรม...&#10;2. อาหารหลักครบ 3 มื้อ และอาหารว่าง 2 มื้อ..."
+                className="mt-1 w-full resize-y rounded-[5px] border border-[#d1d5db] bg-white px-3 py-2 text-[12.5px] leading-relaxed text-[#1f2937] outline-none transition focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/20"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="course-expenses" className={labelClass}>
+                เงื่อนไขค่าใช้จ่ายนอกเหนือการสนับสนุน / การเบิกต้นสังกัด
+              </label>
+              <textarea
+                id="course-expenses"
+                value={expensesPolicy}
+                onChange={(event) => setExpensesPolicy(event.target.value)}
+                rows={2}
+                placeholder="เช่น ค่าเบี้ยเลี้ยงและค่าเดินทาง ให้เบิกจ่ายจากหน่วยงานต้นสังกัด หรือชำระด้วยตนเอง..."
                 className="mt-1 w-full resize-y rounded-[5px] border border-[#d1d5db] bg-white px-3 py-2 text-[12.5px] leading-relaxed text-[#1f2937] outline-none transition focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/20"
               />
             </div>

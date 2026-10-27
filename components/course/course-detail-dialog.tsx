@@ -186,6 +186,45 @@ export function CourseDetailDialog({
             </section>
           )}
 
+          {/* Section: สิทธิประโยชน์และสิ่งที่ กกท. สนับสนุน */}
+          {(course.satSupport || course.expensesPolicy) && (
+            <section className="space-y-2.5 rounded-xl border border-[#bae6fd] bg-gradient-to-br from-[#f0f9ff] to-[#f8fafc] p-3.5">
+              <div className="flex items-center gap-2 border-b border-[#e0f2fe] pb-1.5">
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#0284c7] text-white text-xs">
+                  🎁
+                </span>
+                <h3 className="text-[14.5px] font-bold text-[#0369a1]">
+                  สิทธิประโยชน์และสิ่งที่ กกท. ให้การสนับสนุน
+                </h3>
+              </div>
+
+              {course.satSupport && course.satSupport.length > 0 && (
+                <ul className="space-y-2 pl-1">
+                  {course.satSupport.map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-2.5 text-[13px] leading-relaxed text-[#334155]">
+                      <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#0284c7]/15 text-[#0284c7]">
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {course.expensesPolicy && (
+                <div className="mt-2.5 flex items-start gap-2 rounded-lg border border-[#fde68a] bg-[#fffbeb] p-2.5 text-[12px] text-[#92400e]">
+                  <span className="text-sm shrink-0">ℹ️</span>
+                  <div className="leading-relaxed">
+                    <span className="font-bold">ค่าใช้จ่ายนอกเหนือการสนับสนุน: </span>
+                    {course.expensesPolicy}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
           {/* Section: สัดส่วนกลุ่มเป้าหมาย (5 กลุ่ม) */}
           {course.targetQuotas && (
             <section className="space-y-2.5">
