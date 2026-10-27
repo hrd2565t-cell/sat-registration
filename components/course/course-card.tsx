@@ -16,6 +16,7 @@ export interface CourseCardProps {
   warningMessage?: string;
   selected?: boolean;
   onSelect?: (id: number) => void;
+  onViewDetails?: () => void;
 }
 
 function CalendarIcon() {
@@ -125,6 +126,7 @@ export function CourseCard({
   warningMessage,
   selected = false,
   onSelect,
+  onViewDetails,
 }: CourseCardProps) {
   const isFull = status === "full";
   const isLow = (seatsLeft ?? 0) <= 5;
@@ -181,9 +183,13 @@ export function CourseCard({
         </div>
 
         <Button
+          type="button"
           variant="light"
-          className="h-9 w-full rounded-md px-2 py-0 text-[13px] disabled:border-[#d1d5db] disabled:bg-[#e5e7eb] disabled:text-[#9ca3af]"
-          disabled={isFull}
+          className="h-9 w-full rounded-md px-2 py-0 text-[13px] border border-[#d1d5db] text-[#374151] hover:border-[#1e3a8a] hover:bg-[#eff6ff] hover:text-[#1e3a8a] transition-colors"
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewDetails?.();
+          }}
         >
           <SearchIcon />
           ดูคุณสมบัติและเงื่อนไข

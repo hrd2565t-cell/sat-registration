@@ -77,6 +77,19 @@ function mergeStoredCourses(stored: Course[]) {
       shortTitle:
         saved.shortTitle !== undefined ? saved.shortTitle : seed.shortTitle,
       targetQuotas: saved.targetQuotas ?? seed.targetQuotas,
+      courseObjective: saved.courseObjective || seed.courseObjective,
+      qualifications:
+        saved.qualifications && saved.qualifications.length > 0
+          ? saved.qualifications
+          : seed.qualifications,
+      requiredDocuments:
+        saved.requiredDocuments && saved.requiredDocuments.length > 0
+          ? saved.requiredDocuments
+          : seed.requiredDocuments,
+      evaluationCriteria:
+        saved.evaluationCriteria && saved.evaluationCriteria.length > 0
+          ? saved.evaluationCriteria
+          : seed.evaluationCriteria,
       status: saved.status === "full" ? "full" : "open",
     };
   });
@@ -230,6 +243,10 @@ export type CourseUpdate = Partial<
     | "warningMessage"
     | "image"
     | "targetQuotas"
+    | "courseObjective"
+    | "qualifications"
+    | "requiredDocuments"
+    | "evaluationCriteria"
   >
 >;
 

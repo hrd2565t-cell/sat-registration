@@ -6,8 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Stepper } from "@/components/stepper/stepper";
 import { CourseCard } from "@/components/course/course-card";
+import { CourseDetailDialog } from "@/components/course/course-detail-dialog";
 import { TimelineSummary } from "@/components/timeline/timeline-summary";
-import { getCourseById, getDefaultCourse } from "@/lib/courses";
+import { getCourseById, getDefaultCourse, type Course } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
 
 const steps = [
@@ -34,6 +35,7 @@ function CourseCatalogContent() {
   const [selectedId, setSelectedId] = useState<number | null>(
     initialCourse.status === "open" ? initialCourse.id : null
   );
+  const [detailCourse, setDetailCourse] = useState<Course | null>(null);
   const selectedCourse = courses.find(
     (course) => course.id === selectedId && course.status === "open"
   );
@@ -73,7 +75,7 @@ function CourseCatalogContent() {
             ขั้นตอนที่ 1: เลือกหลักสูตรที่ต้องการสมัคร
           </h2>
           <p className="mt-1 text-[13px] text-[#6b7280]">
-            *กรุณาตรวจสอบคุณสมบัติเฉพาะของแต่ละหลักสูตรก่อนตัดสินใจ (สมัครได้ 1 คนต่อ 1 หลักสูตร)
+            *กรุณาตรวจสอบคุณสมบัติเฉพาะของแต่ละหลักสูตรก่อนตัดสินใจ (สามารถสมัครได้มากกว่า 1 หลักสูตร โดยช่วงเวลาการอบรมต้องไม่ซ้อนทับกัน)
           </p>
         </div>
 
@@ -84,12 +86,19 @@ function CourseCatalogContent() {
               {...course}
               selected={course.id === activeId}
               onSelect={setSelectedId}
+              onViewDetails={() => setDetailCourse(course)}
             />
           ))}
         </div>
 
         <TimelineSummary />
       </main>
+
+      <CourseDetailDialog
+        course={detailCourse}
+        onClose={() => setDetailCourse(null)}
+        onSelectRegister={(id) => setSelectedId(id)}
+      />
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#bfdbfe] bg-[#dbeafe]">
         <div className="mx-auto flex h-14 max-w-[1440px] items-center justify-between gap-4 px-5">

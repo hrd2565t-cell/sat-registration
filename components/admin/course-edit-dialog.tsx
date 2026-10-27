@@ -73,6 +73,18 @@ export function CourseEditDialog({
   const [warningMessage, setWarningMessage] = useState(
     course.warningMessage ?? ""
   );
+  const [courseObjective, setCourseObjective] = useState(
+    course.courseObjective ?? ""
+  );
+  const [qualificationsText, setQualificationsText] = useState(
+    (course.qualifications ?? []).join("\n")
+  );
+  const [requiredDocumentsText, setRequiredDocumentsText] = useState(
+    (course.requiredDocuments ?? []).join("\n")
+  );
+  const [evaluationCriteriaText, setEvaluationCriteriaText] = useState(
+    (course.evaluationCriteria ?? []).join("\n")
+  );
   const [quotas, setQuotas] = useState<TargetGroupQuotas>(
     course.targetQuotas ?? { ...DEFAULT_TARGET_QUOTAS }
   );
@@ -182,6 +194,19 @@ export function CourseEditDialog({
       return;
     }
 
+    const quals = qualificationsText
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const reqDocs = requiredDocumentsText
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const evalCrit = evaluationCriteriaText
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
     const result = onSave({
       title: trimmedTitle,
       shortTitle: trimmedShortTitle || undefined,
@@ -192,6 +217,10 @@ export function CourseEditDialog({
       seatsLeft: status === "full" ? undefined : remaining,
       warningMessage: trimmedWarning || undefined,
       targetQuotas: quotas,
+      courseObjective: courseObjective.trim() || undefined,
+      qualifications: quals.length > 0 ? quals : undefined,
+      requiredDocuments: reqDocs.length > 0 ? reqDocs : undefined,
+      evaluationCriteria: evalCrit.length > 0 ? evalCrit : undefined,
       ...(image !== course.image ? { image } : {}),
     });
     if (typeof result === "string") setError(result);
@@ -493,7 +522,7 @@ export function CourseEditDialog({
 
             <div>
               <label htmlFor="course-warning" className={labelClass}>
-                หมายเหตุ / คุณสมบัติเฉพาะ
+                หมายเหตุ / คำเตือนสั้น
               </label>
               <textarea
                 id="course-warning"
@@ -501,6 +530,68 @@ export function CourseEditDialog({
                 onChange={(event) => setWarningMessage(event.target.value)}
                 rows={2}
                 placeholder="เว้นว่างได้หากไม่มีหมายเหตุ"
+                className="mt-1 w-full resize-y rounded-[5px] border border-[#d1d5db] bg-white px-3 py-2 text-[12.5px] leading-relaxed text-[#1f2937] outline-none transition focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/20"
+              />
+            </div>
+
+            <div className="border-t border-[#e5e7eb] pt-3">
+              <h3 className="text-[12px] font-bold text-[#16265E]">
+                ข้อมูลคุณสมบัติและเงื่อนไข (แสดงในหน้าต่างป๊อปอัปให้ผู้สมัครอ่าน)
+              </h3>
+            </div>
+
+            <div>
+              <label htmlFor="course-objective" className={labelClass}>
+                วัตถุประสงค์ของหลักสูตร
+              </label>
+              <textarea
+                id="course-objective"
+                value={courseObjective}
+                onChange={(event) => setCourseObjective(event.target.value)}
+                rows={2}
+                placeholder="ระบุวัตถุประสงค์ของหลักสูตรนี้..."
+                className="mt-1 w-full resize-y rounded-[5px] border border-[#d1d5db] bg-white px-3 py-2 text-[12.5px] leading-relaxed text-[#1f2937] outline-none transition focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/20"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="course-quals" className={labelClass}>
+                คุณสมบัติของผู้สมัคร (ขึ้นบรรทัดใหม่เพื่อแยกข้อ)
+              </label>
+              <textarea
+                id="course-quals"
+                value={qualificationsText}
+                onChange={(event) => setQualificationsText(event.target.value)}
+                rows={3}
+                placeholder="1. มีสัญชาติไทย...&#10;2. มีประสบการณ์..."
+                className="mt-1 w-full resize-y rounded-[5px] border border-[#d1d5db] bg-white px-3 py-2 text-[12.5px] leading-relaxed text-[#1f2937] outline-none transition focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/20"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="course-docs" className={labelClass}>
+                เอกสารและหลักฐานประกอบการสมัคร (ขึ้นบรรทัดใหม่เพื่อแยกรายการ)
+              </label>
+              <textarea
+                id="course-docs"
+                value={requiredDocumentsText}
+                onChange={(event) => setRequiredDocumentsText(event.target.value)}
+                rows={3}
+                placeholder="1. รูปถ่าย...&#10;2. สำเนาบัตรประชาชน..."
+                className="mt-1 w-full resize-y rounded-[5px] border border-[#d1d5db] bg-white px-3 py-2 text-[12.5px] leading-relaxed text-[#1f2937] outline-none transition focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/20"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="course-eval" className={labelClass}>
+                เกณฑ์การสำเร็จการอบรมและการรับวุฒิบัตร (ขึ้นบรรทัดใหม่เพื่อแยกข้อ)
+              </label>
+              <textarea
+                id="course-eval"
+                value={evaluationCriteriaText}
+                onChange={(event) => setEvaluationCriteriaText(event.target.value)}
+                rows={3}
+                placeholder="1. เวลาเข้าอบรมไม่น้อยกว่าร้อยละ 80...&#10;2. ผ่านการทดสอบ..."
                 className="mt-1 w-full resize-y rounded-[5px] border border-[#d1d5db] bg-white px-3 py-2 text-[12.5px] leading-relaxed text-[#1f2937] outline-none transition focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/20"
               />
             </div>
