@@ -9,10 +9,34 @@ import {
 } from "@/lib/sports-events-store";
 
 const SHORT_MONTH_NAMES: Record<number, string> = {
+  1: "ม.ค.",
+  2: "ก.พ.",
+  3: "มี.ค.",
+  4: "เม.ย.",
+  5: "พ.ค.",
+  6: "มิ.ย.",
+  7: "ก.ค.",
+  8: "ส.ค.",
+  9: "ก.ย.",
   10: "ต.ค.",
   11: "พ.ย.",
   12: "ธ.ค.",
 };
+
+const FULL_MONTH_OPTIONS = [
+  { value: 1, label: "มกราคม 2570" },
+  { value: 2, label: "กุมภาพันธ์ 2570" },
+  { value: 3, label: "มีนาคม 2570" },
+  { value: 4, label: "เมษายน 2570" },
+  { value: 5, label: "พฤษภาคม 2570" },
+  { value: 6, label: "มิถุนายน 2570" },
+  { value: 7, label: "กรกฎาคม 2570" },
+  { value: 8, label: "สิงหาคม 2570" },
+  { value: 9, label: "กันยายน 2570" },
+  { value: 10, label: "ตุลาคม 2570" },
+  { value: 11, label: "พฤศจิกายน 2570" },
+  { value: 12, label: "ธันวาคม 2570" },
+];
 
 interface EditSportsEventDialogProps {
   event: SportsEvent | null;
@@ -223,9 +247,11 @@ export function EditSportsEventDialog({
                     onChange={(e) => setStartMonth(parseInt(e.target.value))}
                     className="h-8 flex-1 rounded border border-[#cbd5e1] bg-white px-2 text-[11.5px]"
                   >
-                    <option value={10}>ตุลาคม 2570</option>
-                    <option value={11}>พฤศจิกายน 2570</option>
-                    <option value={12}>ธันวาคม 2570</option>
+                    {FULL_MONTH_OPTIONS.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -248,9 +274,11 @@ export function EditSportsEventDialog({
                     onChange={(e) => setEndMonth(parseInt(e.target.value))}
                     className="h-8 flex-1 rounded border border-[#cbd5e1] bg-white px-2 text-[11.5px]"
                   >
-                    <option value={10}>ตุลาคม 2570</option>
-                    <option value={11}>พฤศจิกายน 2570</option>
-                    <option value={12}>ธันวาคม 2570</option>
+                    {FULL_MONTH_OPTIONS.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

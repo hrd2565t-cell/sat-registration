@@ -5,10 +5,22 @@ import { useState } from "react";
 import Link from "next/link";
 import { useIsAdmin } from "@/lib/admin-auth";
 import {
+  formatCourseDateFields,
+  parseCourseDateSessions,
+  type Course,
+} from "@/lib/courses";
+import {
+  updateCourse,
+  useCourses,
+  type CourseUpdate,
+} from "@/lib/courses-store";
+import {
   useSportsEvents,
   type SportsEvent,
+  dateToTimelinePercent,
   resetSportsEvents,
 } from "@/lib/sports-events-store";
+import { CourseEditDialog } from "@/components/admin/course-edit-dialog";
 import { AddSportsEventDialog } from "@/components/timeline/add-sports-event-dialog";
 import { EditSportsEventDialog } from "@/components/timeline/edit-sports-event-dialog";
 import { SyncDefaultsButton } from "@/components/admin/sync-defaults-button";
@@ -17,14 +29,18 @@ type BarTone = "open" | "review" | "training" | "result";
 
 interface TimelineBar {
   label: string;
+  tooltip?: string;
   tone: BarTone;
   left: number;
   width: number;
 }
 
 interface TimelineRow {
+  course: Course;
   title: string;
-  english: string;
+  shortBadge?: string;
+  dateSummary: string;
+  sessionSummary: string;
   bars: TimelineBar[];
 }
 
@@ -35,60 +51,128 @@ const bars: Record<BarTone, string> = {
   result: "bg-[#c4080f]",
 };
 
-const rows: TimelineRow[] = [
-  {
-    title: "ผู้ฝึกสอนกีฬาระดับชาติ",
-    english: "(National Coach)",
-    bars: [
-      { label: "15 ต.ค. - 5 พ.ย.", tone: "open", left: 17.8, width: 22.3 },
-      { label: "6 พ.ย. - 10 พ.ย.", tone: "review", left: 40.4, width: 12.3 },
-      { label: "15 พ.ย. - 20 พ.ย.", tone: "training", left: 56.1, width: 15.2 },
-      { label: "25 พ.ย.", tone: "result", left: 74.5, width: 6.5 },
-    ],
-  },
-  {
-    title: "ผู้ตัดสินกีฬาอาชีพ",
-    english: "(Professional Referee)",
-    bars: [
-      { label: "15 ต.ค. - 10 พ.ย.", tone: "open", left: 17.8, width: 28.7 },
-      { label: "11 พ.ย. - 15 พ.ย.", tone: "review", left: 46.9, width: 13.5 },
-      { label: "20 พ.ย. - 25 พ.ย.", tone: "training", left: 60.9, width: 15.4 },
-      { label: "30 พ.ย.", tone: "result", left: 79.7, width: 6.5 },
-    ],
-  },
-  {
-    title: "วิทยาศาสตร์การกีฬาขั้นพื้นฐาน",
-    english: "(Basic Sports Science)",
-    bars: [
-      { label: "10 ต.ค. - 20 ต.ค.", tone: "open", left: 5.5, width: 18.2 },
-      { label: "21 ต.ค. - 25 ต.ค.", tone: "review", left: 24, width: 13.1 },
-      { label: "1 พ.ย. - 5 พ.ย.", tone: "training", left: 72.9, width: 13.7 },
-      { label: "10 พ.ย.", tone: "result", left: 92, width: 6.5 },
-    ],
-  },
-  {
-    title: "การบริหารจัดการองค์การกีฬา",
-    english: "(Sports Management)",
-    bars: [
-      { label: "1 พ.ย. - 15 พ.ย.", tone: "open", left: 37.1, width: 14.8 },
-      { label: "16 พ.ย. - 20 พ.ย.", tone: "review", left: 52.3, width: 13.7 },
-      { label: "8 ธ.ค. - 12 ธ.ค.", tone: "training", left: 77.1, width: 13.9 },
-      { label: "18 ธ.ค.", tone: "result", left: 92.8, width: 6.4 },
-    ],
-  },
-  {
-    title: "จิตวิทยาการกีฬาสำหรับผู้ฝึกสอน",
-    english: "(Sports Psychology)",
-    bars: [
-      { label: "15 ต.ค. - 15 พ.ย.", tone: "open", left: 17.8, width: 34.2 },
-      { label: "16 พ.ย. - 20 พ.ย.", tone: "review", left: 52.3, width: 13.7 },
-      { label: "14 ธ.ค. - 18 ธ.ค.", tone: "training", left: 74.6, width: 14.5 },
-      { label: "24 ธ.ค.", tone: "result", left: 92.8, width: 6.4 },
-    ],
-  },
-];
+function buildCourseTimelineRow(course: Course): TimelineRow {
+  const sessions = parseCourseDateSessions(course.date);
+  const totalDays = sessions.reduce((acc, s) => {
+    const yearCE = s.yearBE - 543;
+    const start = new Date(yearCE, s.startMonth, s.startDay);
+    const end = new Date(yearCE, s.endMonth, s.endDay);
+    const diff =
+      Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    return acc + Math.max(1, diff);
+  }, 0);
 
-const columns = ["หลักสูตร / รายการ", "ตุลาคม 2570", "6 พ.ย. 2570", "15 พ.ย. 2570", "ธันวาคม 2570"];
+  const first = sessions[0];
+  const last = sessions[sessions.length - 1] ?? first;
+
+  const trainStartPct = dateToTimelinePercent(
+    first.startDay,
+    first.startMonth + 1
+  );
+  const trainEndPct = dateToTimelinePercent(last.endDay, last.endMonth + 1);
+  const trainWidth = Math.min(
+    Math.max(13.5, Math.round((trainEndPct - trainStartPct) * 10) / 10),
+    92 - trainStartPct
+  );
+
+  const cleanDateLabel = course.date.replace(/\s*25\d{2}$/, "").trim();
+  const sessionDetails = sessions
+    .map((s, idx) => `ช่วงที่ ${idx + 1}: ${formatCourseDateFields(s, false)}`)
+    .join(" | ");
+
+  const rowBars: TimelineBar[] = [];
+
+  // 1. แถบเปิดรับสมัคร & ตรวจคุณสมบัติ (วางก่อนหน้าวันเริ่มอบรมอัตโนมัติ)
+  if (trainStartPct >= 22) {
+    const openLeft = Math.max(1, Math.round((trainStartPct - 20.5) * 10) / 10);
+    const openWidth = 10.5;
+    const reviewLeft = Math.round((openLeft + openWidth + 0.5) * 10) / 10;
+    const reviewWidth = Math.max(
+      6.5,
+      Math.round((trainStartPct - reviewLeft - 0.5) * 10) / 10
+    );
+    rowBars.push({
+      label: "เปิดรับสมัคร",
+      tooltip: `เปิดรับสมัคร: ล่วงหน้าก่อนการอบรม (${course.title})`,
+      tone: "open",
+      left: openLeft,
+      width: openWidth,
+    });
+    rowBars.push({
+      label: "ตรวจคุณสมบัติ",
+      tooltip: `ตรวจสอบคุณสมบัติและเอกสาร (${course.title})`,
+      tone: "review",
+      left: reviewLeft,
+      width: reviewWidth,
+    });
+  } else if (trainStartPct >= 6) {
+    const available = Math.max(4, trainStartPct - 1.2);
+    const openWidth = Math.round(available * 0.54 * 10) / 10;
+    const reviewWidth = Math.max(
+      3.5,
+      Math.round((available - openWidth - 0.3) * 10) / 10
+    );
+    rowBars.push({
+      label: "รับสมัคร",
+      tooltip: `เปิดรับสมัคร (${course.title})`,
+      tone: "open",
+      left: 0.8,
+      width: openWidth,
+    });
+    rowBars.push({
+      label: "ตรวจสิทธิ",
+      tooltip: `ตรวจคุณสมบัติ (${course.title})`,
+      tone: "review",
+      left: Math.round((0.8 + openWidth + 0.3) * 10) / 10,
+      width: reviewWidth,
+    });
+  }
+
+  // 2. แถบจัดอบรมจริง (สีเขียว)
+  rowBars.push({
+    label: cleanDateLabel,
+    tooltip:
+      sessions.length > 1
+        ? `จัดอบรม ${sessions.length} ช่วง (รวม ${totalDays} วัน): ${sessionDetails}`
+        : `ช่วงวันจัดอบรม (${totalDays} วัน): ${course.date}`,
+    tone: "training",
+    left: Math.round(trainStartPct * 10) / 10,
+    width: trainWidth,
+  });
+
+  // 3. แถบประกาศผล (สีแดง)
+  const resultLeft = Math.min(
+    93.5,
+    Math.round((trainStartPct + trainWidth + 0.6) * 10) / 10
+  );
+  rowBars.push({
+    label: "ประกาศผล",
+    tooltip: `ประกาศผลผู้ผ่านการอบรม (${course.title})`,
+    tone: "result",
+    left: resultLeft,
+    width: 5.8,
+  });
+
+  return {
+    course,
+    title: course.title,
+    shortBadge: course.shortTitle,
+    dateSummary: course.date,
+    sessionSummary:
+      sessions.length > 1
+        ? `${sessions.length} ช่วง · รวม ${totalDays} วัน`
+        : `รวม ${totalDays} วัน`,
+    bars: rowBars,
+  };
+}
+
+const columns = [
+  "หลักสูตร / รายการ",
+  "ม.ค. – มี.ค. 2570",
+  "เม.ย. – มิ.ย. 2570",
+  "ก.ค. – ก.ย. 2570",
+  "ต.ค. – ธ.ค. 2570",
+];
 
 /**
  * Free slots across the timeline without major conflicts
@@ -96,27 +180,27 @@ const columns = ["หลักสูตร / รายการ", "ตุลา�
 const FREE_SLOTS = [
   {
     id: "slot-1",
-    label: "ว่าง 6 วัน",
-    dateRange: "1 - 6 พ.ย. 2570",
-    left: 25.0,
-    width: 15.4,
-    description: "ก่อนเริ่มกีฬาคนพิการแห่งชาติ เหมาะสำหรับจัดอบรม/สัมมนาสั้น",
+    label: "ว่างช่วง มี.ค. – เม.ย.",
+    dateRange: "5 มี.ค. – 30 เม.ย. 2570",
+    left: dateToTimelinePercent(5, 3),
+    width: 15.2,
+    description: "หลังจบหลักสูตรผู้บริหาร (ก.พ.) และก่อนหลักสูตรผู้ตัดสิน (พ.ค.) เหมาะจัดอบรมเพิ่มเติม",
   },
   {
     id: "slot-2",
-    label: "ว่าง 7 วัน (แนะนำ)",
-    dateRange: "1 - 7 ธ.ค. 2570",
-    left: 75.0,
-    width: 6.0,
-    description: "หลังจบชิงแชมป์ประเทศไทย และก่อนเริ่มกีฬาแห่งชาติ — เหมาะจัดอบรม 3-5 วัน",
+    label: "ว่างช่วง มิ.ย. – ก.ค. (แนะนำ)",
+    dateRange: "1 มิ.ย. – 25 ก.ค. 2570",
+    left: dateToTimelinePercent(1, 6),
+    width: 15.0,
+    description: "ช่วงกลางปีก่อนเริ่มหลักสูตรเดือน ส.ค. ไม่มีรายการแข่งขันกีฬาใหญ่ชน",
   },
   {
     id: "slot-3",
-    label: "ว่าง 12 วัน",
-    dateRange: "20 - 31 ธ.ค. 2570",
-    left: 93.0,
-    width: 7.0,
-    description: "หลังจบกีฬาแห่งชาติ ครั้งที่ 49 และหลังการอบรมทุกหลักสูตรสิ้นสุดลง",
+    label: "ว่างช่วง ก.ย.",
+    dateRange: "1 – 30 ก.ย. 2570",
+    left: dateToTimelinePercent(1, 9),
+    width: 8.0,
+    description: "หลังจบการอบรมเดือน ส.ค. และก่อนเข้าสู่ฤดูกาลแข่งขันกีฬาไตรมาส 4 (ต.ค.–ธ.ค.)",
   },
 ];
 
@@ -179,7 +263,8 @@ function TimelineBarItem({ bar }: { bar: TimelineBar }) {
 
   return (
     <div
-      className={`absolute top-1/2 z-10 flex h-[18px] -translate-y-1/2 items-center justify-center rounded-full font-semibold leading-none text-white shadow-sm xl:h-[clamp(21px,1.6vw,28px)] ${
+      title={bar.tooltip || bar.label}
+      className={`group absolute top-1/2 z-10 flex h-[18px] -translate-y-1/2 items-center justify-center rounded-full font-semibold leading-none text-white shadow-sm transition-transform hover:scale-[1.02] hover:z-30 xl:h-[clamp(21px,1.6vw,28px)] ${
         compact
           ? "px-0.5 text-[6px] xl:px-1 xl:text-[clamp(6.5px,0.5vw,8px)]"
           : "px-1 text-[7.5px] xl:px-1.5 xl:text-[clamp(8px,0.6vw,10.5px)]"
@@ -228,12 +313,22 @@ function SportsEventBarItem({
 
 export function TimelineSchedule() {
   const isAdmin = useIsAdmin();
+  const { courses } = useCourses();
   const { events, deleteSportsEvent } = useSportsEvents();
   const [showSportsEvents, setShowSportsEvents] = useState(true);
   const [highlightFreeSlots, setHighlightFreeSlots] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<SportsEvent | null>(null);
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [hoveredEvent, setHoveredEvent] = useState<SportsEvent | null>(null);
+
+  const rows = courses.map(buildCourseTimelineRow);
+
+  function handleSaveCourse(patch: CourseUpdate): boolean {
+    if (!editingCourse) return false;
+    updateCourse(editingCourse.id, patch);
+    return true;
+  }
 
   return (
     <>
@@ -345,18 +440,46 @@ export function TimelineSchedule() {
             <tbody>
               {/* Training Courses Rows */}
               {rows.map((row) => (
-                <tr key={row.title} className="h-[37px] xl:h-[clamp(43px,3.1vw,58px)]">
+                <tr
+                  key={row.course.id}
+                  className="min-h-[44px] transition hover:bg-[#f8fafc] xl:h-[clamp(48px,3.4vw,64px)]"
+                >
                   <th
                     scope="row"
-                    className="border border-t-0 border-l-0 border-[#d8dee4] px-2 py-0.5 text-left align-middle text-[9.5px] font-semibold leading-[1.2] xl:px-3 xl:text-[clamp(10.5px,0.8vw,12.5px)]"
+                    className="border border-t-0 border-l-0 border-[#d8dee4] px-2 py-1.5 text-left align-middle text-[9.5px] font-semibold leading-[1.25] xl:px-3 xl:text-[clamp(10.5px,0.8vw,12.5px)]"
                   >
-                    {row.title}
-                    <span className="mt-0.5 block text-[8.5px] font-normal leading-[1.1] text-[#4b5563] xl:text-[clamp(9px,0.65vw,11px)]">
-                      {row.english}
-                    </span>
+                    <div className="flex flex-col gap-0.5">
+                      {row.shortBadge && (
+                        <div className="flex items-center gap-1">
+                          <span className="inline-flex items-center rounded bg-[#eef2f9] px-1.5 py-0.2 text-[8px] font-bold text-[#16265E]">
+                            {row.shortBadge}
+                          </span>
+                          <span className="text-[8px] font-semibold text-[#059669]">
+                            ({row.sessionSummary})
+                          </span>
+                        </div>
+                      )}
+                      <span className="line-clamp-2 font-bold text-[#111827]" title={row.title}>
+                        {row.title}
+                      </span>
+                      <span className="mt-0.5 block text-[8.5px] font-normal leading-[1.15] text-[#4b5563] xl:text-[clamp(9px,0.65vw,10.5px)]">
+                        📅 {row.dateSummary}
+                      </span>
+                      {isAdmin && (
+                        <div className="mt-1 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setEditingCourse(row.course)}
+                            className="inline-flex items-center gap-0.5 rounded border border-[#cbd5e1] bg-white px-1.5 py-0.5 text-[8.5px] font-semibold text-[#16265E] transition hover:border-[#16265E] hover:bg-[#eef2f9] active:scale-[0.98]"
+                          >
+                            <span>✏️ แก้ไขหลักสูตร</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </th>
                   <td colSpan={4} className="relative border border-t-0 border-r-0 border-[#d8dee4] p-0">
-                    <div className="relative h-[37px] overflow-hidden xl:h-[clamp(43px,3.1vw,58px)]">
+                    <div className="relative h-[46px] overflow-hidden xl:h-[clamp(48px,3.4vw,64px)]">
                       {/* Grid background 4 columns */}
                       <div className="pointer-events-none absolute inset-0 grid grid-cols-4" aria-hidden="true">
                         <span className="border-r border-[#edf0f2]" />
@@ -379,8 +502,8 @@ export function TimelineSchedule() {
                       )}
 
                       {/* Course Bars */}
-                      {row.bars.map((bar) => (
-                        <TimelineBarItem key={`${row.title}-${bar.tone}`} bar={bar} />
+                      {row.bars.map((bar, idx) => (
+                        <TimelineBarItem key={`${row.course.id}-${bar.tone}-${idx}`} bar={bar} />
                       ))}
                     </div>
                   </td>
@@ -560,13 +683,13 @@ export function TimelineSchedule() {
           </div>
 
           {/* Tournament Clash Watch */}
-          <div className="mt-3 flex items-start gap-2 rounded-xl border border-[#fed7aa] bg-[#fffbeb] p-2.5 text-[11.5px] text-[#9a3412]">
-            <span className="text-base shrink-0">⚠️</span>
+          <div className="mt-3 flex items-start gap-2 rounded-xl border border-[#bbf7d0] bg-[#ecfdf5] p-2.5 text-[11.5px] text-[#065f46]">
+            <span className="text-base shrink-0">✅</span>
             <div>
-              <span className="font-bold">ข้อสังเกตสำหรับผู้บริหาร: </span>
-              ช่วงวันที่ <span className="font-semibold underline">9 - 19 ธันวาคม 2570</span> เป็นช่วงจัดแข่งขัน{" "}
-              <span className="font-semibold">มหกรรมกีฬาแห่งชาติ ครั้งที่ 49 (จ.จันทบุรี)</span> ซึ่งคาบเกี่ยวกับหลักสูตร{" "}
-              <span className="font-semibold">จิตวิทยาการกีฬาสำหรับผู้ฝึกสอน (14 - 18 ธ.ค.)</span> ควรประสานงานสมาคมกีฬาเพื่อคัดเลือกผู้ฝึกสอนที่ไม่ได้ติดภารกิจคุมทีมแข่งขันในรายการดังกล่าว
+              <span className="font-bold">สรุปภาพรวมตารางปี 2570 ({courses.length} หลักสูตร): </span>
+              แผนการจัดอบรมทั้ง {courses.length} หลักสูตร ถูกวางกระจายในช่วงไตรมาส 1 – ไตรมาส 3 (ก.พ. – ส.ค. 2570) ทำให้{" "}
+              <span className="font-semibold underline">ไม่ชนกับช่วงมหกรรมกีฬาใหญ่ในไตรมาส 4 (ต.ค. – ธ.ค. 2570)</span>{" "}
+              บุคลากรและผู้ฝึกสอนสามารถเข้าร่วมอบรมได้เต็มเวลาโดยไม่กระทบภารกิจการแข่งขัน
             </div>
           </div>
         </section>
@@ -583,6 +706,15 @@ export function TimelineSchedule() {
         event={editingEvent}
         onClose={() => setEditingEvent(null)}
       />
+
+      {/* Edit Course Modal directly from Timeline */}
+      {editingCourse && (
+        <CourseEditDialog
+          course={editingCourse}
+          onClose={() => setEditingCourse(null)}
+          onSave={handleSaveCourse}
+        />
+      )}
     </>
   );
 }

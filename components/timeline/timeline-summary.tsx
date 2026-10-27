@@ -1,30 +1,76 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowRightIcon, CalendarIcon } from "@/components/ui/icons";
+import { useCourses } from "@/lib/courses-store";
+import { parseCourseDateSessions } from "@/lib/courses";
 
-const phases = [
-  {
-    label: "เปิดรับสมัคร",
-    range: "10 ต.ค. – 15 พ.ย. 2570",
-    border: "border-l-[#1869bc]",
-  },
-  {
-    label: "ตรวจคุณสมบัติ",
-    range: "21 ต.ค. – 20 พ.ย. 2570",
-    border: "border-l-[#ef8507]",
-  },
-  {
-    label: "ช่วงเวลาจัดอบรม",
-    range: "1 พ.ย. – 18 ธ.ค. 2570",
-    border: "border-l-[#198c32]",
-  },
-  {
-    label: "ประกาศผล",
-    range: "10 พ.ย. – 24 ธ.ค. 2570",
-    border: "border-l-[#c4080f]",
-  },
+const THAI_MONTHS_SHORT = [
+  "ม.ค.",
+  "ก.พ.",
+  "มี.ค.",
+  "เม.ย.",
+  "พ.ค.",
+  "มิ.ย.",
+  "ก.ค.",
+  "ส.ค.",
+  "ก.ย.",
+  "ต.ค.",
+  "พ.ย.",
+  "ธ.ค.",
 ];
 
 export function TimelineSummary() {
+  const { courses } = useCourses();
+
+  // Compute dynamic earliest & latest training dates across all courses
+  let minMonth = 11;
+  let minDay = 31;
+  let maxMonth = 0;
+  let maxDay = 1;
+
+  for (const c of courses) {
+    const sessions = parseCourseDateSessions(c.date);
+    for (const s of sessions) {
+      if (s.startMonth < minMonth || (s.startMonth === minMonth && s.startDay < minDay)) {
+        minMonth = s.startMonth;
+        minDay = s.startDay;
+      }
+      if (s.endMonth > maxMonth || (s.endMonth === maxMonth && s.endDay > maxDay)) {
+        maxMonth = s.endMonth;
+        maxDay = s.endDay;
+      }
+    }
+  }
+
+  const trainingRange =
+    courses.length > 0
+      ? `${minDay} ${THAI_MONTHS_SHORT[minMonth]} – ${maxDay} ${THAI_MONTHS_SHORT[maxMonth]} 2570`
+      : "ม.ค. – ธ.ค. 2570";
+
+  const phases = [
+    {
+      label: "เปิดรับสมัคร",
+      range: "ล่วงหน้าก่อนอบรม",
+      border: "border-l-[#1869bc]",
+    },
+    {
+      label: "ตรวจคุณสมบัติ",
+      range: "ก่อนเริ่มแต่ละรุ่น",
+      border: "border-l-[#ef8507]",
+    },
+    {
+      label: "ช่วงเวลาจัดอบรม",
+      range: trainingRange,
+      border: "border-l-[#198c32]",
+    },
+    {
+      label: "ประกาศผล",
+      range: "หลังจบการอบรม",
+      border: "border-l-[#c4080f]",
+    },
+  ];
+
   return (
     <section
       aria-labelledby="timeline-summary-title"
@@ -43,7 +89,7 @@ export function TimelineSummary() {
               Timeline การอบรม ปี 2570
             </h3>
             <p className="mt-0.5 text-[12px] leading-relaxed text-[#6b7280] sm:text-[12.5px]">
-              ดูช่วงเวลาสำคัญของทั้ง 5 หลักสูตร พร้อมเทียบปฏิทินแข่งขันกีฬา กกท. และช่วงเวลาว่าง
+              ดูช่วงเวลาสำคัญของทั้ง {courses.length} หลักสูตร พร้อมเทียบปฏิทินแข่งขันกีฬา กกท. และช่วงเวลาว่างตลอดปี
             </p>
           </div>
         </div>
@@ -74,7 +120,7 @@ export function TimelineSummary() {
       </ol>
 
       <p className="mt-3 text-[11px] leading-relaxed text-[#6b7280]">
-        * ช่วงวันที่เป็นภาพรวมของทั้ง 5 หลักสูตร แต่ละหลักสูตรมีกำหนดแตกต่างกัน
+        * ช่วงวันที่อัปเดตอัตโนมัติตามข้อมูลจริงของทั้ง {courses.length} หลักสูตร
       </p>
     </section>
   );

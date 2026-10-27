@@ -36,32 +36,17 @@ export const CATEGORY_LABELS: Record<EventCategory, string> = {
 };
 
 /**
- * Calculates timeline coordinates (left% & width%)
- * Grid columns:
- * Col 1: ตุลาคม 2570 (0% - 25%)
- * Col 2: 1-10 พ.ย. 2570 (25% - 50%)
- * Col 3: 11-30 พ.ย. 2570 (50% - 75%)
- * Col 4: ธันวาคม 2570 (75% - 100%)
+ * Calculates timeline coordinates (left% & width%) across 12 months (4 Quarters):
+ * Col 1 (0% - 25%): ม.ค. – มี.ค. 2570 (เดือน 1 - 3)
+ * Col 2 (25% - 50%): เม.ย. – มิ.ย. 2570 (เดือน 4 - 6)
+ * Col 3 (50% - 75%): ก.ค. – ก.ย. 2570 (เดือน 7 - 9)
+ * Col 4 (75% - 100%): ต.ค. – ธ.ค. 2570 (เดือน 10 - 12)
  */
 export function dateToTimelinePercent(day: number, month: number): number {
-  if (month === 10) {
-    const clampedDay = Math.min(Math.max(day, 10), 31);
-    return Math.max(0, 5 + ((clampedDay - 10) / 21) * 20);
-  }
-  if (month === 11) {
-    if (day <= 10) {
-      const clampedDay = Math.min(Math.max(day, 1), 10);
-      return 25 + ((clampedDay - 1) / 9) * 25;
-    } else {
-      const clampedDay = Math.min(Math.max(day, 11), 30);
-      return 50 + ((clampedDay - 11) / 19) * 25;
-    }
-  }
-  if (month === 12) {
-    const clampedDay = Math.min(Math.max(day, 1), 31);
-    return 75 + ((clampedDay - 1) / 30) * 22;
-  }
-  return 0;
+  const clampedMonth = Math.min(Math.max(month, 1), 12); // 1..12
+  const clampedDay = Math.min(Math.max(day, 1), 31); // 1..31
+  const fraction = (clampedMonth - 1 + (clampedDay - 1) / 31) / 12;
+  return Math.min(Math.max(1.5 + fraction * 95, 1), 96);
 }
 
 export function computeEventBounds(
@@ -72,12 +57,25 @@ export function computeEventBounds(
 ): { left: number; width: number } {
   const left = Math.round(dateToTimelinePercent(startDay, startMonth) * 10) / 10;
   const right = Math.round(dateToTimelinePercent(endDay, endMonth) * 10) / 10;
-  const width = Math.max(5.5, Math.round(Math.max(4, right - left) * 10) / 10);
-  return { left, width };
+  const width = Math.max(5.5, Math.round(Math.max(5.5, right - left) * 10) / 10);
+  return { left: Math.min(left, 100 - width - 0.5), width };
 }
 
-export const DEFAULT_SPORTS_EVENTS: SportsEvent[] =
-  defaultSportsEventsData as SportsEvent[];
+function normalizeEvents(list: SportsEvent[]): SportsEvent[] {
+  return list.map((evt) => {
+    const { left, width } = computeEventBounds(
+      evt.startDay,
+      evt.startMonth,
+      evt.endDay,
+      evt.endMonth
+    );
+    return { ...evt, left, width };
+  });
+}
+
+export const DEFAULT_SPORTS_EVENTS: SportsEvent[] = normalizeEvents(
+  defaultSportsEventsData as SportsEvent[]
+);
 
 export function getSportsEventsSnapshot(): SportsEvent[] {
   return state.events;
@@ -126,7 +124,7 @@ function hydrate() {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
       state = {
-        events: parsed,
+        events: normalizeEvents(parsed),
         revision: state.revision + 1,
       };
       emit();
