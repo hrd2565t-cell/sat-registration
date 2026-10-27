@@ -4,13 +4,19 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { CourseEditDialog } from "@/components/admin/course-edit-dialog";
+import { SyncDefaultsButton } from "@/components/admin/sync-defaults-button";
 import {
+  DEFAULT_EXPENSES_POLICY,
+  DEFAULT_SAT_SUPPORT,
   DEFAULT_TARGET_QUOTAS,
   TARGET_GROUPS,
   getTargetGroupKey,
+  type Course,
 } from "@/lib/courses";
 import { useApplications } from "@/lib/applications-store";
 import {
+  addCourse,
+  deleteCourse,
   updateCourse,
   useCourses,
   type CourseUpdate,
@@ -91,10 +97,44 @@ function UsersIcon() {
   );
 }
 
+const NEW_COURSE_TEMPLATE: Course = {
+  id: 0,
+  image: "/assets/course-national-coach.png",
+  imageAlt: "หลักสูตรใหม่ - รูปประกอบ",
+  status: "open",
+  capacity: 50,
+  seatsLeft: 50,
+  title: "",
+  shortTitle: "",
+  date: "1 - 5 พ.ย. 2570",
+  location: "สนามกีฬาสถาบันการกีฬาแห่งชาติ กทม.",
+  seats: "จำนวนที่นั่ง 50 คน",
+  targetQuotas: { ...DEFAULT_TARGET_QUOTAS },
+  courseObjective:
+    "เพื่อพัฒนาความรู้และทักษะวิชาชีพบุคลากรทางการกีฬาตามมาตรฐานการกีฬาแห่งประเทศไทย",
+  qualifications: [
+    "มีสัญชาติไทย อายุ 20 ปีบริบูรณ์ขึ้นไป",
+    "สังกัดหน่วยงานใน 5 กลุ่มเป้าหมาย กกท. (มีหนังสือนำส่งรับรองจากต้นสังกัด)",
+  ],
+  requiredDocuments: [
+    "รูปถ่ายหน้าตรงขนาด 1.5 - 2 นิ้ว ถ่ายไม่เกิน 6 เดือน (ไฟล์ JPG/PNG)",
+    "หนังสือนำส่งรับรองจากต้นสังกัดหรือสมาคมกีฬา (ไฟล์ PDF)",
+    "สำเนาบัตรประจำตัวประชาชน พร้อมลงนามรับรองสำเนาถูกต้อง",
+  ],
+  evaluationCriteria: [
+    "มีเวลาเข้าร่วมการอบรมไม่น้อยกว่าร้อยละ 80 ของเวลาทั้งหมด",
+    "ผ่านการประเมินผลภาคทฤษฎีและภาคปฏิบัติตามเกณฑ์ที่กำหนด",
+    "ได้รับวุฒิบัตรรับรองจากการกีฬาแห่งประเทศไทย (กกท.)",
+  ],
+  satSupport: [...DEFAULT_SAT_SUPPORT],
+  expensesPolicy: DEFAULT_EXPENSES_POLICY,
+};
+
 export function CoursesAdmin() {
   const { applications } = useApplications();
   const { courses } = useCourses();
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
   const [notice, setNotice] = useState("");
 
   const editingCourse =
@@ -117,10 +157,37 @@ export function CoursesAdmin() {
         `บันทึก ${result.course.title} แล้ว แต่เบราว์เซอร์ไม่อนุญาตให้จัดเก็บถาวร ข้อมูลจะหายเมื่อรีเฟรช`
       );
     } else {
-      setNotice(`บันทึกการแก้ไข ${result.course.title} เรียบร้อยแล้ว`);
+      setNotice(`บันทึกการแก้ไข ${result.course.title} เรียบร้อยแล้ว (กดปุ่ม "บันทึกเป็นข้อมูลหลักถาวร" ด้านบนเพื่อฝังข้อมูลลงไฟล์ระบบ)`);
     }
     setEditingId(null);
     return true;
+  };
+
+  const handleCreate = (patch: CourseUpdate) => {
+    if (!patch.title?.trim()) {
+      return "กรุณาระบุชื่อหลักสูตร";
+    }
+    const result = addCourse({
+      ...patch,
+      title: patch.title.trim(),
+    });
+    if (!result.persisted && patch.image?.startsWith("data:image/")) {
+      return "รูปมีขนาดใหญ่เกินพื้นที่จัดเก็บของเบราว์เซอร์ กรุณาเลือกรูปที่เล็กลง";
+    }
+    setNotice(`เพิ่มหลักสูตร "${result.course.title}" เรียบร้อยแล้ว (กดปุ่ม "บันทึกเป็นข้อมูลหลักถาวร" ด้านบนเพื่อฝังข้อมูลลงไฟล์ระบบ)`);
+    setIsCreating(false);
+    return true;
+  };
+
+  const handleDelete = (course: Course) => {
+    if (
+      confirm(
+        `คุณต้องการลบหลักสูตร "${course.title}" ออกจากระบบใช่หรือไม่?`
+      )
+    ) {
+      deleteCourse(course.id);
+      setNotice(`ลบหลักสูตร "${course.title}" เรียบร้อยแล้ว`);
+    }
   };
 
   const totals = courses.reduce(
@@ -149,15 +216,25 @@ export function CoursesAdmin() {
             <p className="mt-1 max-w-[680px] text-[11.5px] leading-relaxed text-[#4b5563]">
               ภาพรวมหลักสูตรและจำนวนผู้สมัครจากข้อมูลกลาง
               แก้ไขรายละเอียด สถานะ และจำนวนที่นั่งได้จากปุ่มบนการ์ด
-              การเปลี่ยนแปลงจะแสดงบนหน้าเว็บสาธารณะทันที
+              เมื่อแก้ไขเสร็จแล้วกดปุ่มสีเขียวเพื่อบันทึกฝังลงไฟล์ระบบถาวร
             </p>
           </div>
-          <Link
-            href="/"
-            className="inline-flex h-8 items-center rounded-[5px] border border-[#c7d7ea] bg-white px-3 text-[11px] font-semibold text-[#1e3a8a] transition-colors hover:bg-[#eff6ff]"
-          >
-            ดูหน้าหลักสูตรสาธารณะ
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsCreating(true)}
+              className="inline-flex h-8 items-center gap-1 rounded-[5px] bg-[#1e3a8a] px-3 text-[11px] font-semibold text-white shadow-sm transition hover:bg-[#1e40af] active:scale-[0.98]"
+            >
+              <span>+ เพิ่มหลักสูตรใหม่</span>
+            </button>
+            <SyncDefaultsButton onSuccess={(msg) => setNotice(msg)} />
+            <Link
+              href="/"
+              className="inline-flex h-8 items-center rounded-[5px] border border-[#c7d7ea] bg-white px-3 text-[11px] font-semibold text-[#1e3a8a] transition-colors hover:bg-[#eff6ff]"
+            >
+              ดูหน้าหลักสูตรสาธารณะ
+            </Link>
+          </div>
         </div>
 
         {notice && (
@@ -243,15 +320,26 @@ export function CoursesAdmin() {
                   sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
                   className="object-cover"
                 />
-                <button
-                  type="button"
-                  onClick={() => setEditingId(course.id)}
-                  aria-label={`แก้ไข ${course.title}`}
-                  className="absolute left-2 top-2 z-10 inline-flex h-7 items-center gap-1 rounded-[5px] border border-white/90 bg-white/95 px-2.5 text-[10.5px] font-semibold text-[#1e3a8a] shadow-md backdrop-blur transition hover:bg-white hover:shadow-lg"
-                >
-                  <PencilIcon />
-                  แก้ไข
-                </button>
+                <div className="absolute left-2 top-2 z-10 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(course.id)}
+                    aria-label={`แก้ไข ${course.title}`}
+                    className="inline-flex h-7 items-center gap-1 rounded-[5px] border border-white/90 bg-white/95 px-2.5 text-[10.5px] font-semibold text-[#1e3a8a] shadow-md backdrop-blur transition hover:bg-white hover:shadow-lg"
+                  >
+                    <PencilIcon />
+                    แก้ไข
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(course)}
+                    aria-label={`ลบ ${course.title}`}
+                    title="ลบหลักสูตรนี้"
+                    className="inline-flex h-7 items-center gap-1 rounded-[5px] border border-[#fecaca] bg-white/95 px-2 text-[10.5px] font-semibold text-[#b91c1c] shadow-md backdrop-blur transition hover:bg-[#fef2f2] hover:shadow-lg"
+                  >
+                    🗑️ ลบ
+                  </button>
+                </div>
                 <span
                   className={`absolute right-2 top-2 z-10 min-w-[84px] text-center rounded-[5px] px-2.5 py-1 text-[10.5px] font-semibold text-white shadow-sm ${
                     course.status === "open"
@@ -393,6 +481,15 @@ export function CoursesAdmin() {
           course={editingCourse}
           onClose={() => setEditingId(null)}
           onSave={handleSave}
+        />
+      )}
+
+      {isCreating && (
+        <CourseEditDialog
+          key="new-course"
+          course={NEW_COURSE_TEMPLATE}
+          onClose={() => setIsCreating(false)}
+          onSave={handleCreate}
         />
       )}
     </div>

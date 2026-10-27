@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { logoutAdmin } from "@/lib/admin-auth";
+import { SyncDefaultsButton } from "@/components/admin/sync-defaults-button";
 
 interface AdminTopbarProps {
   title: string;
@@ -49,6 +50,7 @@ export function AdminTopbar({
       </div>
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        <SyncDefaultsButton compact />
         <div className="flex items-center gap-1.5">
           <svg
             className="h-3.5 w-3.5 shrink-0 text-[#4b5563]"

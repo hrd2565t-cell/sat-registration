@@ -233,7 +233,7 @@ export function CourseEditDialog({
       evaluationCriteria: evalCrit.length > 0 ? evalCrit : undefined,
       satSupport: satSup.length > 0 ? satSup : undefined,
       expensesPolicy: expensesPolicy.trim() || undefined,
-      ...(image !== course.image ? { image } : {}),
+      ...(course.id === 0 || image !== course.image ? { image } : {}),
     });
     if (typeof result === "string") setError(result);
   };
@@ -257,13 +257,13 @@ export function CourseEditDialog({
         <div className="flex items-start justify-between gap-3 border-b border-[#eef0f3] px-4 py-3 sm:px-5">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-[#6b7280]">
-              รหัสหลักสูตร #{course.id}
+              {course.id === 0 ? "หลักสูตรใหม่" : `รหัสหลักสูตร #${course.id}`}
             </p>
             <h2
               id="course-edit-title"
               className="mt-0.5 text-[16px] font-semibold text-[#111827]"
             >
-              แก้ไขรายละเอียดหลักสูตร
+              {course.id === 0 ? "เพิ่มหลักสูตรอบรมใหม่" : "แก้ไขรายละเอียดหลักสูตร"}
             </h2>
             <p className="mt-1 text-[11px] leading-relaxed text-[#6b7280]">
               การเปลี่ยนแปลงจะมีผลกับหน้าเว็บสาธารณะทันที

@@ -11,6 +11,7 @@ import {
 } from "@/lib/sports-events-store";
 import { AddSportsEventDialog } from "@/components/timeline/add-sports-event-dialog";
 import { EditSportsEventDialog } from "@/components/timeline/edit-sports-event-dialog";
+import { SyncDefaultsButton } from "@/components/admin/sync-defaults-button";
 
 type BarTone = "open" | "review" | "training" | "result";
 
@@ -273,7 +274,7 @@ export function TimelineSchedule() {
           </div>
 
           {isAdmin ? (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-[#f3e8ff] px-2.5 py-0.5 text-[10px] font-semibold text-[#6d28d9] border border-[#ddd6fe]">
                 🔐 สิทธิ์ Admin: แก้ไขปฏิทินได้
               </span>
@@ -284,6 +285,7 @@ export function TimelineSchedule() {
               >
                 <span>+ เพิ่มรายการแข่งขัน</span>
               </button>
+              <SyncDefaultsButton />
               <button
                 type="button"
                 onClick={() => {
