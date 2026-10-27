@@ -13,9 +13,10 @@ import {
   TARGET_GROUPS,
   THAI_MONTHS,
   formatCourseDateFields,
+  formatCourseDateSessions,
   getDaysInMonth,
   isCourseDateOverlapping,
-  parseCourseDateFields,
+  parseCourseDateSessions,
   type Course,
   type CourseDateFields,
   type TargetGroupQuotas,
@@ -72,11 +73,11 @@ export function CourseEditDialog({
   const [imageBusy, setImageBusy] = useState(false);
   const [title, setTitle] = useState(course.title);
   const [shortTitle, setShortTitle] = useState(course.shortTitle ?? "");
-  const [dateFields, setDateFields] = useState<CourseDateFields>(() =>
-    parseCourseDateFields(course.date)
+  const [sessions, setSessions] = useState<CourseDateFields[]>(() =>
+    parseCourseDateSessions(course.date)
   );
   const [date, setDate] = useState(() =>
-    formatCourseDateFields(parseCourseDateFields(course.date))
+    formatCourseDateSessions(parseCourseDateSessions(course.date))
   );
   const [location, setLocation] = useState(course.location);
   const [seats, setSeats] = useState(course.seats);
@@ -176,87 +177,161 @@ export function CourseEditDialog({
     const yearCE = fields.yearBE - 543;
     const s = new Date(yearCE, fields.startMonth, fields.startDay);
     const e = new Date(yearCE, fields.endMonth, fields.endDay);
-    const diff = Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const diff =
+      Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     return Math.max(1, diff);
   };
 
-  const currentDurationDays = computeDurationDays(dateFields);
+  const totalDurationDays = sessions.reduce(
+    (sum, s) => sum + computeDurationDays(s),
+    0
+  );
+  const currentYearBE = sessions[0]?.yearBE ?? 2570;
 
-  const syncDateState = (next: CourseDateFields) => {
-    setDateFields(next);
-    setDate(formatCourseDateFields(next));
+  const syncSessionsState = (nextSessions: CourseDateFields[]) => {
+    setSessions(nextSessions);
+    setDate(formatCourseDateSessions(nextSessions));
     if (error) setError("");
   };
 
-  const handleStartChange = (
+  const handleSessionStartChange = (
+    idx: number,
     newStartDay: number,
-    newStartMonth: number,
-    newYearBE: number = dateFields.yearBE
+    newStartMonth: number
   ) => {
-    const maxStartDay = getDaysInMonth(newStartMonth, newYearBE);
+    const target = sessions[idx];
+    if (!target) return;
+
+    const maxStartDay = getDaysInMonth(newStartMonth, target.yearBE);
     const clampedStartDay = Math.min(Math.max(1, newStartDay), maxStartDay);
-    const durationToKeep = Math.min(Math.max(1, currentDurationDays), 30);
-    const yearCE = newYearBE - 543;
+    const durationToKeep = Math.min(Math.max(1, computeDurationDays(target)), 30);
+    const yearCE = target.yearBE - 543;
     const endDate = new Date(
       yearCE,
       newStartMonth,
       clampedStartDay + durationToKeep - 1
     );
 
-    syncDateState({
-      startDay: clampedStartDay,
-      startMonth: newStartMonth,
-      endDay: endDate.getDate(),
-      endMonth: endDate.getMonth(),
-      yearBE: newYearBE,
-    });
+    const next = sessions.map((s, i) =>
+      i === idx
+        ? {
+            ...s,
+            startDay: clampedStartDay,
+            startMonth: newStartMonth,
+            endDay: endDate.getDate(),
+            endMonth: endDate.getMonth(),
+          }
+        : s
+    );
+    syncSessionsState(next);
   };
 
-  const handleEndChange = (newEndDay: number, newEndMonth: number) => {
-    const maxEndDay = getDaysInMonth(newEndMonth, dateFields.yearBE);
+  const handleSessionEndChange = (
+    idx: number,
+    newEndDay: number,
+    newEndMonth: number
+  ) => {
+    const target = sessions[idx];
+    if (!target) return;
+
+    const maxEndDay = getDaysInMonth(newEndMonth, target.yearBE);
     const clampedEndDay = Math.min(Math.max(1, newEndDay), maxEndDay);
-    const yearCE = dateFields.yearBE - 543;
-    const startObj = new Date(yearCE, dateFields.startMonth, dateFields.startDay);
+    const yearCE = target.yearBE - 543;
+    const startObj = new Date(yearCE, target.startMonth, target.startDay);
     const endObj = new Date(yearCE, newEndMonth, clampedEndDay);
 
-    if (endObj < startObj) {
-      syncDateState({
-        ...dateFields,
-        endDay: dateFields.startDay,
-        endMonth: dateFields.startMonth,
-      });
-    } else {
-      syncDateState({
-        ...dateFields,
+    const next = sessions.map((s, i) => {
+      if (i !== idx) return s;
+      if (endObj < startObj) {
+        return {
+          ...s,
+          endDay: target.startDay,
+          endMonth: target.startMonth,
+        };
+      }
+      return {
+        ...s,
         endDay: clampedEndDay,
         endMonth: newEndMonth,
-      });
-    }
+      };
+    });
+    syncSessionsState(next);
   };
 
-  const applyDurationPreset = (daysCount: number) => {
-    const yearCE = dateFields.yearBE - 543;
+  const applySessionDurationPreset = (idx: number, daysCount: number) => {
+    const target = sessions[idx];
+    if (!target) return;
+
+    const yearCE = target.yearBE - 543;
     const endDate = new Date(
       yearCE,
-      dateFields.startMonth,
-      dateFields.startDay + daysCount - 1
+      target.startMonth,
+      target.startDay + daysCount - 1
     );
-    syncDateState({
-      ...dateFields,
-      endDay: endDate.getDate(),
-      endMonth: endDate.getMonth(),
-    });
+    const next = sessions.map((s, i) =>
+      i === idx
+        ? {
+            ...s,
+            endDay: endDate.getDate(),
+            endMonth: endDate.getMonth(),
+          }
+        : s
+    );
+    syncSessionsState(next);
   };
 
-  // ตรวจสอบการชนกับตารางการแข่งขันกีฬา กกท.
+  const handleAddSession = () => {
+    const last = sessions[sessions.length - 1] ?? {
+      startDay: 15,
+      startMonth: 4,
+      endDay: 19,
+      endMonth: 4,
+      yearBE: 2570,
+    };
+    const yearCE = last.yearBE - 543;
+    // ตั้งต้นช่วงถัดไปห่างจากวันจบช่วงก่อนหน้า 3 วัน และมีระยะเวลาเริ่มต้น 5 วัน
+    const nextStart = new Date(yearCE, last.endMonth, last.endDay + 3);
+    const nextEnd = new Date(
+      nextStart.getFullYear(),
+      nextStart.getMonth(),
+      nextStart.getDate() + 4
+    );
+
+    const newSession: CourseDateFields = {
+      startDay: nextStart.getDate(),
+      startMonth: nextStart.getMonth(),
+      endDay: nextEnd.getDate(),
+      endMonth: nextEnd.getMonth(),
+      yearBE: last.yearBE,
+    };
+    syncSessionsState([...sessions, newSession]);
+  };
+
+  const handleRemoveSession = (idx: number) => {
+    if (sessions.length <= 1) return;
+    syncSessionsState(sessions.filter((_, i) => i !== idx));
+  };
+
+  const handleYearChange = (newYearBE: number) => {
+    const next = sessions.map((s) => ({
+      ...s,
+      yearBE: newYearBE,
+    }));
+    syncSessionsState(next);
+  };
+
+  // ตรวจสอบการชนกับตารางการแข่งขันกีฬา กกท. (ตรวจสอบทุกช่วงของการอบรม)
   const overlappingSportsEvents = sportsEvents.filter((evt) => {
-    if (dateFields.yearBE !== 2570) return false;
+    if (currentYearBE !== 2570) return false;
     const yearCE = 2570 - 543;
-    const courseStart = new Date(yearCE, dateFields.startMonth, dateFields.startDay, 0, 0, 0);
-    const courseEnd = new Date(yearCE, dateFields.endMonth, dateFields.endDay, 23, 59, 59);
     const evtStart = new Date(yearCE, evt.startMonth - 1, evt.startDay, 0, 0, 0);
     const evtEnd = new Date(yearCE, evt.endMonth - 1, evt.endDay, 23, 59, 59);
-    return courseStart <= evtEnd && courseEnd >= evtStart;
+
+    return sessions.some((s) => {
+      const sStart = new Date(yearCE, s.startMonth, s.startDay, 0, 0, 0);
+      const sEnd = new Date(yearCE, s.endMonth, s.endDay, 23, 59, 59);
+      return sStart <= evtEnd && sEnd >= evtStart;
+    });
   });
 
   // ตรวจสอบการซ้อนทับกับหลักสูตรอื่น
@@ -492,162 +567,226 @@ export function CourseEditDialog({
               </p>
             </div>
 
-            {/* Smart Date Range Picker */}
+            {/* Multi-Session Smart Date Range Picker */}
             <div className="rounded-lg border border-[#dbe3ef] bg-[#f8fafc] p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <label className="text-[12px] font-semibold text-[#1e3a8a]">
-                  📅 ช่วงวันที่อบรม (Smart Date Picker)
-                </label>
+                <div>
+                  <label className="text-[12px] font-semibold text-[#1e3a8a]">
+                    📅 ช่วงวันที่อบรม (Smart Date Picker)
+                  </label>
+                  <p className="text-[10px] text-[#64748b]">
+                    รองรับทั้งการอบรมรวดเดียว หรือแบ่งเป็นหลายช่วง (เช่น ช่วงละ 2 วัน และ 5 วัน)
+                  </p>
+                </div>
                 <div className="inline-flex items-center gap-1.5 rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-2.5 py-0.5 text-[11px] font-bold text-[#1e40af]">
                   <span>ผลลัพธ์: {date}</span>
                   <span className="rounded-full bg-[#1e3a8a] px-1.5 py-0.2 text-[9.5px] font-semibold text-white">
-                    {currentDurationDays} วัน
+                    {sessions.length > 1
+                      ? `${sessions.length} ช่วง · รวม ${totalDurationDays} วัน`
+                      : `${totalDurationDays} วัน`}
                   </span>
                 </div>
               </div>
 
-              {/* Quick Duration Presets */}
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <span className="text-[10.5px] font-medium text-[#64748b]">
-                  ระยะเวลาอบรมด่วน:
-                </span>
-                {[
-                  { days: 1, label: "1 วัน" },
-                  { days: 3, label: "3 วัน" },
-                  { days: 5, label: "5 วัน (มาตรฐาน)" },
-                  { days: 6, label: "6 วัน" },
-                  { days: 7, label: "7 วัน" },
-                ].map((preset) => {
-                  const isActive = currentDurationDays === preset.days;
+              {/* Sessions List */}
+              <div className="mt-2.5 space-y-2.5">
+                {sessions.map((session, idx) => {
+                  const sessionDays = computeDurationDays(session);
                   return (
-                    <button
-                      key={preset.days}
-                      type="button"
-                      onClick={() => applyDurationPreset(preset.days)}
-                      className={`rounded-md px-2 py-0.5 text-[10.5px] font-semibold transition ${
-                        isActive
-                          ? "bg-[#1e3a8a] text-white shadow-sm"
-                          : "border border-[#cbd5e1] bg-white text-[#334155] hover:bg-[#f1f5f9]"
-                      }`}
+                    <div
+                      key={idx}
+                      className="rounded-lg border border-[#e2e8f0] bg-white p-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
                     >
-                      {preset.label}
-                    </button>
+                      {/* Session Header & Quick Presets */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f5f9] pb-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center rounded bg-[#e0e7ff] px-1.5 py-0.5 text-[10px] font-bold text-[#1e3a8a]">
+                            ช่วงที่ {idx + 1}
+                          </span>
+                          <span className="text-[10.5px] font-semibold text-[#334155]">
+                            {formatCourseDateFields(session, false)} ({sessionDays} วัน)
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1">
+                          <span className="mr-0.5 text-[10px] text-[#64748b]">
+                            เลือกด่วน:
+                          </span>
+                          {[
+                            { days: 1, label: "1 วัน" },
+                            { days: 2, label: "2 วัน" },
+                            { days: 3, label: "3 วัน" },
+                            { days: 4, label: "4 วัน" },
+                            { days: 5, label: "5 วัน" },
+                            { days: 7, label: "7 วัน" },
+                          ].map((preset) => {
+                            const isActive = sessionDays === preset.days;
+                            return (
+                              <button
+                                key={preset.days}
+                                type="button"
+                                onClick={() =>
+                                  applySessionDurationPreset(idx, preset.days)
+                                }
+                                className={`rounded px-1.5 py-0.5 text-[10px] font-semibold transition ${
+                                  isActive
+                                    ? "bg-[#1e3a8a] text-white shadow-sm"
+                                    : "border border-[#cbd5e1] bg-[#f8fafc] text-[#334155] hover:bg-[#e2e8f0]"
+                                }`}
+                              >
+                                {preset.label}
+                              </button>
+                            );
+                          })}
+
+                          {sessions.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSession(idx)}
+                              title="ลบช่วงเวลานี้"
+                              className="ml-1 inline-flex items-center gap-0.5 rounded border border-[#fecaca] bg-[#fef2f2] px-1.5 py-0.5 text-[10px] font-semibold text-[#b91c1c] transition hover:bg-[#fee2e2]"
+                            >
+                              🗑️ ลบช่วงนี้
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Start & End Selectors for this session */}
+                      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {/* วันเริ่มต้น */}
+                        <div>
+                          <span className="block text-[10px] font-semibold text-[#475569]">
+                            วันเริ่ม (ช่วงที่ {idx + 1})
+                          </span>
+                          <div className="mt-1 grid grid-cols-[68px_1fr] gap-1.5">
+                            <select
+                              aria-label={`วันเริ่มอบรม ช่วงที่ ${idx + 1}`}
+                              value={session.startDay}
+                              onChange={(e) =>
+                                handleSessionStartChange(
+                                  idx,
+                                  Number(e.target.value),
+                                  session.startMonth
+                                )
+                              }
+                              className="h-8 rounded border border-[#d1d5db] bg-white px-2 text-[11.5px] font-medium text-[#111827] outline-none focus:border-[#1e3a8a]"
+                            >
+                              {Array.from(
+                                {
+                                  length: getDaysInMonth(
+                                    session.startMonth,
+                                    session.yearBE
+                                  ),
+                                },
+                                (_, i) => i + 1
+                              ).map((d) => (
+                                <option key={d} value={d}>
+                                  วันที่ {d}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              aria-label={`เดือนเริ่มอบรม ช่วงที่ ${idx + 1}`}
+                              value={session.startMonth}
+                              onChange={(e) =>
+                                handleSessionStartChange(
+                                  idx,
+                                  session.startDay,
+                                  Number(e.target.value)
+                                )
+                              }
+                              className="h-8 rounded border border-[#d1d5db] bg-white px-2 text-[11.5px] font-medium text-[#111827] outline-none focus:border-[#1e3a8a]"
+                            >
+                              {THAI_MONTHS.map((m) => (
+                                <option key={m.index} value={m.index}>
+                                  {m.full} ({m.abbr})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* วันสิ้นสุด */}
+                        <div>
+                          <span className="block text-[10px] font-semibold text-[#475569]">
+                            วันสิ้นสุด (ช่วงที่ {idx + 1})
+                          </span>
+                          <div className="mt-1 grid grid-cols-[68px_1fr] gap-1.5">
+                            <select
+                              aria-label={`วันสิ้นสุดการอบรม ช่วงที่ ${idx + 1}`}
+                              value={session.endDay}
+                              onChange={(e) =>
+                                handleSessionEndChange(
+                                  idx,
+                                  Number(e.target.value),
+                                  session.endMonth
+                                )
+                              }
+                              className="h-8 rounded border border-[#d1d5db] bg-white px-2 text-[11.5px] font-medium text-[#111827] outline-none focus:border-[#1e3a8a]"
+                            >
+                              {Array.from(
+                                {
+                                  length: getDaysInMonth(
+                                    session.endMonth,
+                                    session.yearBE
+                                  ),
+                                },
+                                (_, i) => i + 1
+                              ).map((d) => {
+                                const isBeforeStart =
+                                  session.endMonth === session.startMonth &&
+                                  d < session.startDay;
+                                return (
+                                  <option
+                                    key={d}
+                                    value={d}
+                                    disabled={isBeforeStart}
+                                  >
+                                    วันที่ {d}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                            <select
+                              aria-label={`เดือนสิ้นสุดการอบรม ช่วงที่ ${idx + 1}`}
+                              value={session.endMonth}
+                              onChange={(e) =>
+                                handleSessionEndChange(
+                                  idx,
+                                  session.endDay,
+                                  Number(e.target.value)
+                                )
+                              }
+                              className="h-8 rounded border border-[#d1d5db] bg-white px-2 text-[11.5px] font-medium text-[#111827] outline-none focus:border-[#1e3a8a]"
+                            >
+                              {THAI_MONTHS.map((m) => (
+                                <option
+                                  key={m.index}
+                                  value={m.index}
+                                  disabled={m.index < session.startMonth}
+                                >
+                                  {m.full} ({m.abbr})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
 
-              {/* Start & End Selectors */}
-              <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                {/* วันเริ่มต้น */}
-                <div className="rounded-md border border-[#e2e8f0] bg-white p-2">
-                  <span className="block text-[10.5px] font-semibold text-[#475569]">
-                    วันเริ่มอบรม
-                  </span>
-                  <div className="mt-1 grid grid-cols-[68px_1fr] gap-1.5">
-                    <select
-                      aria-label="วันเริ่มอบรม"
-                      value={dateFields.startDay}
-                      onChange={(e) =>
-                        handleStartChange(
-                          Number(e.target.value),
-                          dateFields.startMonth
-                        )
-                      }
-                      className="h-8 rounded border border-[#d1d5db] bg-white px-2 text-[12px] font-medium text-[#111827] outline-none focus:border-[#1e3a8a]"
-                    >
-                      {Array.from(
-                        {
-                          length: getDaysInMonth(
-                            dateFields.startMonth,
-                            dateFields.yearBE
-                          ),
-                        },
-                        (_, i) => i + 1
-                      ).map((d) => (
-                        <option key={d} value={d}>
-                          วันที่ {d}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      aria-label="เดือนเริ่มอบรม"
-                      value={dateFields.startMonth}
-                      onChange={(e) =>
-                        handleStartChange(
-                          dateFields.startDay,
-                          Number(e.target.value)
-                        )
-                      }
-                      className="h-8 rounded border border-[#d1d5db] bg-white px-2 text-[12px] font-medium text-[#111827] outline-none focus:border-[#1e3a8a]"
-                    >
-                      {THAI_MONTHS.map((m) => (
-                        <option key={m.index} value={m.index}>
-                          {m.full} ({m.abbr})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* วันสิ้นสุด */}
-                <div className="rounded-md border border-[#e2e8f0] bg-white p-2">
-                  <span className="block text-[10.5px] font-semibold text-[#475569]">
-                    วันสิ้นสุดการอบรม (ปรับตามอัตโนมัติ)
-                  </span>
-                  <div className="mt-1 grid grid-cols-[68px_1fr] gap-1.5">
-                    <select
-                      aria-label="วันสิ้นสุดการอบรม"
-                      value={dateFields.endDay}
-                      onChange={(e) =>
-                        handleEndChange(
-                          Number(e.target.value),
-                          dateFields.endMonth
-                        )
-                      }
-                      className="h-8 rounded border border-[#d1d5db] bg-white px-2 text-[12px] font-medium text-[#111827] outline-none focus:border-[#1e3a8a]"
-                    >
-                      {Array.from(
-                        {
-                          length: getDaysInMonth(
-                            dateFields.endMonth,
-                            dateFields.yearBE
-                          ),
-                        },
-                        (_, i) => i + 1
-                      ).map((d) => {
-                        const isBeforeStart =
-                          dateFields.endMonth === dateFields.startMonth &&
-                          d < dateFields.startDay;
-                        return (
-                          <option key={d} value={d} disabled={isBeforeStart}>
-                            วันที่ {d}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    <select
-                      aria-label="เดือนสิ้นสุดการอบรม"
-                      value={dateFields.endMonth}
-                      onChange={(e) =>
-                        handleEndChange(
-                          dateFields.endDay,
-                          Number(e.target.value)
-                        )
-                      }
-                      className="h-8 rounded border border-[#d1d5db] bg-white px-2 text-[12px] font-medium text-[#111827] outline-none focus:border-[#1e3a8a]"
-                    >
-                      {THAI_MONTHS.map((m) => (
-                        <option
-                          key={m.index}
-                          value={m.index}
-                          disabled={m.index < dateFields.startMonth}
-                        >
-                          {m.full} ({m.abbr})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+              {/* Add Session Button */}
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={handleAddSession}
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-[#93c5fd] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#1e40af] transition hover:border-[#3b82f6] hover:bg-[#eff6ff]"
+                >
+                  <span>+ เพิ่มช่วงเวลาอบรม (เช่น แบ่งอบรมช่วงที่ {sessions.length + 1} / ภาคปฏิบัติ)</span>
+                </button>
               </div>
 
               {/* Year & Status Row */}
@@ -658,14 +797,8 @@ export function CourseEditDialog({
                   </label>
                   <select
                     id="course-year"
-                    value={dateFields.yearBE}
-                    onChange={(e) =>
-                      handleStartChange(
-                        dateFields.startDay,
-                        dateFields.startMonth,
-                        Number(e.target.value)
-                      )
-                    }
+                    value={currentYearBE}
+                    onChange={(e) => handleYearChange(Number(e.target.value))}
                     className="mt-1 h-8 w-full rounded border border-[#d1d5db] bg-white px-2.5 text-[12px] font-medium text-[#111827] outline-none focus:border-[#1e3a8a]"
                   >
                     <option value={2570}>พ.ศ. 2570 (ปีงบประมาณใหม่ - ค่าเริ่มต้น)</option>

@@ -244,17 +244,83 @@ export function parseCourseDateFields(
   return fallback;
 }
 
-export function formatCourseDateFields(fields: CourseDateFields): string {
+export function formatCourseDateFields(
+  fields: CourseDateFields,
+  includeYear = true
+): string {
   const startMonthAbbr = THAI_MONTHS[fields.startMonth]?.abbr ?? "พ.ค.";
   const endMonthAbbr = THAI_MONTHS[fields.endMonth]?.abbr ?? startMonthAbbr;
+  const yearSuffix = includeYear ? ` ${fields.yearBE}` : "";
 
   if (fields.startMonth === fields.endMonth) {
     if (fields.startDay === fields.endDay) {
-      return `${fields.startDay} ${startMonthAbbr} ${fields.yearBE}`;
+      return `${fields.startDay} ${startMonthAbbr}${yearSuffix}`;
     }
-    return `${fields.startDay}-${fields.endDay} ${startMonthAbbr} ${fields.yearBE}`;
+    return `${fields.startDay}-${fields.endDay} ${startMonthAbbr}${yearSuffix}`;
   }
-  return `${fields.startDay} ${startMonthAbbr} - ${fields.endDay} ${endMonthAbbr} ${fields.yearBE}`;
+  return `${fields.startDay} ${startMonthAbbr} - ${fields.endDay} ${endMonthAbbr}${yearSuffix}`;
+}
+
+/**
+ * แยกข้อความช่วงวันที่แบบหลายช่วง (คั่นด้วย "," หรือ "/") ออกเป็นรายการ CourseDateFields[]
+ * เช่น "10-11 พ.ค., 18-22 พ.ค. 2570" -> [ช่วงที่ 1 (2 วัน), ช่วงที่ 2 (5 วัน)]
+ */
+export function parseCourseDateSessions(
+  dateStr: string | null | undefined
+): CourseDateFields[] {
+  const fallback: CourseDateFields = {
+    startDay: 15,
+    startMonth: 4,
+    endDay: 19,
+    endMonth: 4,
+    yearBE: 2570,
+  };
+  if (!dateStr || !dateStr.trim()) return [fallback];
+
+  const yearMatches = dateStr.match(/\b(25\d{2})\b/g);
+  const defaultYearBE = yearMatches
+    ? parseInt(yearMatches[yearMatches.length - 1], 10)
+    : 2570;
+
+  const segments = dateStr
+    .split(/[,/]/)
+    .map((seg) => seg.trim())
+    .filter(Boolean);
+
+  if (segments.length === 0) return [fallback];
+
+  const sessions = segments.map((seg) => {
+    const cleaned = seg.replace(/^ช่วงที่\s*\d+\s*:\s*/, "").trim();
+    const withYear = /\b25\d{2}\b/.test(cleaned)
+      ? cleaned
+      : `${cleaned} ${defaultYearBE}`;
+    return parseCourseDateFields(withYear);
+  });
+
+  return sessions.length > 0 ? sessions : [fallback];
+}
+
+/**
+ * รวมรายการช่วงวันที่หลายช่วงเป็นข้อความมาตรฐาน กกท.
+ * เช่น 1 ช่วง -> "15-19 พ.ค. 2570"
+ * เช่น 2 ช่วง -> "10-11 พ.ค., 18-22 พ.ค. 2570"
+ */
+export function formatCourseDateSessions(
+  sessions: CourseDateFields[]
+): string {
+  if (!sessions || sessions.length === 0) {
+    return "15-19 พ.ค. 2570";
+  }
+  if (sessions.length === 1) {
+    return formatCourseDateFields(sessions[0], true);
+  }
+
+  return sessions
+    .map((s, idx) => {
+      const isLast = idx === sessions.length - 1;
+      return formatCourseDateFields(s, isLast);
+    })
+    .join(", ");
 }
 
 export interface ParsedDateRange {
@@ -263,10 +329,9 @@ export interface ParsedDateRange {
 }
 
 /**
- * แปลงข้อความช่วงวันที่แบบไทย เช่น "15-20 พ.ค. 2570" หรือ "28 พ.ค. - 2 มิ.ย. 2570"
- * เป็น Date object เพื่อนำไปคำนวณการซ้อนทับกันของเวลา
+ * แปลงข้อความช่วงวันที่แบบไทย单ช่วง เช่น "15-20 พ.ค. 2570" หรือ "28 พ.ค. - 2 มิ.ย. 2570"
  */
-export function parseThaiDateRange(
+function parseSingleThaiDateRange(
   dateStr: string | null | undefined
 ): ParsedDateRange | null {
   if (!dateStr) return null;
@@ -279,7 +344,8 @@ export function parseThaiDateRange(
   if (m1) {
     const startDay = parseInt(m1[1], 10);
     const endDay = parseInt(m1[2], 10);
-    const month = THAI_MONTH_INDEX_MAP[m1[3]] ?? 0;
+    const month = THAI_MONTH_INDEX_MAP[m1[3]];
+    if (month === undefined) return null;
     const yearBE = parseInt(m1[4], 10);
     const yearCE = yearBE > 2400 ? yearBE - 543 : yearBE;
     return {
@@ -294,9 +360,10 @@ export function parseThaiDateRange(
   );
   if (m2) {
     const startDay = parseInt(m2[1], 10);
-    const startMonth = THAI_MONTH_INDEX_MAP[m2[2]] ?? 0;
+    const startMonth = THAI_MONTH_INDEX_MAP[m2[2]];
     const endDay = parseInt(m2[3], 10);
-    const endMonth = THAI_MONTH_INDEX_MAP[m2[4]] ?? 0;
+    const endMonth = THAI_MONTH_INDEX_MAP[m2[4]];
+    if (startMonth === undefined || endMonth === undefined) return null;
     const yearBE = parseInt(m2[5], 10);
     const yearCE = yearBE > 2400 ? yearBE - 543 : yearBE;
     return {
@@ -309,7 +376,8 @@ export function parseThaiDateRange(
   const m3 = s.match(/^(\d{1,2})\s+([ก-๙\.]+)\s+(\d{4})$/);
   if (m3) {
     const day = parseInt(m3[1], 10);
-    const month = THAI_MONTH_INDEX_MAP[m3[2]] ?? 0;
+    const month = THAI_MONTH_INDEX_MAP[m3[2]];
+    if (month === undefined) return null;
     const yearBE = parseInt(m3[3], 10);
     const yearCE = yearBE > 2400 ? yearBE - 543 : yearBE;
     return {
@@ -322,16 +390,58 @@ export function parseThaiDateRange(
 }
 
 /**
- * ตรวจสอบว่าช่วงวันที่ของหลักสูตร 2 รายการ มีการซ้อนทับกันหรือไม่
+ * แปลงข้อความช่วงวันที่แบบไทย (รองรับทั้งแบบช่วงเดียวและหลายช่วง เช่น "10-11 พ.ค., 18-22 พ.ค. 2570")
+ * เป็นรายการ ParsedDateRange[] เพื่อนำไปคำนวณการซ้อนทับกันของเวลาอย่างแม่นยำรายช่วง
+ */
+export function parseThaiDateRanges(
+  dateStr: string | null | undefined
+): ParsedDateRange[] {
+  if (!dateStr || !dateStr.trim()) return [];
+
+  const yearMatches = dateStr.match(/\b(25\d{2})\b/g);
+  const defaultYearBE = yearMatches
+    ? parseInt(yearMatches[yearMatches.length - 1], 10)
+    : 2570;
+
+  const segments = dateStr
+    .split(/[,/]/)
+    .map((seg) => seg.trim())
+    .filter(Boolean);
+
+  const results: ParsedDateRange[] = [];
+  for (const seg of segments) {
+    const cleaned = seg.replace(/^ช่วงที่\s*\d+\s*:\s*/, "").trim();
+    const withYear = /\b25\d{2}\b/.test(cleaned)
+      ? cleaned
+      : `${cleaned} ${defaultYearBE}`;
+    const parsed = parseSingleThaiDateRange(withYear);
+    if (parsed) {
+      results.push(parsed);
+    }
+  }
+  return results;
+}
+
+export function parseThaiDateRange(
+  dateStr: string | null | undefined
+): ParsedDateRange | null {
+  const ranges = parseThaiDateRanges(dateStr);
+  return ranges[0] ?? null;
+}
+
+/**
+ * ตรวจสอบว่าช่วงวันที่ของหลักสูตร 2 รายการ มีการซ้อนทับกันหรือไม่ (รองรับหลายช่วงการอบรม)
  */
 export function isCourseDateOverlapping(
   dateStr1: string | null | undefined,
   dateStr2: string | null | undefined
 ): boolean {
-  const r1 = parseThaiDateRange(dateStr1);
-  const r2 = parseThaiDateRange(dateStr2);
-  if (!r1 || !r2) return false;
-  return r1.start <= r2.end && r1.end >= r2.start;
+  const ranges1 = parseThaiDateRanges(dateStr1);
+  const ranges2 = parseThaiDateRanges(dateStr2);
+  if (ranges1.length === 0 || ranges2.length === 0) return false;
+  return ranges1.some((r1) =>
+    ranges2.some((r2) => r1.start <= r2.end && r1.end >= r2.start)
+  );
 }
 
 /**
