@@ -1,6 +1,6 @@
-import Link from "next/link";
 import Image from "next/image";
 import type { ReactNode } from "react";
+import { AdminNavButton } from "@/components/layout/admin-nav-button";
 
 interface HeaderProps {
   rightSlot?: ReactNode;
@@ -72,22 +72,12 @@ export function Header({
         </div>
 
         <div className="flex min-w-0 max-w-full items-center gap-3">
-          {rightSlot ??
-            (isDark ? (
-              <Link
-                href="/admin"
-                className="whitespace-nowrap rounded-[4px] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#183875] transition-colors hover:bg-[#f1f5f9]"
-              >
-                เข้าสู่ระบบ (Admin)
-              </Link>
-            ) : (
-              <Link
-                href="/admin"
-                className="whitespace-nowrap rounded-md bg-[#16265E] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[#1e3a8a]"
-              >
-                เข้าสู่ระบบ (Admin)
-              </Link>
-            ))}
+          {rightSlot ?? (
+            <AdminNavButton
+              compact={isDark}
+              variant={isDark ? "light" : "primary"}
+            />
+          )}
         </div>
       </div>
     </header>

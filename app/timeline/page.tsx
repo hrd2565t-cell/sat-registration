@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Header } from "@/components/layout/header";
+import { AdminNavButton } from "@/components/layout/admin-nav-button";
 import { TimelineSchedule } from "@/components/timeline/timeline-schedule";
 import { TimelineShareButton } from "@/components/timeline/timeline-share-button";
 import { ArrowLeftIcon, CalendarIcon } from "@/components/ui/icons";
@@ -27,12 +28,7 @@ export default function TimelinePage() {
             >
               ตรวจสอบสถานะ
             </Link>
-            <Link
-              href="/admin"
-              className={`${navLinkClass} bg-[#16265e] px-3 text-[12px] text-white hover:bg-[#0f1e4a]`}
-            >
-              เข้าสู่ระบบ (Admin)
-            </Link>
+            <AdminNavButton compact />
           </div>
         }
       />
@@ -68,15 +64,15 @@ export default function TimelinePage() {
             <ul className="mt-1.5 space-y-1 text-[10.5px] leading-[1.45] text-[#374151] xl:text-[clamp(11.5px,0.8vw,13px)]">
               <li className="flex gap-1.5">
                 <span aria-hidden="true">•</span>
-                สามารถสลับดูข้อมูลแยกตาม <strong>ปี พ.ศ. 2570</strong>, <strong>ปี พ.ศ. 2571</strong> หรือ <strong>ดูรวมทุกปี</strong> ได้จากปุ่มด้านบนตาราง
+                แสดงแผนกำหนดการฝึกอบรมตลอด <strong>ปีงบประมาณ พ.ศ. 2570 (ต.ค. 2569 – ก.ย. 2570)</strong> ต่อเนื่องถึงเดือน <strong>ม.ค. 2571</strong>
               </li>
               <li className="flex gap-1.5">
                 <span aria-hidden="true">•</span>
-                สลับมุมมองระหว่าง <strong>📊 ตาราง 12 เดือน (Gantt)</strong> และ <strong>🗓️ การ์ดสรุปรายเดือน</strong> เพื่อให้ดูง่ายเมื่อมีรายการจำนวนมาก
+                สามารถสลับมุมมองระหว่าง <strong>📊 ตาราง Timeline ต่อเนื่อง</strong> และ <strong>🗓️ การ์ดสรุปรายเดือน</strong> หรือติ๊กดูวันรับสมัครและวันประกาศผลได้จากแถบด้านบน
               </li>
               <li className="flex gap-1.5">
                 <span aria-hidden="true">•</span>
-                ผู้ดูแลระบบ (Admin) สามารถเพิ่ม/แก้ไขหลักสูตรและรายการแข่งขันกีฬา พร้อมกด <strong>บันทึกเป็นข้อมูลหลักถาวร</strong> ได้ทันที
+                สามารถดาวน์โหลดตารางแผนกำหนดการอบรมเป็นไฟล์ <strong>PDF</strong> หรือรูปภาพ <strong>PNG</strong> ได้จากปุ่มด้านขวา
               </li>
             </ul>
           </section>

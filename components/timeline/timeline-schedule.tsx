@@ -400,7 +400,9 @@ function SportsEventBarItem({
         onMouseEnter={() => onHover(event)}
         onMouseLeave={() => onHover(null)}
         onClick={() => isAdmin && onClickEdit?.(event)}
-        className={`group absolute top-1/2 z-20 flex h-[22px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-full px-1.5 text-[9px] font-bold leading-none text-white shadow-[0_2px_6px_rgba(109,40,217,0.3)] ring-1 ring-white transition-all hover:z-30 hover:scale-105 ${gradient}`}
+        className={`group absolute top-1/2 z-20 flex h-[22px] -translate-y-1/2 items-center justify-center rounded-full px-1.5 text-[9px] font-bold leading-none text-white shadow-[0_2px_6px_rgba(109,40,217,0.3)] ring-1 ring-white transition-all hover:z-30 hover:scale-105 ${
+          isAdmin ? "cursor-pointer" : "cursor-default"
+        } ${gradient}`}
         style={{ left: `${event.left}%`, width: `${event.width}%` }}
         title={`${event.title} (${event.dateRange}) ณ ${event.location}`}
       >
@@ -411,7 +413,9 @@ function SportsEventBarItem({
         onMouseEnter={() => onHover(event)}
         onMouseLeave={() => onHover(null)}
         onClick={() => isAdmin && onClickEdit?.(event)}
-        className="absolute top-1/2 z-25 -translate-y-1/2 cursor-pointer whitespace-nowrap"
+        className={`absolute top-1/2 z-25 -translate-y-1/2 whitespace-nowrap ${
+          isAdmin ? "cursor-pointer" : "cursor-default"
+        }`}
         style={
           placeLabelOnLeft
             ? { right: `${100 - event.left + 0.7}%` }
@@ -439,6 +443,10 @@ export function TimelineSchedule() {
   const [showSubPhases, setShowSubPhases] = useState(false);
   const [highlightFreeSlots, setHighlightFreeSlots] = useState(false);
   const [onlyActiveMonths, setOnlyActiveMonths] = useState(true);
+  const [previewAsApplicant, setPreviewAsApplicant] = useState(false);
+
+  const canEdit = isAdmin && !previewAsApplicant;
+  const effectiveHighlightFreeSlots = canEdit && highlightFreeSlots;
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<SportsEvent | null>(null);
@@ -532,6 +540,64 @@ export function TimelineSchedule() {
           </div>
         </div>
 
+        {/* Admin Mode Switcher Banner (Visible ONLY to authenticated Admins) */}
+        {isAdmin && (
+          <div
+            className={`mb-3 flex flex-wrap items-center justify-between gap-2.5 rounded-xl border px-3.5 py-2 text-[11.5px] transition ${
+              previewAsApplicant
+                ? "border-[#bae6fd] bg-[#f0f9ff] text-[#0369a1]"
+                : "border-[#c7d2fe] bg-[#eef2ff] text-[#1e3a8a]"
+            }`}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold text-white ${
+                  previewAsApplicant ? "bg-[#0284c7]" : "bg-[#16265E]"
+                }`}
+              >
+                {previewAsApplicant
+                  ? "👁️ มุมมองผู้สมัครทั่วไป"
+                  : "🛡️ โหมดผู้ดูแลระบบ (Admin)"}
+              </span>
+              <span className="font-medium">
+                {previewAsApplicant
+                  ? "กำลังจำลองหน้าจอที่ผู้สมัครทั่วไปมองเห็น (ซ่อนปุ่มแก้ไขและตั้งค่าทั้งหมด)"
+                  : "คุณกำลังอยู่ในโหมดผู้ดูแลระบบ (ผู้สมัครทั่วไปจะไม่เห็นแถบนี้และปุ่มแก้ไขทั้งหมด)"}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPreviewAsApplicant((prev) => !prev)}
+                className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-bold shadow-2xs transition ${
+                  previewAsApplicant
+                    ? "border-[#16265E] bg-[#16265E] text-white hover:bg-[#1e3a8a]"
+                    : "border-[#cbd5e1] bg-white text-[#16265E] hover:bg-[#f8fafc]"
+                }`}
+              >
+                {previewAsApplicant ? (
+                  <>
+                    <span>🔧</span>
+                    <span>กลับสู่โหมดแก้ไข (Admin)</span>
+                  </>
+                ) : (
+                  <>
+                    <span>👁️</span>
+                    <span>สลับดูมุมมองผู้สมัครทั่วไป</span>
+                  </>
+                )}
+              </button>
+              <Link
+                href="/admin/courses"
+                className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#cbd5e1] bg-white px-2.5 text-[11px] font-semibold text-[#334155] transition hover:bg-[#f8fafc]"
+              >
+                <span>⚙️ จัดการหลักสูตร</span>
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Row 2: Display Options & Admin Actions */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2">
@@ -563,15 +629,17 @@ export function TimelineSchedule() {
                   <span>แสดงวันรับสมัคร/ประกาศผล</span>
                 </label>
 
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-2.5 py-1 text-[11.5px] font-semibold text-[#334155] transition hover:bg-[#f1f5f9]">
-                  <input
-                    type="checkbox"
-                    checked={highlightFreeSlots}
-                    onChange={(e) => setHighlightFreeSlots(e.target.checked)}
-                    className="h-3.5 w-3.5 rounded text-[#10b981] focus:ring-[#10b981]"
-                  />
-                  <span>✨ ไฮไลต์ช่วงเวลาว่าง</span>
-                </label>
+                {canEdit && (
+                  <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-2.5 py-1 text-[11.5px] font-semibold text-[#334155] transition hover:bg-[#f1f5f9]">
+                    <input
+                      type="checkbox"
+                      checked={highlightFreeSlots}
+                      onChange={(e) => setHighlightFreeSlots(e.target.checked)}
+                      className="h-3.5 w-3.5 rounded text-[#10b981] focus:ring-[#10b981]"
+                    />
+                    <span>✨ ไฮไลต์ช่วงเวลาว่าง (สำหรับผู้บริหาร)</span>
+                  </label>
+                )}
               </>
             )}
 
@@ -588,7 +656,7 @@ export function TimelineSchedule() {
             )}
           </div>
 
-          {isAdmin ? (
+          {canEdit && (
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -615,19 +683,10 @@ export function TimelineSchedule() {
                 คืนค่าเริ่มต้น
               </button>
             </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Link
-                href="/admin/login?next=/timeline"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-2.5 py-1 text-[11px] font-medium text-[#64748b] transition hover:border-[#16265e] hover:bg-white hover:text-[#16265e]"
-              >
-                <span>🔒 เข้าสู่ระบบจัดการปฏิทิน (Admin)</span>
-              </Link>
-            </div>
           )}
         </div>
 
-        {isAdmin && (
+        {canEdit && (
           <div className="mb-3">
             <GlobalScheduleCard onSaved={showToast} />
           </div>
@@ -636,7 +695,7 @@ export function TimelineSchedule() {
         <Legend
           showSportsEvents={showSportsEvents}
           showSubPhases={showSubPhases}
-          highlightFreeSlots={highlightFreeSlots}
+          highlightFreeSlots={effectiveHighlightFreeSlots}
         />
 
         {/* ==================== VIEW MODE 1: 16-MONTH CONTINUOUS GANTT ==================== */}
@@ -794,7 +853,7 @@ export function TimelineSchedule() {
                           <span className="text-[9.5px] font-semibold text-[#166534]">
                             🎓 อบรม: {row.dateSummary}
                           </span>
-                          {isAdmin && (
+                          {canEdit && (
                             <button
                               type="button"
                               onClick={() => setEditingCourse(row.course)}
@@ -841,7 +900,7 @@ export function TimelineSchedule() {
                           ))}
                         </div>
 
-                        {highlightFreeSlots && (
+                        {effectiveHighlightFreeSlots && (
                           <div className="pointer-events-none absolute inset-0 z-0">
                             {FREE_SLOTS.map((slot) => (
                               <div
@@ -881,7 +940,7 @@ export function TimelineSchedule() {
                             </span>
                           </span>
                           <span className="text-[10px] font-normal text-[#7c3aed]">
-                            {isAdmin
+                            {canEdit
                               ? "*คลิกที่แถบสีหรือปุ่มแก้ไขเพื่อเปลี่ยนวันที่/ปี พ.ศ."
                               : "*วางตำแหน่งตามเดือนและปี พ.ศ. จริงของรายการแข่งขัน"}
                           </span>
@@ -921,7 +980,7 @@ export function TimelineSchedule() {
                                 <span className="text-[9.5px] font-medium text-[#64748b]">
                                   📅 {event.dateRange} • 📍 {event.location}
                                 </span>
-                                {isAdmin && (
+                                {canEdit && (
                                   <div className="flex items-center gap-1">
                                     <button
                                       type="button"
@@ -983,7 +1042,7 @@ export function TimelineSchedule() {
                                 ))}
                               </div>
 
-                              {highlightFreeSlots && (
+                              {effectiveHighlightFreeSlots && (
                                 <div className="pointer-events-none absolute inset-0 z-0">
                                   {FREE_SLOTS.map((slot) => (
                                     <div
@@ -1002,7 +1061,7 @@ export function TimelineSchedule() {
                                 event={event}
                                 onHover={setHoveredEvent}
                                 onClickEdit={setEditingEvent}
-                                isAdmin={isAdmin}
+                                isAdmin={canEdit}
                               />
                             </div>
                           </td>
@@ -1126,7 +1185,7 @@ export function TimelineSchedule() {
                                 </span>
                               )}
                             </span>
-                            {isAdmin && (
+                            {canEdit && (
                               <button
                                 type="button"
                                 onClick={() => setEditingCourse(row.course)}
@@ -1162,7 +1221,7 @@ export function TimelineSchedule() {
                             <span className="rounded bg-[#ede9fe] px-1.5 py-0.2 text-[9.5px] font-bold text-[#6d28d9]">
                               🏆 {evt.categoryLabel}
                             </span>
-                            {isAdmin && (
+                            {canEdit && (
                               <div className="flex items-center gap-1.5">
                                 <button
                                   type="button"
@@ -1219,7 +1278,7 @@ export function TimelineSchedule() {
       </section>
 
       {/* Executive Gap Analysis Card */}
-      {highlightFreeSlots && (
+      {effectiveHighlightFreeSlots && (
         <section className="mx-auto mt-3.5 w-full max-w-[960px] rounded-2xl border border-[#a7f3d0] bg-gradient-to-br from-[#f0fdf4] to-[#f8fafc] p-4 shadow-[0_2px_8px_rgba(16,185,129,0.08)] xl:max-w-[clamp(1060px,80vw,1400px)]">
           <div className="flex items-center justify-between gap-3 border-b border-[#bbf7d0] pb-2.5">
             <div className="flex items-center gap-2">

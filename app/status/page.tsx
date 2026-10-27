@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout/header";
+import { AdminNavButton } from "@/components/layout/admin-nav-button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeftIcon, DownloadIcon } from "@/components/ui/icons";
 import { IdCardInput } from "@/components/ui/id-card-input";
@@ -63,12 +64,7 @@ function StatusHeader() {
           >
             ตรวจสอบสถานะ
           </Link>
-          <Link
-            href="/admin"
-            className={`${navLinkClass} border border-[#d1d5db] bg-white text-[#1f2937] hover:bg-[#f8fafc]`}
-          >
-            เข้าสู่ระบบ (Admin)
-          </Link>
+          <AdminNavButton compact variant="outline" />
         </div>
       }
     />

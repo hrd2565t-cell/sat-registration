@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout/header";
+import { AdminNavButton } from "@/components/layout/admin-nav-button";
 import { Stepper } from "@/components/stepper/stepper";
 import { CourseCard } from "@/components/course/course-card";
 import { CourseDetailDialog } from "@/components/course/course-detail-dialog";
@@ -57,12 +58,7 @@ function CourseCatalogContent() {
             >
               ตรวจสอบสถานะ
             </Link>
-            <Link
-              href="/admin"
-              className="whitespace-nowrap rounded-md bg-[#16265E] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[#1e3a8a]"
-            >
-              เข้าสู่ระบบ (Admin)
-            </Link>
+            <AdminNavButton />
           </div>
         }
       />
