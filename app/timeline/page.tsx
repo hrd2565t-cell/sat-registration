@@ -68,7 +68,7 @@ export default function TimelinePage() {
               </li>
               <li className="flex gap-1.5">
                 <span aria-hidden="true">•</span>
-                สามารถสลับมุมมองระหว่าง <strong>📊 ตาราง Timeline ต่อเนื่อง</strong> และ <strong>🗓️ การ์ดสรุปรายเดือน</strong> หรือติ๊กดูวันรับสมัครและวันประกาศผลได้จากแถบด้านบน
+                สามารถสลับมุมมองระหว่าง <strong>📊 ตาราง Timeline ต่อเนื่อง</strong> และ <strong>🗓️ การ์ดสรุปรายเดือน</strong> ได้จากปุ่มด้านบนตาราง
               </li>
               <li className="flex gap-1.5">
                 <span aria-hidden="true">•</span>

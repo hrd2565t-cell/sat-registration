@@ -5,9 +5,10 @@ import path from "node:path";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { courses, sportsEvents } = body as {
+    const { courses, sportsEvents, timelineSettings } = body as {
       courses?: unknown[];
       sportsEvents?: unknown[];
+      timelineSettings?: Record<string, unknown>;
     };
 
     const dataDir = path.join(process.cwd(), "data");
@@ -34,6 +35,15 @@ export async function POST(request: Request) {
         "utf-8"
       );
       sportsEventsCount = sportsEvents.length;
+    }
+
+    if (timelineSettings && typeof timelineSettings === "object") {
+      const settingsPath = path.join(dataDir, "timeline-settings.json");
+      await fs.writeFile(
+        settingsPath,
+        JSON.stringify(timelineSettings, null, 2) + "\n",
+        "utf-8"
+      );
     }
 
     return NextResponse.json({

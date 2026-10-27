@@ -1,12 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useIsAdmin } from "@/lib/admin-auth";
+import defaultTimelineSettings from "@/data/timeline-settings.json";
 import {
   formatCourseDateFields,
   getCourseScheduleDates,
+  getGlobalCourseSchedule,
   parseCourseDateFields,
   parseCourseDateSessions,
   type Course,
@@ -47,6 +49,7 @@ interface SessionSegment {
   left: number;
   width: number;
   label: string;
+  subCount: number;
 }
 
 interface TimelineRow {
@@ -55,6 +58,7 @@ interface TimelineRow {
   quarterLabel: string;
   title: string;
   shortBadge?: string;
+  isCustomSchedule: boolean;
   registrationDate: string;
   resultDate: string;
   dateSummary: string;
@@ -68,19 +72,65 @@ interface TimelineRow {
   subPhaseBars: TimelineBar[];
 }
 
-const bars: Record<BarTone, string> = {
-  open: "bg-[#1869bc]",
-  review: "bg-[#ef8507]",
-  training: "bg-[#16803c]",
-  result: "bg-[#c4080f]",
-};
-
 function getCourseYear(course: Course): number {
   const sessions = parseCourseDateSessions(course.date);
   const yr = sessions[0]?.yearBE;
   if (yr && yr >= 2568 && yr <= 2580) return yr;
   const match = course.date.match(/(25\d{2})/);
   return match ? parseInt(match[1], 10) : 2570;
+}
+
+function buildScheduleBars(
+  registrationDate: string,
+  resultDate: string,
+  contextTitle: string
+): TimelineBar[] {
+  const subPhaseBars: TimelineBar[] = [];
+  const regF = parseCourseDateFields(registrationDate);
+  const regStartYear =
+    regF.startMonth > regF.endMonth ? regF.yearBE - 1 : regF.yearBE;
+  const regLeft = dateToTimelinePercent(
+    regF.startDay,
+    regF.startMonth + 1,
+    regStartYear
+  );
+  const regRight = dateToTimelinePercent(
+    regF.endDay + 1,
+    regF.endMonth + 1,
+    regF.yearBE
+  );
+  const regWidth = Math.max(2.0, Math.round((regRight - regLeft) * 10) / 10);
+  subPhaseBars.push({
+    label: registrationDate,
+    tooltip: `📥 เปิดรับสมัคร: ${registrationDate} (${contextTitle})`,
+    tone: "open",
+    left: Math.round(regLeft * 10) / 10,
+    width: regWidth,
+  });
+
+  const resF = parseCourseDateFields(resultDate);
+  const resStartYear =
+    resF.startMonth > resF.endMonth ? resF.yearBE - 1 : resF.yearBE;
+  const resLeft = dateToTimelinePercent(
+    resF.startDay,
+    resF.startMonth + 1,
+    resStartYear
+  );
+  const resRight = dateToTimelinePercent(
+    resF.endDay + 1,
+    resF.endMonth + 1,
+    resF.yearBE
+  );
+  const resWidth = Math.max(1.4, Math.round((resRight - resLeft) * 10) / 10);
+  subPhaseBars.push({
+    label: resultDate,
+    tooltip: `📣 วันประกาศผล: ${resultDate} (${contextTitle})`,
+    tone: "result",
+    left: Math.round(resLeft * 10) / 10,
+    width: resWidth,
+  });
+
+  return subPhaseBars;
 }
 
 function buildCourseTimelineRow(
@@ -106,25 +156,47 @@ function buildCourseTimelineRow(
     return acc + Math.max(1, diff);
   }, 0);
 
-  const sessionSegments: SessionSegment[] = sessions.map((s) => {
+  const rawSegments: SessionSegment[] = sessions.map((s) => {
     const sLeft = dateToTimelinePercent(s.startDay, s.startMonth + 1, s.yearBE);
     const sRight = dateToTimelinePercent(
       s.endDay + 1,
       s.endMonth + 1,
       s.yearBE
     );
-    const sWidth = Math.max(1.2, Math.round((sRight - sLeft) * 10) / 10);
+    const sWidth = Math.max(1.4, Math.round((sRight - sLeft) * 10) / 10);
     return {
       left: Math.round(sLeft * 10) / 10,
       width: sWidth,
       label: formatCourseDateFields(s, false),
+      subCount: 1,
     };
   });
+
+  // Merge adjacent segments that are very close (e.g. within the same month) so they don't overlap as tiny blobs
+  const sessionSegments: SessionSegment[] = [];
+  for (const seg of rawSegments) {
+    const prev = sessionSegments[sessionSegments.length - 1];
+    if (prev && seg.left - (prev.left + prev.width) <= 2.4) {
+      const mergedRight = Math.max(
+        prev.left + prev.width,
+        seg.left + seg.width
+      );
+      prev.width = Math.max(
+        2.2,
+        Math.round((mergedRight - prev.left) * 10) / 10
+      );
+      prev.label = `${prev.label}, ${seg.label}`;
+      prev.subCount += 1;
+    } else {
+      sessionSegments.push({ ...seg });
+    }
+  }
 
   const firstSeg = sessionSegments[0] ?? {
     left: 25,
     width: 4,
     label: course.date,
+    subCount: 1,
   };
   const lastSeg = sessionSegments[sessionSegments.length - 1] ?? firstSeg;
 
@@ -134,52 +206,11 @@ function buildCourseTimelineRow(
 
   const compactDateLabel = course.date.replace(/\s*25\d{2}$/, "").trim();
   const sched = getCourseScheduleDates(course, allCourses);
-
-  // Sub-phase bars computed from the course's real registrationDate & resultDate
-  const subPhaseBars: TimelineBar[] = [];
-  const regF = parseCourseDateFields(sched.registrationDate);
-  const regStartYear =
-    regF.startMonth > regF.endMonth ? regF.yearBE - 1 : regF.yearBE;
-  const regLeft = dateToTimelinePercent(
-    regF.startDay,
-    regF.startMonth + 1,
-    regStartYear
+  const subPhaseBars = buildScheduleBars(
+    sched.registrationDate,
+    sched.resultDate,
+    course.title
   );
-  const regRight = dateToTimelinePercent(
-    regF.endDay + 1,
-    regF.endMonth + 1,
-    regF.yearBE
-  );
-  const regWidth = Math.max(1.8, Math.round((regRight - regLeft) * 10) / 10);
-  subPhaseBars.push({
-    label: "รับสมัคร",
-    tooltip: `📥 เปิดรับสมัคร: ${sched.registrationDate} (${course.title})`,
-    tone: "open",
-    left: Math.round(regLeft * 10) / 10,
-    width: regWidth,
-  });
-
-  const resF = parseCourseDateFields(sched.resultDate);
-  const resStartYear =
-    resF.startMonth > resF.endMonth ? resF.yearBE - 1 : resF.yearBE;
-  const resLeft = dateToTimelinePercent(
-    resF.startDay,
-    resF.startMonth + 1,
-    resStartYear
-  );
-  const resRight = dateToTimelinePercent(
-    resF.endDay + 1,
-    resF.endMonth + 1,
-    resF.yearBE
-  );
-  const resWidth = Math.max(1.2, Math.round((resRight - resLeft) * 10) / 10);
-  subPhaseBars.push({
-    label: "ประกาศผล",
-    tooltip: `📣 วันประกาศผล: ${sched.resultDate} (${course.title})`,
-    tone: "result",
-    left: Math.round(resLeft * 10) / 10,
-    width: resWidth,
-  });
 
   return {
     course,
@@ -187,6 +218,7 @@ function buildCourseTimelineRow(
     quarterLabel,
     title: course.title,
     shortBadge: course.shortTitle,
+    isCustomSchedule: sched.isCustom,
     registrationDate: sched.registrationDate,
     resultDate: sched.resultDate,
     dateSummary: course.date,
@@ -306,6 +338,90 @@ function Legend({
   );
 }
 
+function GlobalScheduleTrack({
+  registrationDate,
+  resultDate,
+}: {
+  registrationDate: string;
+  resultDate: string;
+}) {
+  const scheduleBars = buildScheduleBars(
+    registrationDate,
+    resultDate,
+    "กำหนดการกลางทุกหลักสูตร"
+  );
+  const regBar = scheduleBars[0];
+  const resBar = scheduleBars[1];
+
+  const regPlaceLeft = regBar ? regBar.left + regBar.width > 64 : false;
+  const resPlaceLeft = resBar ? resBar.left + resBar.width > 64 : false;
+
+  return (
+    <>
+      {/* Lane 1 (Top): Registration Period */}
+      {regBar && (
+        <>
+          <div
+            title={regBar.tooltip}
+            className="absolute top-[7px] z-20 flex h-[20px] items-center justify-center rounded-full bg-gradient-to-r from-[#1869bc] to-[#1d4ed8] px-2 text-[9px] font-bold text-white shadow-[0_2px_5px_rgba(24,105,188,0.28)] ring-1 ring-white"
+            style={{ left: `${regBar.left}%`, width: `${regBar.width}%` }}
+          >
+            {regBar.width >= 4.2 ? (
+              <span className="truncate">📥 รับสมัคร</span>
+            ) : (
+              <span className="text-[9px]">📥</span>
+            )}
+          </div>
+          <div
+            className="pointer-events-none absolute top-[7px] z-30 flex h-[20px] items-center whitespace-nowrap"
+            style={
+              regPlaceLeft
+                ? { right: `${100 - regBar.left + 0.6}%` }
+                : { left: `${regBar.left + regBar.width + 0.6}%` }
+            }
+          >
+            <span className="inline-flex items-center gap-1 rounded-md border border-[#bfdbfe] bg-[#eff6ff]/95 px-2 py-0.5 text-[9.5px] font-bold text-[#1e40af] shadow-2xs">
+              <span>เปิดรับสมัคร: {registrationDate}</span>
+            </span>
+          </div>
+        </>
+      )}
+
+      {/* Lane 2 (Bottom): Result Announcement Date */}
+      {resBar && (
+        <>
+          <div
+            title={resBar.tooltip}
+            className="absolute bottom-[7px] z-20 flex h-[20px] min-w-[20px] items-center justify-center rounded-full bg-gradient-to-r from-[#dc2626] to-[#b91c1c] px-1.5 text-[9px] font-bold text-white shadow-[0_2px_5px_rgba(220,38,38,0.3)] ring-1 ring-white"
+            style={{
+              left: `${resBar.left}%`,
+              width: `${Math.max(1.8, resBar.width)}%`,
+            }}
+          >
+            <span className="text-[9.5px] leading-none">📣</span>
+          </div>
+          <div
+            className="pointer-events-none absolute bottom-[7px] z-30 flex h-[20px] items-center whitespace-nowrap"
+            style={
+              resPlaceLeft
+                ? { right: `${100 - resBar.left + 0.6}%` }
+                : {
+                    left: `${
+                      resBar.left + Math.max(1.8, resBar.width) + 0.6
+                    }%`,
+                  }
+            }
+          >
+            <span className="inline-flex items-center gap-1 rounded-md border border-[#fecaca] bg-[#fef2f2]/95 px-2 py-0.5 text-[9.5px] font-bold text-[#991b1b] shadow-2xs">
+              <span>ประกาศผล: {resultDate}</span>
+            </span>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 function CourseTrainingTrack({
   row,
   showSubPhases,
@@ -313,7 +429,7 @@ function CourseTrainingTrack({
   row: TimelineRow;
   showSubPhases: boolean;
 }) {
-  const placeLabelOnLeft = row.spanLeft + row.spanWidth > 66;
+  const placeLabelOnLeft = row.spanLeft + row.spanWidth > 62;
   const sessionDetails = row.sessions
     .map((s, idx) => `ช่วงที่ ${idx + 1}: ${formatCourseDateFields(s, false)}`)
     .join(" | ");
@@ -323,24 +439,45 @@ function CourseTrainingTrack({
       ? `${row.title} — จัดอบรม ${row.sessions.length} ช่วง (รวม ${row.totalDays} วัน): ${sessionDetails}`
       : `${row.title} — จัดอบรม (${row.totalDays} วัน): ${row.dateSummary}`;
 
+  const showCustomPhase = showSubPhases && row.isCustomSchedule;
+  const regBar = row.subPhaseBars[0];
+  const resBar = row.subPhaseBars[1];
+
   return (
     <>
-      {showSubPhases &&
-        row.subPhaseBars.map((bar, idx) => (
-          <div
-            key={`${row.course.id}-sub-${idx}`}
-            title={bar.tooltip || bar.label}
-            className={`absolute top-1/2 z-10 flex h-[18px] -translate-y-1/2 items-center justify-center rounded-full px-1 text-[7.5px] font-semibold leading-none text-white opacity-90 shadow-xs ${bars[bar.tone]}`}
-            style={{ left: `${bar.left}%`, width: `${bar.width}%` }}
-          >
-            <span className="truncate">{bar.label}</span>
-          </div>
-        ))}
+      {/* Optional custom registration/result lane ONLY for courses that override the global schedule */}
+      {showCustomPhase && (
+        <>
+          {regBar && (
+            <div
+              title={regBar.tooltip}
+              className="absolute top-[5px] z-10 flex h-[16px] items-center justify-center rounded-full bg-[#1869bc] px-1.5 text-[8px] font-bold text-white shadow-2xs"
+              style={{ left: `${regBar.left}%`, width: `${regBar.width}%` }}
+            >
+              <span className="truncate">📥 รับสมัคร</span>
+            </div>
+          )}
+          {resBar && (
+            <div
+              title={resBar.tooltip}
+              className="absolute top-[5px] z-15 flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-[#c4080f] px-1 text-[8px] font-bold text-white shadow-2xs"
+              style={{
+                left: `${resBar.left}%`,
+                width: `${Math.max(1.5, resBar.width)}%`,
+              }}
+            >
+              <span>📣</span>
+            </div>
+          )}
+        </>
+      )}
 
       {row.sessionSegments.length > 1 && (
         <div
           title={fullTooltip}
-          className="absolute top-1/2 z-10 h-[10px] -translate-y-1/2 rounded-full border border-[#16803c]/40 bg-[#dcfce7]"
+          className={`absolute z-10 h-[10px] rounded-full border border-[#16803c]/40 bg-[#dcfce7] ${
+            showCustomPhase ? "bottom-[11px]" : "top-1/2 -translate-y-1/2"
+          }`}
           style={{ left: `${row.spanLeft}%`, width: `${row.spanWidth}%` }}
         />
       )}
@@ -348,32 +485,61 @@ function CourseTrainingTrack({
       {row.sessionSegments.map((seg, idx) => (
         <div
           key={`${row.course.id}-seg-${idx}`}
-          title={`ช่วงที่ ${idx + 1}: ${seg.label} (${row.title})`}
-          className="group absolute top-1/2 z-20 flex h-[22px] -translate-y-1/2 items-center justify-center rounded-full bg-gradient-to-r from-[#16a34a] to-[#15803d] px-1.5 text-[9px] font-bold text-white shadow-[0_2px_5px_rgba(22,163,74,0.3)] ring-1 ring-white transition-transform hover:scale-105"
+          title={`${seg.label} (${row.title})`}
+          className={`group absolute z-20 flex h-[22px] items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-[#16a34a] to-[#15803d] px-1.5 text-[9px] font-bold text-white shadow-[0_2px_5px_rgba(22,163,74,0.3)] ring-1 ring-white transition-transform hover:scale-105 ${
+            showCustomPhase ? "bottom-[5px]" : "top-1/2 -translate-y-1/2"
+          }`}
           style={{ left: `${seg.left}%`, width: `${seg.width}%` }}
         >
-          {seg.width >= 7.5 && <span className="truncate">{seg.label}</span>}
+          {seg.subCount > 1 && (
+            <div
+              className="pointer-events-none absolute inset-0 grid"
+              style={{
+                gridTemplateColumns: `repeat(${seg.subCount}, minmax(0, 1fr))`,
+              }}
+              aria-hidden="true"
+            >
+              {Array.from({ length: seg.subCount }).map((_, subIdx) => (
+                <span
+                  key={subIdx}
+                  className={
+                    subIdx < seg.subCount - 1
+                      ? "border-r border-dashed border-white/55"
+                      : ""
+                  }
+                />
+              ))}
+            </div>
+          )}
+          {seg.width >= 9.5 ? (
+            <span className="relative z-10 truncate">{seg.label}</span>
+          ) : (
+            <span className="relative z-10 text-[9.5px] leading-none">🎓</span>
+          )}
         </div>
       ))}
 
-      {!showSubPhases && (
-        <div
-          title={fullTooltip}
-          className="pointer-events-none absolute top-1/2 z-30 -translate-y-1/2 whitespace-nowrap"
-          style={
-            placeLabelOnLeft
-              ? { right: `${100 - row.spanLeft + 0.7}%` }
-              : { left: `${row.spanLeft + row.spanWidth + 0.7}%` }
-          }
-        >
-          <span className="inline-flex items-center gap-1 rounded-md border border-[#bbf7d0] bg-[#f0fdf4]/95 px-2 py-0.5 text-[10px] font-bold text-[#166534] shadow-2xs">
-            <span>{row.compactDateLabel}</span>
-            <span className="font-normal text-[#15803d]">
-              ({row.totalDays} วัน)
-            </span>
+      {/* Always show crisp external date & day-count label so it is never hidden or truncated */}
+      <div
+        title={fullTooltip}
+        className={`pointer-events-none absolute z-30 whitespace-nowrap ${
+          showCustomPhase
+            ? "bottom-[5px] flex h-[22px] items-center"
+            : "top-1/2 -translate-y-1/2"
+        }`}
+        style={
+          placeLabelOnLeft
+            ? { right: `${100 - row.spanLeft + 0.7}%` }
+            : { left: `${row.spanLeft + row.spanWidth + 0.7}%` }
+        }
+      >
+        <span className="inline-flex items-center gap-1 rounded-md border border-[#bbf7d0] bg-[#f0fdf4]/95 px-2 py-0.5 text-[10px] font-bold text-[#166534] shadow-2xs">
+          <span>{row.compactDateLabel}</span>
+          <span className="font-normal text-[#15803d]">
+            ({row.sessionSummary})
           </span>
-        </div>
-      )}
+        </span>
+      </div>
     </>
   );
 }
@@ -433,20 +599,85 @@ function SportsEventBarItem({
   );
 }
 
+const TIMELINE_SETTINGS_KEY = "sat-timeline-display-settings-v1";
+
 export function TimelineSchedule() {
   const isAdmin = useIsAdmin();
   const { courses } = useCourses();
   const { events, deleteSportsEvent } = useSportsEvents();
 
   const [viewMode, setViewMode] = useState<ViewMode>("gantt");
-  const [showSportsEvents, setShowSportsEvents] = useState(true);
-  const [showSubPhases, setShowSubPhases] = useState(false);
+  const [showSportsEvents, setShowSportsEvents] = useState<boolean>(
+    defaultTimelineSettings.showSportsEvents ?? true
+  );
+  const [showSubPhases, setShowSubPhases] = useState<boolean>(
+    defaultTimelineSettings.showSubPhases ?? true
+  );
   const [highlightFreeSlots, setHighlightFreeSlots] = useState(false);
-  const [onlyActiveMonths, setOnlyActiveMonths] = useState(true);
+  const [onlyActiveMonths, setOnlyActiveMonths] = useState<boolean>(
+    defaultTimelineSettings.onlyActiveMonths ?? true
+  );
   const [previewAsApplicant, setPreviewAsApplicant] = useState(false);
 
   const canEdit = isAdmin && !previewAsApplicant;
   const effectiveHighlightFreeSlots = canEdit && highlightFreeSlots;
+  const globalSchedule = getGlobalCourseSchedule(courses);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(TIMELINE_SETTINGS_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        showSportsEvents?: boolean;
+        showSubPhases?: boolean;
+        onlyActiveMonths?: boolean;
+      };
+      if (typeof parsed.showSportsEvents === "boolean") {
+        setShowSportsEvents(parsed.showSportsEvents);
+      }
+      if (typeof parsed.showSubPhases === "boolean") {
+        setShowSubPhases(parsed.showSubPhases);
+      }
+      if (typeof parsed.onlyActiveMonths === "boolean") {
+        setOnlyActiveMonths(parsed.onlyActiveMonths);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  const updateDisplaySetting = (
+    patch: Partial<{
+      showSportsEvents: boolean;
+      showSubPhases: boolean;
+      onlyActiveMonths: boolean;
+    }>
+  ) => {
+    const next = {
+      showSportsEvents: patch.showSportsEvents ?? showSportsEvents,
+      showSubPhases: patch.showSubPhases ?? showSubPhases,
+      onlyActiveMonths: patch.onlyActiveMonths ?? onlyActiveMonths,
+    };
+    if (typeof patch.showSportsEvents === "boolean") {
+      setShowSportsEvents(patch.showSportsEvents);
+    }
+    if (typeof patch.showSubPhases === "boolean") {
+      setShowSubPhases(patch.showSubPhases);
+    }
+    if (typeof patch.onlyActiveMonths === "boolean") {
+      setOnlyActiveMonths(patch.onlyActiveMonths);
+    }
+    try {
+      window.localStorage.setItem(TIMELINE_SETTINGS_KEY, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+    void fetch("/api/admin/save-defaults", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ timelineSettings: next }),
+    }).catch(() => {});
+  };
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<SportsEvent | null>(null);
@@ -598,65 +829,74 @@ export function TimelineSchedule() {
           </div>
         )}
 
-        {/* Row 2: Display Options & Admin Actions */}
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-2.5 py-1 text-[11.5px] font-semibold text-[#334155] transition hover:bg-[#f1f5f9]">
-              <input
-                type="checkbox"
-                checked={showSportsEvents}
-                onChange={(e) => setShowSportsEvents(e.target.checked)}
-                className="h-3.5 w-3.5 rounded text-[#7c3aed] focus:ring-[#7c3aed]"
-              />
-              <span className="flex items-center gap-1">
-                <span>🏆</span>
-                <span>แสดงปฏิทินแข่งขันกีฬา</span>
-                <span className="rounded-full bg-[#f3e8ff] px-1.5 text-[10px] font-bold text-[#7c3aed]">
-                  {events.length}
-                </span>
+        {/* Row 2: Display Options & Admin Actions (Visible ONLY to Admin in Edit Mode) */}
+        {canEdit && (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc]/70 p-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-bold text-[#1e3a8a]">
+                ⚙️ ตั้งค่าการแสดงผลตาราง (บันทึกเป็นค่าเริ่มต้นให้ผู้สมัครเห็น):
               </span>
-            </label>
+              <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#e2e8f0] bg-white px-2.5 py-1 text-[11.5px] font-semibold text-[#334155] shadow-2xs transition hover:bg-[#f1f5f9]">
+                <input
+                  type="checkbox"
+                  checked={showSportsEvents}
+                  onChange={(e) =>
+                    updateDisplaySetting({ showSportsEvents: e.target.checked })
+                  }
+                  className="h-3.5 w-3.5 rounded text-[#7c3aed] focus:ring-[#7c3aed]"
+                />
+                <span className="flex items-center gap-1">
+                  <span>🏆</span>
+                  <span>แสดงปฏิทินแข่งขันกีฬา</span>
+                  <span className="rounded-full bg-[#f3e8ff] px-1.5 text-[10px] font-bold text-[#7c3aed]">
+                    {events.length}
+                  </span>
+                </span>
+              </label>
 
-            {viewMode === "gantt" && (
-              <>
-                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-2.5 py-1 text-[11.5px] font-semibold text-[#334155] transition hover:bg-[#f1f5f9]">
-                  <input
-                    type="checkbox"
-                    checked={showSubPhases}
-                    onChange={(e) => setShowSubPhases(e.target.checked)}
-                    className="h-3.5 w-3.5 rounded text-[#1869bc] focus:ring-[#1869bc]"
-                  />
-                  <span>แสดงวันรับสมัคร/ประกาศผล</span>
-                </label>
+              {viewMode === "gantt" && (
+                <>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#e2e8f0] bg-white px-2.5 py-1 text-[11.5px] font-semibold text-[#334155] shadow-2xs transition hover:bg-[#f1f5f9]">
+                    <input
+                      type="checkbox"
+                      checked={showSubPhases}
+                      onChange={(e) =>
+                        updateDisplaySetting({ showSubPhases: e.target.checked })
+                      }
+                      className="h-3.5 w-3.5 rounded text-[#1869bc] focus:ring-[#1869bc]"
+                    />
+                    <span>แสดงวันรับสมัคร/ประกาศผล</span>
+                  </label>
 
-                {canEdit && (
-                  <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-2.5 py-1 text-[11.5px] font-semibold text-[#334155] transition hover:bg-[#f1f5f9]">
+                  <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#e2e8f0] bg-white px-2.5 py-1 text-[11.5px] font-semibold text-[#334155] shadow-2xs transition hover:bg-[#f1f5f9]">
                     <input
                       type="checkbox"
                       checked={highlightFreeSlots}
                       onChange={(e) => setHighlightFreeSlots(e.target.checked)}
                       className="h-3.5 w-3.5 rounded text-[#10b981] focus:ring-[#10b981]"
                     />
-                    <span>✨ ไฮไลต์ช่วงเวลาว่าง (สำหรับผู้บริหาร)</span>
+                    <span>✨ ไฮไลต์ช่วงเวลาว่าง (เฉพาะ Admin)</span>
                   </label>
-                )}
-              </>
-            )}
+                </>
+              )}
 
-            {viewMode === "monthly" && (
-              <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-2.5 py-1 text-[11.5px] font-semibold text-[#334155] transition hover:bg-[#f1f5f9]">
-                <input
-                  type="checkbox"
-                  checked={onlyActiveMonths}
-                  onChange={(e) => setOnlyActiveMonths(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded text-[#16265E] focus:ring-[#16265E]"
-                />
-                <span>แสดงเฉพาะเดือนที่มีกิจกรรม</span>
-              </label>
-            )}
-          </div>
+              {viewMode === "monthly" && (
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#e2e8f0] bg-white px-2.5 py-1 text-[11.5px] font-semibold text-[#334155] shadow-2xs transition hover:bg-[#f1f5f9]">
+                  <input
+                    type="checkbox"
+                    checked={onlyActiveMonths}
+                    onChange={(e) =>
+                      updateDisplaySetting({
+                        onlyActiveMonths: e.target.checked,
+                      })
+                    }
+                    className="h-3.5 w-3.5 rounded text-[#16265E] focus:ring-[#16265E]"
+                  />
+                  <span>แสดงเฉพาะเดือนที่มีกิจกรรม</span>
+                </label>
+              )}
+            </div>
 
-          {canEdit && (
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -683,8 +923,8 @@ export function TimelineSchedule() {
                 คืนค่าเริ่มต้น
               </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {canEdit && (
           <div className="mb-3">
@@ -783,6 +1023,75 @@ export function TimelineSchedule() {
               </thead>
 
               <tbody>
+                {/* Dedicated Global Registration & Result Schedule Summary Row */}
+                {showSubPhases && (
+                  <tr className="bg-gradient-to-r from-[#eff6ff]/70 to-[#fef2f2]/40">
+                    <th
+                      scope="row"
+                      className="border-b-2 border-r border-[#93c5fd] px-3 py-2 text-left align-middle text-[10.5px] leading-[1.35]"
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex flex-wrap items-center gap-1">
+                          <span className="inline-flex items-center gap-1 rounded bg-[#1869bc] px-1.5 py-0.5 text-[9px] font-bold text-white">
+                            🌐 กำหนดการกลางทุกหลักสูตร
+                          </span>
+                        </div>
+                        <span className="mt-0.5 font-bold text-[#1e3a8a]">
+                          ช่วงเปิดรับสมัคร &amp; วันประกาศผลรายชื่อ
+                        </span>
+                        <div className="mt-0.5 flex flex-col gap-0.5 text-[9.5px]">
+                          <span className="font-semibold text-[#1869bc]">
+                            📥 เปิดรับสมัคร: {globalSchedule.registrationDate}
+                          </span>
+                          <span className="font-semibold text-[#c4080f]">
+                            📣 วันประกาศผล: {globalSchedule.resultDate}
+                          </span>
+                        </div>
+                      </div>
+                    </th>
+
+                    <td
+                      colSpan={16}
+                      className="relative border-b-2 border-[#93c5fd] p-0"
+                    >
+                      <div className="relative h-[58px] overflow-hidden">
+                        {/* 16 Month Grid Columns Background */}
+                        <div
+                          className="pointer-events-none absolute inset-0 grid"
+                          style={{
+                            gridTemplateColumns: "repeat(16, minmax(0, 1fr))",
+                          }}
+                          aria-hidden="true"
+                        >
+                          {TIMELINE_SLOTS.map((slot) => (
+                            <span
+                              key={slot.index}
+                              className={`border-r ${
+                                slot.index === 11
+                                  ? "border-r-2 border-r-[#f59e0b]/70"
+                                  : slot.index % 3 === 2 && slot.index < 11
+                                  ? "border-r-[#cbd5e1]"
+                                  : "border-r-[#eef2f6]"
+                              } ${
+                                slot.isPostFiscal
+                                  ? "bg-[#faf5ff]/45"
+                                  : slot.index % 2 === 1
+                                  ? "bg-[#f8fafc]/40"
+                                  : ""
+                              }`}
+                            />
+                          ))}
+                        </div>
+
+                        <GlobalScheduleTrack
+                          registrationDate={globalSchedule.registrationDate}
+                          resultDate={globalSchedule.resultDate}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                )}
+
                 {/* Courses Section Header */}
                 <tr className="bg-[#f0fdf4] text-[11px] font-bold text-[#166534]">
                   <th
