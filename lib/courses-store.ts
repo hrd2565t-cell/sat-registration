@@ -39,6 +39,14 @@ function persist() {
   if (typeof window === "undefined") return true;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.courses));
+    // Auto-sync to data/courses.json in the background
+    fetch("/api/admin/save-defaults", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ courses: state.courses }),
+    }).catch(() => {
+      // Ignore background sync errors in static/read-only environments
+    });
     return true;
   } catch {
     // Storage may be unavailable in private mode or full; the in-memory store still works.
@@ -62,12 +70,15 @@ export function getSeedCourse(id: number) {
 }
 
 function mergeStoredCourses(stored: Course[]): Course[] {
+  const globalSched = getGlobalCourseSchedule(stored);
+
   return stored.map((saved): Course => {
     const seed = getSeedCourse(saved.id);
     const customImage =
       isAllowedCourseImage(saved.image)
         ? saved.image
         : undefined;
+    const isCustom = Boolean(saved.useCustomSchedule ?? seed?.useCustomSchedule);
 
     return {
       ...(seed ?? {}),
@@ -77,16 +88,13 @@ function mergeStoredCourses(stored: Course[]): Course[] {
       imageAlt: saved.imageAlt || seed?.imageAlt || `${saved.title} - รูปประกอบ`,
       shortTitle:
         saved.shortTitle !== undefined ? saved.shortTitle : seed?.shortTitle,
-      useCustomSchedule:
-        saved.useCustomSchedule !== undefined
-          ? saved.useCustomSchedule
-          : seed?.useCustomSchedule,
-      registrationDate:
-        saved.registrationDate !== undefined
-          ? saved.registrationDate
-          : seed?.registrationDate,
-      resultDate:
-        saved.resultDate !== undefined ? saved.resultDate : seed?.resultDate,
+      useCustomSchedule: isCustom,
+      registrationDate: isCustom
+        ? saved.registrationDate || seed?.registrationDate || globalSched.registrationDate
+        : globalSched.registrationDate,
+      resultDate: isCustom
+        ? saved.resultDate || seed?.resultDate || globalSched.resultDate
+        : globalSched.resultDate,
       targetQuotas: saved.targetQuotas ?? seed?.targetQuotas ?? { ...DEFAULT_TARGET_QUOTAS },
       courseObjective: saved.courseObjective || seed?.courseObjective,
       qualifications:
@@ -283,8 +291,25 @@ export function updateCourse(
 ): UpdateCourseResult | undefined {
   let updated: Course | undefined;
 
+  // หากบันทึกในโหมด "ใช้กำหนดการกลาง" (useCustomSchedule === false)
+  // ให้ซิงก์วันเปิดรับสมัครและวันประกาศผลไปยังทุกหลักสูตรที่ใช้กำหนดการกลางด้วยทันที
+  const syncGlobalSchedule =
+    patch.useCustomSchedule === false &&
+    (patch.registrationDate !== undefined || patch.resultDate !== undefined);
+  const nextGlobalReg = patch.registrationDate?.trim();
+  const nextGlobalRes = patch.resultDate?.trim();
+
   const nextCourses = state.courses.map((course) => {
-    if (course.id !== id) return course;
+    if (course.id !== id) {
+      if (syncGlobalSchedule && !course.useCustomSchedule) {
+        return {
+          ...course,
+          ...(nextGlobalReg ? { registrationDate: nextGlobalReg } : {}),
+          ...(nextGlobalRes ? { resultDate: nextGlobalRes } : {}),
+        };
+      }
+      return course;
+    }
 
     const nextImage =
       patch.image === undefined

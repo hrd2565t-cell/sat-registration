@@ -439,11 +439,10 @@ export function getCourseScheduleDates(
 
   const globalSched = getGlobalCourseSchedule(courseList);
   return {
-    registrationDate:
-      course.registrationDate?.trim() || globalSched.registrationDate,
-    resultDate: course.resultDate?.trim() || globalSched.resultDate,
+    registrationDate: globalSched.registrationDate,
+    resultDate: globalSched.resultDate,
     trainingDate: course.date,
-    isCustom,
+    isCustom: false,
   };
 }
 

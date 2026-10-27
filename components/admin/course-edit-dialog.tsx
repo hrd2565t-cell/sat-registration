@@ -371,12 +371,8 @@ export function CourseEditDialog({
       title: trimmedTitle,
       shortTitle: trimmedShortTitle || undefined,
       useCustomSchedule,
-      registrationDate: useCustomSchedule
-        ? registrationDate.trim() || globalSched.registrationDate
-        : globalSched.registrationDate,
-      resultDate: useCustomSchedule
-        ? resultDate.trim() || globalSched.resultDate
-        : globalSched.resultDate,
+      registrationDate: registrationDate.trim() || globalSched.registrationDate,
+      resultDate: resultDate.trim() || globalSched.resultDate,
       date: trimmedDate,
       location: trimmedLocation,
       seats: trimmedSeats,
@@ -392,7 +388,13 @@ export function CourseEditDialog({
       expensesPolicy: expensesPolicy.trim() || undefined,
       ...(course.id === 0 || image !== course.image ? { image } : {}),
     });
-    if (typeof result === "string") setError(result);
+    if (typeof result === "string") {
+      setError(result);
+      return;
+    }
+    if (result) {
+      onClose();
+    }
   };
 
   const isCustomImage = image.startsWith("data:image/");
@@ -597,82 +599,67 @@ export function CourseEditDialog({
                 </div>
               </div>
 
-              {!useCustomSchedule ? (
-                <div className="rounded-lg border border-[#bfdbfe] bg-white p-2.5 text-[11px]">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-bold text-[#1e3a8a]">
-                      🌐 กำลังใช้วันเปิด-ปิดรับสมัคร และวันประกาศผลร่วมกับทุกหลักสูตร:
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setUseCustomSchedule(true)}
-                      className="text-[10px] font-semibold text-[#1d4ed8] hover:underline"
-                    >
-                      ต้องการปรับเฉพาะหลักสูตรนี้ ›
-                    </button>
-                  </div>
-                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <div className="flex items-center justify-between rounded border border-[#dbeafe] bg-[#eff6ff]/60 px-2.5 py-1.5">
-                      <span className="font-semibold text-[#1869bc]">
-                        1. 📥 เปิดรับสมัคร:
-                      </span>
-                      <strong className="font-bold text-[#1e3a8a]">
-                        {globalSched.registrationDate}
-                      </strong>
-                    </div>
-                    <div className="flex items-center justify-between rounded border border-[#fecaca] bg-[#fef2f2]/60 px-2.5 py-1.5">
-                      <span className="font-semibold text-[#c4080f]">
-                        2. 📣 วันประกาศผล:
-                      </span>
-                      <strong className="font-bold text-[#991b1b]">
-                        {globalSched.resultDate}
-                      </strong>
-                    </div>
-                  </div>
+              <div
+                className={`space-y-2.5 rounded-lg border p-2.5 ${
+                  useCustomSchedule
+                    ? "border-[#fde68a] bg-[#fffbeb]/40"
+                    : "border-[#bfdbfe] bg-[#eff6ff]/40"
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span
+                    className={`text-[11px] font-bold ${
+                      useCustomSchedule ? "text-[#92400e]" : "text-[#1e3a8a]"
+                    }`}
+                  >
+                    {useCustomSchedule
+                      ? "✏️ กำหนดวันรับสมัครและประกาศผลเฉพาะหลักสูตรนี้:"
+                      : "🌐 วันรับสมัครและประกาศผลกลาง (หากเปลี่ยนจะอัปเดตให้ทุกหลักสูตรที่ใช้กำหนดการกลาง):"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAutoCalculateSchedule}
+                    className="inline-flex items-center gap-1 rounded-md border border-[#3b82f6] bg-white px-2 py-0.5 text-[10px] font-bold text-[#1d4ed8] transition hover:bg-[#dbeafe]"
+                  >
+                    <span>⚡ คำนวณล่วงหน้าอัตโนมัติจากวันอบรม</span>
+                  </button>
                 </div>
-              ) : (
-                <div className="space-y-2.5 rounded-lg border border-[#fde68a] bg-[#fffbeb]/40 p-2.5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-[11px] font-bold text-[#92400e]">
-                      ✏️ กำหนดวันรับสมัครและวันประกาศผลเฉพาะหลักสูตรนี้:
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleAutoCalculateSchedule}
-                      className="inline-flex items-center gap-1 rounded-md border border-[#3b82f6] bg-[#eff6ff] px-2 py-0.5 text-[10px] font-bold text-[#1d4ed8] transition hover:bg-[#dbeafe]"
-                    >
-                      <span>⚡ คำนวณล่วงหน้าอัตโนมัติจากวันอบรม</span>
-                    </button>
-                  </div>
 
-                  {/* 1. ช่วงวันเปิดรับสมัคร (registrationDate) */}
-                  <ThaiCalendarRangePicker
-                    value={regFields}
-                    onChange={syncRegFields}
-                    tone="blue"
-                    badgeLabel="1. 📥 เปิดรับสมัคร (เฉพาะหลักสูตรนี้)"
-                    presets={[
-                      { days: 7, label: "7 วัน" },
-                      { days: 14, label: "14 วัน" },
-                      { days: 17, label: "17 วัน (มาตรฐาน)" },
-                      { days: 30, label: "30 วัน" },
-                    ]}
-                  />
+                {/* 1. ช่วงวันเปิดรับสมัคร (registrationDate) */}
+                <ThaiCalendarRangePicker
+                  value={regFields}
+                  onChange={syncRegFields}
+                  tone="blue"
+                  badgeLabel={
+                    useCustomSchedule
+                      ? "1. 📥 เปิดรับสมัคร (เฉพาะหลักสูตรนี้)"
+                      : "1. 📥 เปิดรับสมัครกลาง (ทุกหลักสูตร)"
+                  }
+                  presets={[
+                    { days: 7, label: "7 วัน" },
+                    { days: 14, label: "14 วัน" },
+                    { days: 17, label: "17 วัน (มาตรฐาน)" },
+                    { days: 30, label: "30 วัน" },
+                  ]}
+                />
 
-                  {/* 2. วันประกาศผลผู้มีสิทธิ์เข้าอบรม (resultDate) */}
-                  <ThaiCalendarRangePicker
-                    value={resultFields}
-                    onChange={syncResultFields}
-                    tone="red"
-                    badgeLabel="2. 📣 วันประกาศผล (เฉพาะหลักสูตรนี้)"
-                    presets={[
-                      { days: 1, label: "วันเดียว (1 วัน)" },
-                      { days: 2, label: "ช่วง 2 วัน" },
-                      { days: 3, label: "ช่วง 3 วัน" },
-                    ]}
-                  />
-                </div>
-              )}
+                {/* 2. วันประกาศผลผู้มีสิทธิ์เข้าอบรม (resultDate) */}
+                <ThaiCalendarRangePicker
+                  value={resultFields}
+                  onChange={syncResultFields}
+                  tone="red"
+                  badgeLabel={
+                    useCustomSchedule
+                      ? "2. 📣 วันประกาศผล (เฉพาะหลักสูตรนี้)"
+                      : "2. 📣 วันประกาศผลกลาง (ทุกหลักสูตร)"
+                  }
+                  presets={[
+                    { days: 1, label: "วันเดียว (1 วัน)" },
+                    { days: 2, label: "ช่วง 2 วัน" },
+                    { days: 3, label: "ช่วง 3 วัน" },
+                  ]}
+                />
+              </div>
 
               {/* 3. Multi-Session Smart Date Range Picker (ช่วงวันที่อบรม) */}
               <div className="rounded-lg border border-[#bbf7d0] bg-[#f0fdf4]/40 p-2.5">

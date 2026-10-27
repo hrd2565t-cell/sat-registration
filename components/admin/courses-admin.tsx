@@ -144,6 +144,13 @@ export function CoursesAdmin() {
       ? undefined
       : courses.find((course) => course.id === editingId);
 
+  const showNotice = (msg: string) => {
+    setNotice(msg);
+    window.setTimeout(() => {
+      setNotice((prev) => (prev === msg ? "" : prev));
+    }, 4500);
+  };
+
   const handleSave = (patch: CourseUpdate) => {
     if (!editingCourse) return false;
 
@@ -155,11 +162,16 @@ export function CoursesAdmin() {
         // Keep the dialog open so the admin can pick a smaller image.
         return "รูปมีขนาดใหญ่เกินพื้นที่จัดเก็บของเบราว์เซอร์ กรุณาเลือกรูปที่เล็กลง";
       }
-      setNotice(
+      showNotice(
         `บันทึก ${result.course.title} แล้ว แต่เบราว์เซอร์ไม่อนุญาตให้จัดเก็บถาวร ข้อมูลจะหายเมื่อรีเฟรช`
       );
     } else {
-      setNotice(`บันทึกการแก้ไข ${result.course.title} เรียบร้อยแล้ว (กดปุ่ม "บันทึกเป็นข้อมูลหลักถาวร" ด้านบนเพื่อฝังข้อมูลลงไฟล์ระบบ)`);
+      const modeText = patch.useCustomSchedule
+        ? "(กำหนดวันแยกเฉพาะหลักสูตรนี้)"
+        : "(ซิงก์กำหนดการกลางครบทุกหลักสูตร)";
+      showNotice(
+        `บันทึกการแก้ไข "${result.course.title}" เรียบร้อยแล้ว ${modeText}`
+      );
     }
     setEditingId(null);
     return true;
@@ -176,7 +188,7 @@ export function CoursesAdmin() {
     if (!result.persisted && patch.image?.startsWith("data:image/")) {
       return "รูปมีขนาดใหญ่เกินพื้นที่จัดเก็บของเบราว์เซอร์ กรุณาเลือกรูปที่เล็กลง";
     }
-    setNotice(`เพิ่มหลักสูตร "${result.course.title}" เรียบร้อยแล้ว (กดปุ่ม "บันทึกเป็นข้อมูลหลักถาวร" ด้านบนเพื่อฝังข้อมูลลงไฟล์ระบบ)`);
+    showNotice(`เพิ่มหลักสูตร "${result.course.title}" และบันทึกข้อมูลเรียบร้อยแล้ว`);
     setIsCreating(false);
     return true;
   };
@@ -188,7 +200,7 @@ export function CoursesAdmin() {
       )
     ) {
       deleteCourse(course.id);
-      setNotice(`ลบหลักสูตร "${course.title}" เรียบร้อยแล้ว`);
+      showNotice(`ลบหลักสูตร "${course.title}" เรียบร้อยแล้ว`);
     }
   };
 
@@ -209,6 +221,25 @@ export function CoursesAdmin() {
 
   return (
     <div className="mx-auto w-full max-w-[1220px]">
+      {notice && (
+        <div
+          role="status"
+          className="fixed top-4 left-1/2 z-[90] flex w-[92vw] max-w-[620px] -translate-x-1/2 items-center justify-between gap-3 rounded-xl border border-[#16a34a] bg-[#15803d] px-4 py-3 text-[12.5px] font-semibold text-white shadow-2xl"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-base">✅</span>
+            <span>{notice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setNotice("")}
+            className="rounded-md bg-white/15 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-white/25"
+          >
+            ปิด ✕
+          </button>
+        </div>
+      )}
+
       <section className="rounded-lg border border-[#e3e6ea] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.05)]">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -229,7 +260,7 @@ export function CoursesAdmin() {
             >
               <span>+ เพิ่มหลักสูตรใหม่</span>
             </button>
-            <SyncDefaultsButton onSuccess={(msg) => setNotice(msg)} />
+            <SyncDefaultsButton onSuccess={(msg) => showNotice(msg)} />
             <Link
               href="/"
               className="inline-flex h-8 items-center rounded-[5px] border border-[#c7d7ea] bg-white px-3 text-[11px] font-semibold text-[#1e3a8a] transition-colors hover:bg-[#eff6ff]"
@@ -242,9 +273,9 @@ export function CoursesAdmin() {
         {notice && (
           <p
             role="status"
-            className="mt-3 rounded-[5px] border border-[#b9dbc5] bg-[#eef9f1] px-3 py-2 text-[11px] text-[#176c3a]"
+            className="mt-3 rounded-[5px] border border-[#b9dbc5] bg-[#eef9f1] px-3 py-2 text-[11px] font-semibold text-[#176c3a]"
           >
-            {notice}
+            ✅ {notice}
           </p>
         )}
 
@@ -278,7 +309,7 @@ export function CoursesAdmin() {
       </section>
 
       <div className="mt-3">
-        <GlobalScheduleCard onSaved={(msg) => setNotice(msg)} />
+        <GlobalScheduleCard onSaved={(msg) => showNotice(msg)} />
       </div>
 
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">

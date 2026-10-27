@@ -83,7 +83,10 @@ function getCourseYear(course: Course): number {
   return match ? parseInt(match[1], 10) : 2570;
 }
 
-function buildCourseTimelineRow(course: Course): TimelineRow {
+function buildCourseTimelineRow(
+  course: Course,
+  allCourses: Course[]
+): TimelineRow {
   const sessions = parseCourseDateSessions(course.date);
   const year = getCourseYear(course);
 
@@ -130,7 +133,7 @@ function buildCourseTimelineRow(course: Course): TimelineRow {
   const spanWidth = Math.max(2.0, Math.round((spanRight - spanLeft) * 10) / 10);
 
   const compactDateLabel = course.date.replace(/\s*25\d{2}$/, "").trim();
-  const sched = getCourseScheduleDates(course);
+  const sched = getCourseScheduleDates(course, allCourses);
 
   // Sub-phase bars computed from the course's real registrationDate & resultDate
   const subPhaseBars: TimelineBar[] = [];
@@ -441,17 +444,51 @@ export function TimelineSchedule() {
   const [editingEvent, setEditingEvent] = useState<SportsEvent | null>(null);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [hoveredEvent, setHoveredEvent] = useState<SportsEvent | null>(null);
+  const [toastNotice, setToastNotice] = useState("");
 
-  const courseRows = courses.map(buildCourseTimelineRow);
+  const showToast = (msg: string) => {
+    setToastNotice(msg);
+    window.setTimeout(() => {
+      setToastNotice((prev) => (prev === msg ? "" : prev));
+    }, 4500);
+  };
+
+  const courseRows = courses.map((c) => buildCourseTimelineRow(c, courses));
 
   function handleSaveCourse(patch: CourseUpdate): boolean {
     if (!editingCourse) return false;
-    updateCourse(editingCourse.id, patch);
+    const result = updateCourse(editingCourse.id, patch);
+    if (!result) return false;
+    const modeText = patch.useCustomSchedule
+      ? "(กำหนดวันแยกเฉพาะหลักสูตรนี้)"
+      : "(ซิงก์กำหนดการกลางครบทุกหลักสูตร)";
+    showToast(
+      `บันทึกการแก้ไข "${result.course.title}" เรียบร้อยแล้ว ${modeText}`
+    );
+    setEditingCourse(null);
     return true;
   }
 
   return (
     <>
+      {toastNotice && (
+        <div
+          role="status"
+          className="fixed top-4 left-1/2 z-[90] flex w-[92vw] max-w-[620px] -translate-x-1/2 items-center justify-between gap-3 rounded-xl border border-[#16a34a] bg-[#15803d] px-4 py-3 text-[12.5px] font-semibold text-white shadow-2xl"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-base">✅</span>
+            <span>{toastNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setToastNotice("")}
+            className="rounded-md bg-white/15 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-white/25"
+          >
+            ปิด ✕
+          </button>
+        </div>
+      )}
       <section className="mx-auto mt-[7px] w-full max-w-[960px] rounded-2xl border border-[#e0e5e8] bg-white p-3.5 shadow-[0_2px_10px_rgba(16,24,40,0.06)] xl:mt-[clamp(8px,0.75vw,12px)] xl:max-w-[clamp(1060px,80vw,1400px)] xl:rounded-[clamp(14px,1vw,18px)] xl:p-[clamp(14px,1.1vw,20px)]">
         {/* Top Row: Fiscal Year Title Badge + View Mode Switcher */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5 border-b border-[#eef2f6] pb-3">
@@ -592,7 +629,7 @@ export function TimelineSchedule() {
 
         {isAdmin && (
           <div className="mb-3">
-            <GlobalScheduleCard />
+            <GlobalScheduleCard onSaved={showToast} />
           </div>
         )}
 

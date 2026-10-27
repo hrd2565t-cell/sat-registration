@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { getCourseScheduleDates } from "@/lib/courses";
+import { useCourses } from "@/lib/courses-store";
 
 export interface CourseCardProps {
   id: number;
@@ -11,6 +12,7 @@ export interface CourseCardProps {
   status: "open" | "full";
   seatsLeft?: number;
   title: string;
+  useCustomSchedule?: boolean;
   registrationDate?: string;
   resultDate?: string;
   date: string;
@@ -123,6 +125,7 @@ export function CourseCard({
   status,
   seatsLeft,
   title,
+  useCustomSchedule,
   registrationDate,
   resultDate,
   date,
@@ -133,13 +136,18 @@ export function CourseCard({
   onSelect,
   onViewDetails,
 }: CourseCardProps) {
+  const { courses } = useCourses();
   const isFull = status === "full";
   const isLow = (seatsLeft ?? 0) <= 5;
-  const schedule = getCourseScheduleDates({
-    date,
-    registrationDate,
-    resultDate,
-  });
+  const schedule = getCourseScheduleDates(
+    {
+      date,
+      registrationDate,
+      resultDate,
+      useCustomSchedule,
+    },
+    courses
+  );
 
   const badge = isFull ? (
     <span className="inline-flex min-w-[76px] items-center justify-center rounded-md bg-[#dc2626] px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">

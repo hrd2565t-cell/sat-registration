@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 import type { Course } from "@/lib/courses";
 import { TARGET_GROUPS, getCourseScheduleDates } from "@/lib/courses";
+import { useCourses } from "@/lib/courses-store";
 
 interface CourseDetailDialogProps {
   course: Course | null;
@@ -17,6 +18,7 @@ export function CourseDetailDialog({
   onClose,
   onSelectRegister,
 }: CourseDetailDialogProps) {
+  const { courses } = useCourses();
   useEffect(() => {
     if (!course) return;
 
@@ -37,7 +39,7 @@ export function CourseDetailDialog({
   if (!course) return null;
 
   const isFull = course.status === "full" || course.seatsLeft === 0;
-  const schedule = getCourseScheduleDates(course);
+  const schedule = getCourseScheduleDates(course, courses);
 
   return (
     <div
