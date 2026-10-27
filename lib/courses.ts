@@ -136,6 +136,21 @@ export function getCourseKeyword(
   return cleaned || rawTitle;
 }
 
+export const THAI_MONTHS = [
+  { index: 0, abbr: "ม.ค.", full: "มกราคม", maxDays: 31 },
+  { index: 1, abbr: "ก.พ.", full: "กุมภาพันธ์", maxDays: 29 },
+  { index: 2, abbr: "มี.ค.", full: "มีนาคม", maxDays: 31 },
+  { index: 3, abbr: "เม.ย.", full: "เมษายน", maxDays: 30 },
+  { index: 4, abbr: "พ.ค.", full: "พฤษภาคม", maxDays: 31 },
+  { index: 5, abbr: "มิ.ย.", full: "มิถุนายน", maxDays: 30 },
+  { index: 6, abbr: "ก.ค.", full: "กรกฎาคม", maxDays: 31 },
+  { index: 7, abbr: "ส.ค.", full: "สิงหาคม", maxDays: 31 },
+  { index: 8, abbr: "ก.ย.", full: "กันยายน", maxDays: 30 },
+  { index: 9, abbr: "ต.ค.", full: "ตุลาคม", maxDays: 31 },
+  { index: 10, abbr: "พ.ย.", full: "พฤศจิกายน", maxDays: 30 },
+  { index: 11, abbr: "ธ.ค.", full: "ธันวาคม", maxDays: 31 },
+] as const;
+
 export const THAI_MONTH_INDEX_MAP: Record<string, number> = {
   "ม.ค.": 0,
   "ก.พ.": 1,
@@ -151,13 +166,104 @@ export const THAI_MONTH_INDEX_MAP: Record<string, number> = {
   "ธ.ค.": 11,
 };
 
+export interface CourseDateFields {
+  startDay: number;
+  startMonth: number; // 0-11
+  endDay: number;
+  endMonth: number; // 0-11
+  yearBE: number; // e.g. 2570
+}
+
+export function getDaysInMonth(monthIndex: number, yearBE = 2570): number {
+  const yearCE = yearBE > 2400 ? yearBE - 543 : yearBE;
+  return new Date(yearCE, monthIndex + 1, 0).getDate();
+}
+
+export function parseCourseDateFields(
+  dateStr: string | null | undefined
+): CourseDateFields {
+  const fallback: CourseDateFields = {
+    startDay: 15,
+    startMonth: 4, // พ.ค.
+    endDay: 19,
+    endMonth: 4,
+    yearBE: 2570,
+  };
+  if (!dateStr) return fallback;
+  const s = dateStr.trim();
+
+  // รูปแบบ 1: ภายในเดือนเดียวกัน เช่น "15-20 พ.ค. 2570" หรือ "1 - 5 พ.ย. 2570"
+  const m1 = s.match(/^(\d{1,2})\s*-\s*(\d{1,2})\s+([ก-๙\.]+)\s+(\d{4})$/);
+  if (m1) {
+    const month = THAI_MONTH_INDEX_MAP[m1[3]];
+    if (month !== undefined) {
+      return {
+        startDay: parseInt(m1[1], 10),
+        startMonth: month,
+        endDay: parseInt(m1[2], 10),
+        endMonth: month,
+        yearBE: parseInt(m1[4], 10),
+      };
+    }
+  }
+
+  // รูปแบบ 2: ข้ามเดือน เช่น "28 พ.ค. - 2 มิ.ย. 2570"
+  const m2 = s.match(
+    /^(\d{1,2})\s+([ก-๙\.]+)\s*-\s*(\d{1,2})\s+([ก-๙\.]+)\s+(\d{4})$/
+  );
+  if (m2) {
+    const startMonth = THAI_MONTH_INDEX_MAP[m2[2]];
+    const endMonth = THAI_MONTH_INDEX_MAP[m2[4]];
+    if (startMonth !== undefined && endMonth !== undefined) {
+      return {
+        startDay: parseInt(m2[1], 10),
+        startMonth,
+        endDay: parseInt(m2[3], 10),
+        endMonth,
+        yearBE: parseInt(m2[5], 10),
+      };
+    }
+  }
+
+  // รูปแบบ 3: วันเดียว เช่น "15 พ.ค. 2570"
+  const m3 = s.match(/^(\d{1,2})\s+([ก-๙\.]+)\s+(\d{4})$/);
+  if (m3) {
+    const month = THAI_MONTH_INDEX_MAP[m3[2]];
+    if (month !== undefined) {
+      const day = parseInt(m3[1], 10);
+      return {
+        startDay: day,
+        startMonth: month,
+        endDay: day,
+        endMonth: month,
+        yearBE: parseInt(m3[3], 10),
+      };
+    }
+  }
+
+  return fallback;
+}
+
+export function formatCourseDateFields(fields: CourseDateFields): string {
+  const startMonthAbbr = THAI_MONTHS[fields.startMonth]?.abbr ?? "พ.ค.";
+  const endMonthAbbr = THAI_MONTHS[fields.endMonth]?.abbr ?? startMonthAbbr;
+
+  if (fields.startMonth === fields.endMonth) {
+    if (fields.startDay === fields.endDay) {
+      return `${fields.startDay} ${startMonthAbbr} ${fields.yearBE}`;
+    }
+    return `${fields.startDay}-${fields.endDay} ${startMonthAbbr} ${fields.yearBE}`;
+  }
+  return `${fields.startDay} ${startMonthAbbr} - ${fields.endDay} ${endMonthAbbr} ${fields.yearBE}`;
+}
+
 export interface ParsedDateRange {
   start: Date;
   end: Date;
 }
 
 /**
- * แปลงข้อความช่วงวันที่แบบไทย เช่น "15-20 พ.ค. 2569" หรือ "28 พ.ค. - 2 มิ.ย. 2569"
+ * แปลงข้อความช่วงวันที่แบบไทย เช่น "15-20 พ.ค. 2570" หรือ "28 พ.ค. - 2 มิ.ย. 2570"
  * เป็น Date object เพื่อนำไปคำนวณการซ้อนทับกันของเวลา
  */
 export function parseThaiDateRange(
@@ -166,7 +272,7 @@ export function parseThaiDateRange(
   if (!dateStr) return null;
   const s = dateStr.trim();
 
-  // รูปแบบ 1: ภายในเดือนเดียวกัน เช่น "15-20 พ.ค. 2569"
+  // รูปแบบ 1: ภายในเดือนเดียวกัน เช่น "15-20 พ.ค. 2570"
   const m1 = s.match(
     /^(\d{1,2})\s*-\s*(\d{1,2})\s+([ก-๙\.]+)\s+(\d{4})$/
   );
@@ -182,7 +288,7 @@ export function parseThaiDateRange(
     };
   }
 
-  // รูปแบบ 2: ข้ามเดือน เช่น "28 พ.ค. - 2 มิ.ย. 2569"
+  // รูปแบบ 2: ข้ามเดือน เช่น "28 พ.ค. - 2 มิ.ย. 2570"
   const m2 = s.match(
     /^(\d{1,2})\s+([ก-๙\.]+)\s*-\s*(\d{1,2})\s+([ก-๙\.]+)\s+(\d{4})$/
   );
@@ -196,6 +302,19 @@ export function parseThaiDateRange(
     return {
       start: new Date(yearCE, startMonth, startDay, 0, 0, 0),
       end: new Date(yearCE, endMonth, endDay, 23, 59, 59),
+    };
+  }
+
+  // รูปแบบ 3: วันเดียว เช่น "15 พ.ค. 2570"
+  const m3 = s.match(/^(\d{1,2})\s+([ก-๙\.]+)\s+(\d{4})$/);
+  if (m3) {
+    const day = parseInt(m3[1], 10);
+    const month = THAI_MONTH_INDEX_MAP[m3[2]] ?? 0;
+    const yearBE = parseInt(m3[3], 10);
+    const yearCE = yearBE > 2400 ? yearBE - 543 : yearBE;
+    return {
+      start: new Date(yearCE, month, day, 0, 0, 0),
+      end: new Date(yearCE, month, day, 23, 59, 59),
     };
   }
 

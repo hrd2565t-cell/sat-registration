@@ -11,10 +11,17 @@ import {
 import {
   DEFAULT_TARGET_QUOTAS,
   TARGET_GROUPS,
+  THAI_MONTHS,
+  formatCourseDateFields,
+  getDaysInMonth,
+  isCourseDateOverlapping,
+  parseCourseDateFields,
   type Course,
+  type CourseDateFields,
   type TargetGroupQuotas,
 } from "@/lib/courses";
-import { getSeedCourse, type CourseUpdate } from "@/lib/courses-store";
+import { getSeedCourse, useCourses, type CourseUpdate } from "@/lib/courses-store";
+import { useSportsEvents } from "@/lib/sports-events-store";
 import {
   ACCEPTED_IMAGE_TYPES,
   MAX_SOURCE_IMAGE_BYTES,
@@ -57,13 +64,20 @@ export function CourseEditDialog({
 }) {
   const titleRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { courses: allCourses } = useCourses();
+  const { events: sportsEvents } = useSportsEvents();
   const seedImage = getSeedCourse(course.id)?.image ?? course.image;
   const [image, setImage] = useState(course.image);
   const [imageInfo, setImageInfo] = useState("");
   const [imageBusy, setImageBusy] = useState(false);
   const [title, setTitle] = useState(course.title);
   const [shortTitle, setShortTitle] = useState(course.shortTitle ?? "");
-  const [date, setDate] = useState(course.date);
+  const [dateFields, setDateFields] = useState<CourseDateFields>(() =>
+    parseCourseDateFields(course.date)
+  );
+  const [date, setDate] = useState(() =>
+    formatCourseDateFields(parseCourseDateFields(course.date))
+  );
   const [location, setLocation] = useState(course.location);
   const [seats, setSeats] = useState(course.seats);
   const [status, setStatus] = useState<Course["status"]>(course.status);
@@ -157,6 +171,98 @@ export function CourseEditDialog({
     setImageInfo("");
     if (error) setError("");
   };
+
+  const computeDurationDays = (fields: CourseDateFields) => {
+    const yearCE = fields.yearBE - 543;
+    const s = new Date(yearCE, fields.startMonth, fields.startDay);
+    const e = new Date(yearCE, fields.endMonth, fields.endDay);
+    const diff = Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    return Math.max(1, diff);
+  };
+
+  const currentDurationDays = computeDurationDays(dateFields);
+
+  const syncDateState = (next: CourseDateFields) => {
+    setDateFields(next);
+    setDate(formatCourseDateFields(next));
+    if (error) setError("");
+  };
+
+  const handleStartChange = (
+    newStartDay: number,
+    newStartMonth: number,
+    newYearBE: number = dateFields.yearBE
+  ) => {
+    const maxStartDay = getDaysInMonth(newStartMonth, newYearBE);
+    const clampedStartDay = Math.min(Math.max(1, newStartDay), maxStartDay);
+    const durationToKeep = Math.min(Math.max(1, currentDurationDays), 30);
+    const yearCE = newYearBE - 543;
+    const endDate = new Date(
+      yearCE,
+      newStartMonth,
+      clampedStartDay + durationToKeep - 1
+    );
+
+    syncDateState({
+      startDay: clampedStartDay,
+      startMonth: newStartMonth,
+      endDay: endDate.getDate(),
+      endMonth: endDate.getMonth(),
+      yearBE: newYearBE,
+    });
+  };
+
+  const handleEndChange = (newEndDay: number, newEndMonth: number) => {
+    const maxEndDay = getDaysInMonth(newEndMonth, dateFields.yearBE);
+    const clampedEndDay = Math.min(Math.max(1, newEndDay), maxEndDay);
+    const yearCE = dateFields.yearBE - 543;
+    const startObj = new Date(yearCE, dateFields.startMonth, dateFields.startDay);
+    const endObj = new Date(yearCE, newEndMonth, clampedEndDay);
+
+    if (endObj < startObj) {
+      syncDateState({
+        ...dateFields,
+        endDay: dateFields.startDay,
+        endMonth: dateFields.startMonth,
+      });
+    } else {
+      syncDateState({
+        ...dateFields,
+        endDay: clampedEndDay,
+        endMonth: newEndMonth,
+      });
+    }
+  };
+
+  const applyDurationPreset = (daysCount: number) => {
+    const yearCE = dateFields.yearBE - 543;
+    const endDate = new Date(
+      yearCE,
+      dateFields.startMonth,
+      dateFields.startDay + daysCount - 1
+    );
+    syncDateState({
+      ...dateFields,
+      endDay: endDate.getDate(),
+      endMonth: endDate.getMonth(),
+    });
+  };
+
+  // ตรวจสอบการชนกับตารางการแข่งขันกีฬา กกท.
+  const overlappingSportsEvents = sportsEvents.filter((evt) => {
+    if (dateFields.yearBE !== 2570) return false;
+    const yearCE = 2570 - 543;
+    const courseStart = new Date(yearCE, dateFields.startMonth, dateFields.startDay, 0, 0, 0);
+    const courseEnd = new Date(yearCE, dateFields.endMonth, dateFields.endDay, 23, 59, 59);
+    const evtStart = new Date(yearCE, evt.startMonth - 1, evt.startDay, 0, 0, 0);
+    const evtEnd = new Date(yearCE, evt.endMonth - 1, evt.endDay, 23, 59, 59);
+    return courseStart <= evtEnd && courseEnd >= evtStart;
+  });
+
+  // ตรวจสอบการซ้อนทับกับหลักสูตรอื่น
+  const overlappingCourses = allCourses.filter(
+    (c) => c.id !== course.id && isCourseDateOverlapping(date, c.date)
+  );
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -386,39 +492,229 @@ export function CourseEditDialog({
               </p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label htmlFor="course-date" className={labelClass}>
-                  ช่วงวันที่อบรม
+            {/* Smart Date Range Picker */}
+            <div className="rounded-lg border border-[#dbe3ef] bg-[#f8fafc] p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="text-[12px] font-semibold text-[#1e3a8a]">
+                  📅 ช่วงวันที่อบรม (Smart Date Picker)
                 </label>
-                <input
-                  id="course-date"
-                  value={date}
-                  onChange={(event) => {
-                    setDate(event.target.value);
-                    if (error) setError("");
-                  }}
-                  placeholder="เช่น 15-20 พ.ค. 2570"
-                  className={fieldClass}
-                />
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-2.5 py-0.5 text-[11px] font-bold text-[#1e40af]">
+                  <span>ผลลัพธ์: {date}</span>
+                  <span className="rounded-full bg-[#1e3a8a] px-1.5 py-0.2 text-[9.5px] font-semibold text-white">
+                    {currentDurationDays} วัน
+                  </span>
+                </div>
               </div>
-              <div>
-                <label htmlFor="course-status" className={labelClass}>
-                  สถานะการรับสมัคร
-                </label>
-                <select
-                  id="course-status"
-                  value={status}
-                  onChange={(event) => {
-                    setStatus(event.target.value as Course["status"]);
-                    if (error) setError("");
-                  }}
-                  className={fieldClass}
-                >
-                  <option value="open">เปิดรับสมัคร</option>
-                  <option value="full">เต็มแล้ว / ปิดรับ</option>
-                </select>
+
+              {/* Quick Duration Presets */}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <span className="text-[10.5px] font-medium text-[#64748b]">
+                  ระยะเวลาอบรมด่วน:
+                </span>
+                {[
+                  { days: 1, label: "1 วัน" },
+                  { days: 3, label: "3 วัน" },
+                  { days: 5, label: "5 วัน (มาตรฐาน)" },
+                  { days: 6, label: "6 วัน" },
+                  { days: 7, label: "7 วัน" },
+                ].map((preset) => {
+                  const isActive = currentDurationDays === preset.days;
+                  return (
+                    <button
+                      key={preset.days}
+                      type="button"
+                      onClick={() => applyDurationPreset(preset.days)}
+                      className={`rounded-md px-2 py-0.5 text-[10.5px] font-semibold transition ${
+                        isActive
+                          ? "bg-[#1e3a8a] text-white shadow-sm"
+                          : "border border-[#cbd5e1] bg-white text-[#334155] hover:bg-[#f1f5f9]"
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
               </div>
+
+              {/* Start & End Selectors */}
+              <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                {/* วันเริ่มต้น */}
+                <div className="rounded-md border border-[#e2e8f0] bg-white p-2">
+                  <span className="block text-[10.5px] font-semibold text-[#475569]">
+                    วันเริ่มอบรม
+                  </span>
+                  <div className="mt-1 grid grid-cols-[68px_1fr] gap-1.5">
+                    <select
+                      aria-label="วันเริ่มอบรม"
+                      value={dateFields.startDay}
+                      onChange={(e) =>
+                        handleStartChange(
+                          Number(e.target.value),
+                          dateFields.startMonth
+                        )
+                      }
+                      className="h-8 rounded border border-[#d1d5db] bg-white px-2 text-[12px] font-medium text-[#111827] outline-none focus:border-[#1e3a8a]"
+                    >
+                      {Array.from(
+                        {
+                          length: getDaysInMonth(
+                            dateFields.startMonth,
+                            dateFields.yearBE
+                          ),
+                        },
+                        (_, i) => i + 1
+                      ).map((d) => (
+                        <option key={d} value={d}>
+                          วันที่ {d}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      aria-label="เดือนเริ่มอบรม"
+                      value={dateFields.startMonth}
+                      onChange={(e) =>
+                        handleStartChange(
+                          dateFields.startDay,
+                          Number(e.target.value)
+                        )
+                      }
+                      className="h-8 rounded border border-[#d1d5db] bg-white px-2 text-[12px] font-medium text-[#111827] outline-none focus:border-[#1e3a8a]"
+                    >
+                      {THAI_MONTHS.map((m) => (
+                        <option key={m.index} value={m.index}>
+                          {m.full} ({m.abbr})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* วันสิ้นสุด */}
+                <div className="rounded-md border border-[#e2e8f0] bg-white p-2">
+                  <span className="block text-[10.5px] font-semibold text-[#475569]">
+                    วันสิ้นสุดการอบรม (ปรับตามอัตโนมัติ)
+                  </span>
+                  <div className="mt-1 grid grid-cols-[68px_1fr] gap-1.5">
+                    <select
+                      aria-label="วันสิ้นสุดการอบรม"
+                      value={dateFields.endDay}
+                      onChange={(e) =>
+                        handleEndChange(
+                          Number(e.target.value),
+                          dateFields.endMonth
+                        )
+                      }
+                      className="h-8 rounded border border-[#d1d5db] bg-white px-2 text-[12px] font-medium text-[#111827] outline-none focus:border-[#1e3a8a]"
+                    >
+                      {Array.from(
+                        {
+                          length: getDaysInMonth(
+                            dateFields.endMonth,
+                            dateFields.yearBE
+                          ),
+                        },
+                        (_, i) => i + 1
+                      ).map((d) => {
+                        const isBeforeStart =
+                          dateFields.endMonth === dateFields.startMonth &&
+                          d < dateFields.startDay;
+                        return (
+                          <option key={d} value={d} disabled={isBeforeStart}>
+                            วันที่ {d}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <select
+                      aria-label="เดือนสิ้นสุดการอบรม"
+                      value={dateFields.endMonth}
+                      onChange={(e) =>
+                        handleEndChange(
+                          dateFields.endDay,
+                          Number(e.target.value)
+                        )
+                      }
+                      className="h-8 rounded border border-[#d1d5db] bg-white px-2 text-[12px] font-medium text-[#111827] outline-none focus:border-[#1e3a8a]"
+                    >
+                      {THAI_MONTHS.map((m) => (
+                        <option
+                          key={m.index}
+                          value={m.index}
+                          disabled={m.index < dateFields.startMonth}
+                        >
+                          {m.full} ({m.abbr})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Year & Status Row */}
+              <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="course-year" className="block text-[10.5px] font-medium text-[#475569]">
+                    ปี พ.ศ. (ปีงบประมาณ)
+                  </label>
+                  <select
+                    id="course-year"
+                    value={dateFields.yearBE}
+                    onChange={(e) =>
+                      handleStartChange(
+                        dateFields.startDay,
+                        dateFields.startMonth,
+                        Number(e.target.value)
+                      )
+                    }
+                    className="mt-1 h-8 w-full rounded border border-[#d1d5db] bg-white px-2.5 text-[12px] font-medium text-[#111827] outline-none focus:border-[#1e3a8a]"
+                  >
+                    <option value={2570}>พ.ศ. 2570 (ปีงบประมาณใหม่ - ค่าเริ่มต้น)</option>
+                    <option value={2569}>พ.ศ. 2569</option>
+                    <option value={2571}>พ.ศ. 2571</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="course-status" className="block text-[10.5px] font-medium text-[#475569]">
+                    สถานะการรับสมัคร
+                  </label>
+                  <select
+                    id="course-status"
+                    value={status}
+                    onChange={(event) => {
+                      setStatus(event.target.value as Course["status"]);
+                      if (error) setError("");
+                    }}
+                    className="mt-1 h-8 w-full rounded border border-[#d1d5db] bg-white px-2.5 text-[12px] font-medium text-[#111827] outline-none focus:border-[#1e3a8a]"
+                  >
+                    <option value="open">เปิดรับสมัคร</option>
+                    <option value="full">เต็มแล้ว / ปิดรับ</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Smart Conflict Warnings */}
+              {overlappingSportsEvents.length > 0 && (
+                <div className="mt-2.5 rounded-md border border-[#fde68a] bg-[#fffbeb] px-2.5 py-2 text-[11px] text-[#92400e]">
+                  <p className="font-semibold">
+                    ⚠️ แจ้งเตือน: ช่วงวันอบรมนี้ตรงกับปฏิทินการแข่งขันกีฬา กกท.
+                  </p>
+                  <ul className="mt-0.5 list-inside list-disc space-y-0.5 text-[10.5px]">
+                    {overlappingSportsEvents.map((evt) => (
+                      <li key={evt.id}>
+                        <span className="font-medium">{evt.title}</span> ({evt.dateRange} · {evt.location})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {overlappingCourses.length > 0 && (
+                <div className="mt-2 rounded-md border border-[#bfdbfe] bg-[#eff6ff] px-2.5 py-1.5 text-[10.5px] text-[#1e40af]">
+                  ℹ️ วันอบรมซ้อนทับกับหลักสูตรอื่น ({overlappingCourses.length} หลักสูตร):{" "}
+                  {overlappingCourses.map((c) => `${c.title} (${c.date})`).join(", ")}
+                </div>
+              )}
             </div>
 
             <div>
