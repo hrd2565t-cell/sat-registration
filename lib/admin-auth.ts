@@ -60,6 +60,10 @@ function getServerSnapshot() {
   return false;
 }
 
+export function useIsAdmin(): boolean {
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+
 /**
  * Hook to guard admin pages using useSyncExternalStore.
  * Automatically redirects to /admin/login?next=... if not authenticated.

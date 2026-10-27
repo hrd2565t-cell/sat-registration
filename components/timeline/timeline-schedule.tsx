@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { useState } from "react";
+import Link from "next/link";
+import { useIsAdmin } from "@/lib/admin-auth";
 import {
   useSportsEvents,
   type SportsEvent,
@@ -223,6 +225,7 @@ function SportsEventBarItem({
 }
 
 export function TimelineSchedule() {
+  const isAdmin = useIsAdmin();
   const { events, deleteSportsEvent } = useSportsEvents();
   const [showSportsEvents, setShowSportsEvents] = useState(true);
   const [highlightFreeSlots, setHighlightFreeSlots] = useState(true);
@@ -267,27 +270,42 @@ export function TimelineSchedule() {
             </label>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsAddModalOpen(true)}
-              className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#7c3aed] px-3 text-[11.5px] font-semibold text-white shadow-sm transition hover:bg-[#6d28d9] active:scale-[0.98]"
-            >
-              <span>+ เพิ่มรายการแข่งขัน</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (confirm("ต้องการคืนค่ารายการแข่งขันกีฬาเป็นค่ามาตรฐานหรือไม่?")) {
-                  resetSportsEvents();
-                }
-              }}
-              title="คืนค่าเป็นปฏิทินมาตรฐาน กกท."
-              className="h-8 rounded-lg border border-[#e2e8f0] bg-white px-2 text-[11px] font-medium text-[#64748b] transition hover:bg-[#f8fafc]"
-            >
-              คืนค่าเริ่มต้น
-            </button>
-          </div>
+          {isAdmin ? (
+            <div className="flex items-center gap-2">
+              <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-[#f3e8ff] px-2.5 py-0.5 text-[10px] font-semibold text-[#6d28d9] border border-[#ddd6fe]">
+                🔐 สิทธิ์ Admin: แก้ไขปฏิทินได้
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(true)}
+                className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#7c3aed] px-3 text-[11.5px] font-semibold text-white shadow-sm transition hover:bg-[#6d28d9] active:scale-[0.98]"
+              >
+                <span>+ เพิ่มรายการแข่งขัน</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm("ต้องการคืนค่ารายการแข่งขันกีฬาเป็นค่ามาตรฐานหรือไม่?")) {
+                    resetSportsEvents();
+                  }
+                }}
+                title="คืนค่าเป็นปฏิทินมาตรฐาน กกท."
+                className="h-8 rounded-lg border border-[#e2e8f0] bg-white px-2 text-[11px] font-medium text-[#64748b] transition hover:bg-[#f8fafc]"
+              >
+                คืนค่าเริ่มต้น
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Link
+                href="/admin/login?next=/timeline"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-2.5 py-1 text-[11px] font-medium text-[#64748b] transition hover:border-[#16265e] hover:bg-white hover:text-[#16265e]"
+                title="เข้าสู่ระบบผู้ดูแลเพื่อจัดการหรือเพิ่มปฏิทินแข่งขันกีฬา"
+              >
+                <span>🔒 เข้าสู่ระบบจัดการปฏิทิน (Admin)</span>
+              </Link>
+            </div>
+          )}
         </div>
 
         <Legend
@@ -413,7 +431,7 @@ export function TimelineSchedule() {
                             </span>
                           </div>
 
-                          {event.id.startsWith("evt-custom-") && (
+                          {isAdmin && event.id.startsWith("evt-custom-") && (
                             <button
                               type="button"
                               onClick={() => deleteSportsEvent(event.id)}
