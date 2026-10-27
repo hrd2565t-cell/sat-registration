@@ -10,6 +10,7 @@ import {
   reviewApplication,
   useApplications,
 } from "@/lib/applications-store";
+import { exportApplicantsToExcel } from "@/lib/export-excel";
 import { AiVerdictBadge } from "@/components/admin/ai-verdict-badge";
 import { ReviewDecisionDialog } from "@/components/admin/review-decision-dialog";
 import { StatusBadge } from "@/components/admin/status-badge";
@@ -192,6 +193,15 @@ export function ApplicantsTable({
     setPage(1);
   };
 
+  const handleExportExcel = () => {
+    const selectedCourseObj = courses.find((c) => c.id === Number(courseFilter));
+    exportApplicantsToExcel(filteredRows, {
+      courseTitle: selectedCourseObj?.title,
+      courses,
+    });
+    setNotice(`ส่งออกไฟล์ Excel (.xlsx) จำนวน ${filteredRows.length} รายการ เรียบร้อยแล้ว`);
+  };
+
   const handleExport = () => {
     const header = [
       "ลำดับ",
@@ -303,15 +313,39 @@ export function ApplicantsTable({
             <div className="flex flex-wrap items-center gap-2 print:hidden">
               <button
                 type="button"
-                onClick={handleExport}
-                className="h-9 whitespace-nowrap rounded-[4px] bg-[#078A43] px-3 text-[11px] font-semibold text-white transition-colors hover:bg-[#067537] sm:h-[25px] sm:px-[13px] sm:text-[9px]"
+                onClick={handleExportExcel}
+                className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[5px] bg-[#107c41] px-3 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-[#0d6937] active:scale-[0.98] sm:h-[26px] sm:px-[12px] sm:text-[10px]"
+                title="ส่งออกรายชื่อผู้สมัครเป็นไฟล์ Microsoft Excel (.xlsx)"
               >
-                ดาวน์โหลดรายงาน (Excel/CSV)
+                <svg
+                  className="h-3.5 w-3.5 shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="8" y1="13" x2="16" y2="13" />
+                  <line x1="8" y1="17" x2="16" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
+                <span>Export Excel (.xlsx)</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleExport}
+                className="inline-flex h-9 items-center gap-1 whitespace-nowrap rounded-[5px] border border-[#d1d5db] bg-white px-2.5 text-[12px] font-medium text-[#374151] transition-colors hover:bg-[#f9fafb] sm:h-[26px] sm:text-[10px]"
+                title="ดาวน์โหลดไฟล์ CSV (สำหรับเปิดในโปรแกรมทั่วไป)"
+              >
+                <span>CSV</span>
               </button>
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="h-9 whitespace-nowrap rounded-[4px] bg-[#D4D7DB] px-3 text-[11px] font-semibold text-[#111827] transition-colors hover:bg-[#c6cad0] sm:h-[25px] sm:text-[9px]"
+                className="inline-flex h-9 items-center gap-1 whitespace-nowrap rounded-[5px] bg-[#e5e7eb] px-3 text-[12px] font-medium text-[#1f2937] transition-colors hover:bg-[#d1d5db] sm:h-[26px] sm:text-[10px]"
               >
                 พิมพ์รายงาน (PDF)
               </button>
