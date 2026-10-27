@@ -112,6 +112,8 @@ export function getFiscalQuarter(month: number): 1 | 2 | 3 | 4 {
 
 /**
  * Calculates timeline coordinates (0% - 100%) across the 16 continuous months (Oct 2569 .. Jan 2571).
+ * Aligns days 1–7 to Week 1 (0–25%), days 8–14 to Week 2 (25–50%),
+ * days 15–21 to Week 3 (50–75%), and days 22–end to Week 4 (75–100%) of each month.
  */
 export function dateToTimelinePercent(
   day: number,
@@ -119,9 +121,22 @@ export function dateToTimelinePercent(
   yearBE = 2570
 ): number {
   const slotIdx = yearMonthToSlotIndex(month, yearBE); // 0..15
-  const clampedDay = Math.min(Math.max(day, 1), 31); // 1..31
-  const fraction = (slotIdx + (clampedDay - 1) / 31) / TOTAL_TIMELINE_SLOTS;
-  return Math.min(Math.max(fraction * 100, 0.3), 98.8);
+  const yearCE = yearBE - 543;
+  const daysInMonth = new Date(yearCE, month, 0).getDate() || 30;
+  const clampedDay = Math.min(Math.max(day, 1), daysInMonth + 1);
+
+  let monthFraction: number;
+  if (clampedDay <= 22) {
+    // Days 1..21 map evenly across Week 1 (0..0.25), Week 2 (0.25..0.5), Week 3 (0.5..0.75)
+    monthFraction = (clampedDay - 1) / 28;
+  } else {
+    // Days 22..(daysInMonth+1) map evenly across Week 4 (0.75..1.0)
+    const week4Days = Math.max(1, daysInMonth + 1 - 22);
+    monthFraction = 0.75 + ((clampedDay - 22) / week4Days) * 0.25;
+  }
+
+  const fraction = (slotIdx + monthFraction) / TOTAL_TIMELINE_SLOTS;
+  return Math.min(Math.max(fraction * 100, 0.1), 99.6);
 }
 
 export function computeEventBounds(
@@ -133,12 +148,15 @@ export function computeEventBounds(
   endYear = startYear
 ): { left: number; width: number } {
   const left =
-    Math.round(dateToTimelinePercent(startDay, startMonth, startYear) * 10) / 10;
+    Math.round(dateToTimelinePercent(startDay, startMonth, startYear) * 100) /
+    100;
   const right =
-    Math.round(dateToTimelinePercent(endDay + 1, endMonth, endYear) * 10) / 10;
-  const rawWidth = right >= left ? right - left : 3.0;
-  const width = Math.max(1.8, Math.round(rawWidth * 10) / 10);
-  return { left: Math.min(left, 100 - width - 0.3), width };
+    Math.round(
+      dateToTimelinePercent(endDay + 1, endMonth, endYear) * 100
+    ) / 100;
+  const rawWidth = right >= left ? right - left : 1.56;
+  const width = Math.max(0.9, Math.round(rawWidth * 100) / 100);
+  return { left: Math.min(left, 100 - width - 0.2), width };
 }
 
 function normalizeEvents(list: SportsEvent[]): SportsEvent[] {

@@ -35,9 +35,36 @@ export function TimelineExportButtons() {
       return;
     }
 
-    const courseRowsHtml = courses
+    const sortedCourses = [...courses].sort((a, b) => {
+      const sa = parseCourseDateSessions(a.date)[0];
+      const sb = parseCourseDateSessions(b.date)[0];
+      const la = sa
+        ? dateToTimelinePercent(sa.startDay, sa.startMonth + 1, sa.yearBE)
+        : 0;
+      const lb = sb
+        ? dateToTimelinePercent(sb.startDay, sb.startMonth + 1, sb.yearBE)
+        : 0;
+      return la - lb;
+    });
+
+    const sortedEvents = [...events].sort((a, b) => a.left - b.left);
+
+    const grid16Html = TIMELINE_SLOTS.map(
+      (s) =>
+        `<span class="m-col ${
+          s.index === 11
+            ? "fy-end"
+            : s.index % 3 === 2 && s.index < 11
+            ? "q-end"
+            : ""
+        } ${
+          s.isPostFiscal ? "post-fy" : ""
+        }"><i></i><i></i><i></i><i></i></span>`
+    ).join("");
+
+    const courseRowsHtml = sortedCourses
       .map((course, idx) => {
-        const sched = getCourseScheduleDates(course);
+        const sched = getCourseScheduleDates(course, courses);
         const sessions = parseCourseDateSessions(course.date);
         const first = sessions[0];
         const firstSlotIdx = first
@@ -57,6 +84,31 @@ export function TimelineExportButtons() {
           return acc + Math.max(1, diff);
         }, 0);
 
+        const lastSession = sessions[sessions.length - 1] ?? first;
+        const startPct = first
+          ? dateToTimelinePercent(
+              first.startDay,
+              first.startMonth + 1,
+              first.yearBE
+            )
+          : 25;
+        const endPct = lastSession
+          ? dateToTimelinePercent(
+              lastSession.endDay + 1,
+              lastSession.endMonth + 1,
+              lastSession.yearBE
+            )
+          : 50;
+
+        const railHtml =
+          sessions.length > 1
+            ? `<div style="position:absolute;top:50%;transform:translateY(-50%);left:${startPct.toFixed(
+                2
+              )}%;width:${Math.max(0.8, endPct - startPct).toFixed(
+                2
+              )}%;height:7px;background:#bbf7d0;border:1px solid #16a34a;border-radius:2px;"></div>`
+            : "";
+
         const barsHtml = sessions
           .map((s) => {
             const left = dateToTimelinePercent(
@@ -69,30 +121,19 @@ export function TimelineExportButtons() {
               s.endMonth + 1,
               s.yearBE
             );
-            const width = Math.max(1.5, right - left);
+            const width = Math.max(0.55, right - left);
             return `<div style="position:absolute;top:50%;transform:translateY(-50%);left:${left.toFixed(
-              1
+              2
             )}%;width:${width.toFixed(
-              1
-            )}%;height:18px;background:#16803c;border-radius:999px;"></div>`;
+              2
+            )}%;height:18px;background:#16803c;border-radius:4px;border:1px solid #fff;"></div>`;
           })
           .join("");
 
-        const lastSession = sessions[sessions.length - 1] ?? first;
-        const startPct = first
-          ? dateToTimelinePercent(first.startDay, first.startMonth + 1, first.yearBE)
-          : 25;
-        const endPct = lastSession
-          ? dateToTimelinePercent(
-              lastSession.endDay + 1,
-              lastSession.endMonth + 1,
-              lastSession.yearBE
-            )
-          : 50;
         const labelStyle =
           endPct > 68
-            ? `right:${(100 - startPct + 0.8).toFixed(1)}%`
-            : `left:${(endPct + 0.8).toFixed(1)}%`;
+            ? `right:${(100 - startPct + 0.6).toFixed(2)}%`
+            : `left:${(endPct + 0.6).toFixed(2)}%`;
 
         return `
           <tr>
@@ -114,22 +155,16 @@ export function TimelineExportButtons() {
         )}</span></div>
               <div class="item-sub">🎓 อบรม: ${escapeHtml(course.date)} • 📍 ${escapeHtml(
           course.location
+        )} • 👥 ${escapeHtml(
+          course.seats.replace(/^จำนวนที่นั่ง\s*/, "")
         )}</div>
             </td>
             <td colspan="16" class="track-cell">
               <div class="track-wrap">
                 <div class="grid-16">
-                  ${TIMELINE_SLOTS.map(
-                    (s) =>
-                      `<span class="${
-                        s.index === 11
-                          ? "fy-end"
-                          : s.index % 3 === 2 && s.index < 11
-                          ? "q-end"
-                          : ""
-                      } ${s.isPostFiscal ? "post-fy" : ""}"></span>`
-                  ).join("")}
+                  ${grid16Html}
                 </div>
+                ${railHtml}
                 ${barsHtml}
                 <div class="outside-label course-label" style="${labelStyle}">
                   ${escapeHtml(course.date.replace(/\s*25\d{2}$/, ""))} (${totalDays} วัน)
@@ -141,7 +176,7 @@ export function TimelineExportButtons() {
       })
       .join("");
 
-    const eventRowsHtml = events
+    const eventRowsHtml = sortedEvents
       .map((evt) => {
         const yr = getEventYear(evt);
         const slotIdx = yearMonthToSlotIndex(evt.startMonth, yr);
@@ -150,8 +185,8 @@ export function TimelineExportButtons() {
         const endPct = evt.left + evt.width;
         const labelStyle =
           endPct > 66
-            ? `right:${(100 - evt.left + 0.8).toFixed(1)}%`
-            : `left:${(endPct + 0.8).toFixed(1)}%`;
+            ? `right:${(100 - evt.left + 0.6).toFixed(2)}%`
+            : `left:${(endPct + 0.6).toFixed(2)}%`;
 
         return `
           <tr class="event-row">
@@ -168,22 +203,13 @@ export function TimelineExportButtons() {
             <td colspan="16" class="track-cell">
               <div class="track-wrap">
                 <div class="grid-16">
-                  ${TIMELINE_SLOTS.map(
-                    (s) =>
-                      `<span class="${
-                        s.index === 11
-                          ? "fy-end"
-                          : s.index % 3 === 2 && s.index < 11
-                          ? "q-end"
-                          : ""
-                      } ${s.isPostFiscal ? "post-fy" : ""}"></span>`
-                  ).join("")}
+                  ${grid16Html}
                 </div>
                 <div style="position:absolute;top:50%;transform:translateY(-50%);left:${evt.left.toFixed(
-                  1
+                  2
                 )}%;width:${evt.width.toFixed(
-          1
-        )}%;height:18px;background:#6d28d9;border-radius:999px;"></div>
+          2
+        )}%;height:18px;background:#6d28d9;border-radius:4px;border:1px solid #fff;"></div>
                 <div class="outside-label event-label" style="${labelStyle}">
                   🏆 ${escapeHtml(evt.dateRange)} • ${escapeHtml(evt.location)}
                 </div>
@@ -357,11 +383,19 @@ export function TimelineExportButtons() {
       display: grid;
       grid-template-columns: repeat(16, 1fr);
     }
-    .grid-16 span {
-      border-right: 1px solid #f1f5f9;
+    .grid-16 span.m-col {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-right: 1px solid #cbd5e1;
+    }
+    .grid-16 span.m-col i {
+      border-right: 1px dashed rgba(203, 213, 225, 0.55);
+    }
+    .grid-16 span.m-col i:last-child {
+      border-right: none;
     }
     .grid-16 span.q-end {
-      border-right: 1px solid #cbd5e1;
+      border-right: 1px solid #94a3b8;
     }
     .grid-16 span.fy-end {
       border-right: 2px solid #f59e0b;

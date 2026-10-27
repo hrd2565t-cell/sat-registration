@@ -101,12 +101,15 @@ function buildScheduleBars(
     regF.endMonth + 1,
     regF.yearBE
   );
-  const regWidth = Math.max(2.0, Math.round((regRight - regLeft) * 10) / 10);
+  const regWidth = Math.max(
+    1.2,
+    Math.round((regRight - regLeft) * 100) / 100
+  );
   subPhaseBars.push({
     label: registrationDate,
     tooltip: `📥 เปิดรับสมัคร: ${registrationDate} (${contextTitle})`,
     tone: "open",
-    left: Math.round(regLeft * 10) / 10,
+    left: Math.round(regLeft * 100) / 100,
     width: regWidth,
   });
 
@@ -123,12 +126,15 @@ function buildScheduleBars(
     resF.endMonth + 1,
     resF.yearBE
   );
-  const resWidth = Math.max(1.4, Math.round((resRight - resLeft) * 10) / 10);
+  const resWidth = Math.max(
+    0.85,
+    Math.round((resRight - resLeft) * 100) / 100
+  );
   subPhaseBars.push({
     label: resultDate,
     tooltip: `📣 วันประกาศผล: ${resultDate} (${contextTitle})`,
     tone: "result",
-    left: Math.round(resLeft * 10) / 10,
+    left: Math.round(resLeft * 100) / 100,
     width: resWidth,
   });
 
@@ -165,27 +171,27 @@ function buildCourseTimelineRow(
       s.endMonth + 1,
       s.yearBE
     );
-    const sWidth = Math.max(1.4, Math.round((sRight - sLeft) * 10) / 10);
+    const sWidth = Math.max(0.55, Math.round((sRight - sLeft) * 100) / 100);
     return {
-      left: Math.round(sLeft * 10) / 10,
+      left: Math.round(sLeft * 100) / 100,
       width: sWidth,
       label: formatCourseDateFields(s, false),
       subCount: 1,
     };
   });
 
-  // Merge adjacent segments that are very close (e.g. within the same month) so they don't overlap as tiny blobs
+  // Keep each session aligned to its exact weekly slot; only merge if two segments literally overlap/touch
   const sessionSegments: SessionSegment[] = [];
   for (const seg of rawSegments) {
     const prev = sessionSegments[sessionSegments.length - 1];
-    if (prev && seg.left - (prev.left + prev.width) <= 2.4) {
+    if (prev && seg.left - (prev.left + prev.width) < 0.15) {
       const mergedRight = Math.max(
         prev.left + prev.width,
         seg.left + seg.width
       );
       prev.width = Math.max(
-        2.2,
-        Math.round((mergedRight - prev.left) * 10) / 10
+        0.9,
+        Math.round((mergedRight - prev.left) * 100) / 100
       );
       prev.label = `${prev.label}, ${seg.label}`;
       prev.subCount += 1;
@@ -204,7 +210,10 @@ function buildCourseTimelineRow(
 
   const spanLeft = firstSeg.left;
   const spanRight = lastSeg.left + lastSeg.width;
-  const spanWidth = Math.max(2.0, Math.round((spanRight - spanLeft) * 10) / 10);
+  const spanWidth = Math.max(
+    0.8,
+    Math.round((spanRight - spanLeft) * 100) / 100
+  );
 
   const compactDateLabel = course.date.replace(/\s*25\d{2}$/, "").trim();
   const sched = getCourseScheduleDates(course, allCourses);
@@ -296,6 +305,51 @@ const EVENT_TEXT_COLORS: Record<SportsEvent["colorTone"], string> = {
   teal: "text-[#115e59] bg-[#f0fdfa] border-[#99f6e4]",
 };
 
+/**
+ * Renders the 16-month background grid where each month is subdivided into 4 faint weekly columns (Weeks 1–4).
+ */
+function MonthWeeklyGridBackground({
+  variant = "default",
+}: {
+  variant?: "default" | "global" | "event";
+}) {
+  return (
+    <div
+      className="pointer-events-none absolute inset-0 grid"
+      style={{
+        gridTemplateColumns: "repeat(16, minmax(0, 1fr))",
+      }}
+      aria-hidden="true"
+    >
+      {TIMELINE_SLOTS.map((slot) => (
+        <div
+          key={slot.index}
+          className={`grid grid-cols-4 border-r ${
+            slot.index === 11
+              ? "border-r-2 border-r-[#f59e0b]/80"
+              : slot.index % 3 === 2 && slot.index < 11
+              ? "border-r-[#94a3b8]"
+              : "border-r-[#cbd5e1]"
+          } ${
+            slot.isPostFiscal
+              ? variant === "event"
+                ? "bg-[#faf5ff]/55"
+                : "bg-[#faf5ff]/45"
+              : variant !== "event" && slot.index % 2 === 1
+              ? "bg-[#f8fafc]/45"
+              : ""
+          }`}
+        >
+          <span className="border-r border-dashed border-[#cbd5e1]/55" />
+          <span className="border-r border-dashed border-[#cbd5e1]/55" />
+          <span className="border-r border-dashed border-[#cbd5e1]/55" />
+          <span />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Legend({
   showSportsEvents,
   showSubPhases,
@@ -308,41 +362,42 @@ function Legend({
   return (
     <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-[11px] text-[#374151]">
       <span className="inline-flex items-center gap-1.5 font-semibold text-[#166534]">
-        <span className="h-3 w-5 rounded-full bg-[#16803c] shadow-xs" />
+        <span className="h-3 w-5 rounded-[3px] bg-[#16803c] shadow-xs" />
         ช่วงวันจัดอบรมจริง (ปีงบฯ 2570)
       </span>
 
       {showSubPhases && (
         <>
           <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#1869bc]" />
+            <span className="h-2.5 w-3.5 rounded-[3px] bg-[#1869bc]" />
             เปิดรับสมัคร
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#ef8507]" />
-            ตรวจคุณสมบัติ
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#c4080f]" />
+            <span className="h-2.5 w-3.5 rounded-[3px] bg-[#c4080f]" />
             ประกาศผล
           </span>
         </>
       )}
 
       {showSportsEvents && (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-[#ddd6fe] bg-[#f5f3ff] px-2.5 py-0.5 font-semibold text-[#6d28d9]">
+        <span className="inline-flex items-center gap-1.5 rounded-md border border-[#ddd6fe] bg-[#f5f3ff] px-2.5 py-0.5 font-semibold text-[#6d28d9]">
           <span>🏆</span>
           รายการแข่งขันกีฬา กกท.
         </span>
       )}
 
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e2e8f0] bg-white px-2.5 py-0.5 text-[10.5px] font-medium text-[#4c1d95]">
-        <span className="h-2 w-2 rounded-full bg-[#6d28d9]" />
+      <span className="inline-flex items-center gap-1.5 rounded-md border border-[#e2e8f0] bg-white px-2.5 py-0.5 text-[10.5px] font-medium text-[#475569]">
+        <span className="h-3 w-3.5 border-x border-dashed border-[#94a3b8] bg-[#f8fafc]" />
+        เส้นประในแต่ละเดือน = แบ่ง 4 สัปดาห์ (สัปดาห์ที่ 1–4)
+      </span>
+
+      <span className="inline-flex items-center gap-1.5 rounded-md border border-[#e2e8f0] bg-white px-2.5 py-0.5 text-[10.5px] font-medium text-[#4c1d95]">
+        <span className="h-2 w-2 rounded-[2px] bg-[#6d28d9]" />
         คอลัมน์ขวาสุด (ต.ค. 70 – ม.ค. 71) = ช่วงต่อเนื่องหลังสิ้นสุดปีงบฯ 2570
       </span>
 
       {highlightFreeSlots && (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-[#a7f3d0] bg-[#ecfdf5] px-2.5 py-0.5 font-semibold text-[#059669]">
+        <span className="inline-flex items-center gap-1.5 rounded-md border border-[#a7f3d0] bg-[#ecfdf5] px-2.5 py-0.5 font-semibold text-[#059669]">
           <span>✨</span>
           ช่วงเวลาว่าง (Free Slot)
         </span>
@@ -376,21 +431,21 @@ function GlobalScheduleTrack({
         <>
           <div
             title={regBar.tooltip}
-            className="absolute top-[7px] z-20 flex h-[20px] items-center justify-center rounded-full bg-gradient-to-r from-[#1869bc] to-[#1d4ed8] px-2 text-[9px] font-bold text-white shadow-[0_2px_5px_rgba(24,105,188,0.28)] ring-1 ring-white"
+            className="absolute top-[7px] z-20 flex h-[20px] items-center justify-center rounded-[4px] bg-gradient-to-r from-[#1869bc] to-[#1d4ed8] px-1.5 text-[9px] font-bold text-white shadow-[0_2px_4px_rgba(24,105,188,0.25)] ring-1 ring-white"
             style={{ left: `${regBar.left}%`, width: `${regBar.width}%` }}
           >
             {regBar.width >= 4.2 ? (
               <span className="truncate">📥 รับสมัคร</span>
-            ) : (
+            ) : regBar.width >= 1.8 ? (
               <span className="text-[9px]">📥</span>
-            )}
+            ) : null}
           </div>
           <div
             className="pointer-events-none absolute top-[7px] z-30 flex h-[20px] items-center whitespace-nowrap"
             style={
               regPlaceLeft
-                ? { right: `${100 - regBar.left + 0.6}%` }
-                : { left: `${regBar.left + regBar.width + 0.6}%` }
+                ? { right: `${100 - regBar.left + 0.5}%` }
+                : { left: `${regBar.left + regBar.width + 0.5}%` }
             }
           >
             <span className="inline-flex items-center gap-1 rounded-md border border-[#bfdbfe] bg-[#eff6ff]/95 px-2 py-0.5 text-[9.5px] font-bold text-[#1e40af] shadow-2xs">
@@ -405,22 +460,24 @@ function GlobalScheduleTrack({
         <>
           <div
             title={resBar.tooltip}
-            className="absolute bottom-[7px] z-20 flex h-[20px] min-w-[20px] items-center justify-center rounded-full bg-gradient-to-r from-[#dc2626] to-[#b91c1c] px-1.5 text-[9px] font-bold text-white shadow-[0_2px_5px_rgba(220,38,38,0.3)] ring-1 ring-white"
+            className="absolute bottom-[7px] z-20 flex h-[20px] min-w-[10px] items-center justify-center rounded-[4px] bg-gradient-to-r from-[#dc2626] to-[#b91c1c] px-1 text-[9px] font-bold text-white shadow-[0_2px_4px_rgba(220,38,38,0.28)] ring-1 ring-white"
             style={{
               left: `${resBar.left}%`,
-              width: `${Math.max(1.8, resBar.width)}%`,
+              width: `${Math.max(1.0, resBar.width)}%`,
             }}
           >
-            <span className="text-[9.5px] leading-none">📣</span>
+            {resBar.width >= 1.4 && (
+              <span className="text-[9px] leading-none">📣</span>
+            )}
           </div>
           <div
             className="pointer-events-none absolute bottom-[7px] z-30 flex h-[20px] items-center whitespace-nowrap"
             style={
               resPlaceLeft
-                ? { right: `${100 - resBar.left + 0.6}%` }
+                ? { right: `${100 - resBar.left + 0.5}%` }
                 : {
                     left: `${
-                      resBar.left + Math.max(1.8, resBar.width) + 0.6
+                      resBar.left + Math.max(1.0, resBar.width) + 0.5
                     }%`,
                   }
             }
@@ -464,32 +521,35 @@ function CourseTrainingTrack({
           {regBar && (
             <div
               title={regBar.tooltip}
-              className="absolute top-[5px] z-10 flex h-[16px] items-center justify-center rounded-full bg-[#1869bc] px-1.5 text-[8px] font-bold text-white shadow-2xs"
+              className="absolute top-[5px] z-10 flex h-[16px] items-center justify-center rounded-[3px] bg-[#1869bc] px-1 text-[8px] font-bold text-white shadow-2xs"
               style={{ left: `${regBar.left}%`, width: `${regBar.width}%` }}
             >
-              <span className="truncate">📥 รับสมัคร</span>
+              {regBar.width >= 3.5 && (
+                <span className="truncate">📥 รับสมัคร</span>
+              )}
             </div>
           )}
           {resBar && (
             <div
               title={resBar.tooltip}
-              className="absolute top-[5px] z-15 flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-[#c4080f] px-1 text-[8px] font-bold text-white shadow-2xs"
+              className="absolute top-[5px] z-15 flex h-[16px] min-w-[8px] items-center justify-center rounded-[3px] bg-[#c4080f] px-0.5 text-[8px] font-bold text-white shadow-2xs"
               style={{
                 left: `${resBar.left}%`,
-                width: `${Math.max(1.5, resBar.width)}%`,
+                width: `${Math.max(0.9, resBar.width)}%`,
               }}
             >
-              <span>📣</span>
+              {resBar.width >= 1.4 && <span>📣</span>}
             </div>
           )}
         </>
       )}
 
+      {/* Subtle connecting rail for multi-session courses */}
       {row.sessionSegments.length > 1 && (
         <div
           title={fullTooltip}
-          className={`absolute z-10 h-[10px] rounded-full border border-[#16803c]/40 bg-[#dcfce7] ${
-            showCustomPhase ? "bottom-[11px]" : "top-1/2 -translate-y-1/2"
+          className={`absolute z-10 h-[8px] rounded-[2px] border border-[#16803c]/45 bg-[#bbf7d0]/85 ${
+            showCustomPhase ? "bottom-[12px]" : "top-1/2 -translate-y-1/2"
           }`}
           style={{ left: `${row.spanLeft}%`, width: `${row.spanWidth}%` }}
         />
@@ -498,37 +558,21 @@ function CourseTrainingTrack({
       {row.sessionSegments.map((seg, idx) => (
         <div
           key={`${row.course.id}-seg-${idx}`}
-          title={`${seg.label} (${row.title})`}
-          className={`group absolute z-20 flex h-[22px] items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-[#16a34a] to-[#15803d] px-1.5 text-[9px] font-bold text-white shadow-[0_2px_5px_rgba(22,163,74,0.3)] ring-1 ring-white transition-transform hover:scale-105 ${
+          title={
+            row.sessionSegments.length > 1
+              ? `ช่วงที่ ${idx + 1}: ${seg.label} (${row.title})`
+              : `${seg.label} (${row.title})`
+          }
+          className={`group absolute z-20 flex h-[22px] items-center justify-center overflow-hidden rounded-[4px] bg-gradient-to-r from-[#16a34a] to-[#15803d] px-1 text-[9px] font-bold text-white shadow-[0_1px_4px_rgba(22,163,74,0.28)] ring-1 ring-white transition-transform hover:z-30 hover:scale-105 ${
             showCustomPhase ? "bottom-[5px]" : "top-1/2 -translate-y-1/2"
           }`}
           style={{ left: `${seg.left}%`, width: `${seg.width}%` }}
         >
-          {seg.subCount > 1 && (
-            <div
-              className="pointer-events-none absolute inset-0 grid"
-              style={{
-                gridTemplateColumns: `repeat(${seg.subCount}, minmax(0, 1fr))`,
-              }}
-              aria-hidden="true"
-            >
-              {Array.from({ length: seg.subCount }).map((_, subIdx) => (
-                <span
-                  key={subIdx}
-                  className={
-                    subIdx < seg.subCount - 1
-                      ? "border-r border-dashed border-white/55"
-                      : ""
-                  }
-                />
-              ))}
-            </div>
-          )}
           {seg.width >= 9.5 ? (
             <span className="relative z-10 truncate">{seg.label}</span>
-          ) : (
-            <span className="relative z-10 text-[9.5px] leading-none">🎓</span>
-          )}
+          ) : seg.width >= 1.8 ? (
+            <span className="relative z-10 text-[9px] leading-none">🎓</span>
+          ) : null}
         </div>
       ))}
 
@@ -542,8 +586,8 @@ function CourseTrainingTrack({
         }`}
         style={
           placeLabelOnLeft
-            ? { right: `${100 - row.spanLeft + 0.7}%` }
-            : { left: `${row.spanLeft + row.spanWidth + 0.7}%` }
+            ? { right: `${100 - row.spanLeft + 0.6}%` }
+            : { left: `${row.spanLeft + row.spanWidth + 0.6}%` }
         }
       >
         <span className="inline-flex items-center gap-1 rounded-md border border-[#bbf7d0] bg-[#f0fdf4]/95 px-2 py-0.5 text-[10px] font-bold text-[#166534] shadow-2xs">
@@ -579,13 +623,13 @@ function SportsEventBarItem({
         onMouseEnter={() => onHover(event)}
         onMouseLeave={() => onHover(null)}
         onClick={() => isAdmin && onClickEdit?.(event)}
-        className={`group absolute top-1/2 z-20 flex h-[22px] -translate-y-1/2 items-center justify-center rounded-full px-1.5 text-[9px] font-bold leading-none text-white shadow-[0_2px_6px_rgba(109,40,217,0.3)] ring-1 ring-white transition-all hover:z-30 hover:scale-105 ${
+        className={`group absolute top-1/2 z-20 flex h-[22px] -translate-y-1/2 items-center justify-center rounded-[4px] px-1 text-[9px] font-bold leading-none text-white shadow-[0_1px_5px_rgba(109,40,217,0.28)] ring-1 ring-white transition-all hover:z-30 hover:scale-105 ${
           isAdmin ? "cursor-pointer" : "cursor-default"
         } ${gradient}`}
         style={{ left: `${event.left}%`, width: `${event.width}%` }}
         title={`${event.title} (${event.dateRange}) ณ ${event.location}`}
       >
-        <span className="text-[10px]">🏆</span>
+        {event.width >= 1.5 && <span className="text-[9.5px]">🏆</span>}
       </div>
 
       <div
@@ -597,8 +641,8 @@ function SportsEventBarItem({
         }`}
         style={
           placeLabelOnLeft
-            ? { right: `${100 - event.left + 0.7}%` }
-            : { left: `${event.left + event.width + 0.7}%` }
+            ? { right: `${100 - event.left + 0.6}%` }
+            : { left: `${event.left + event.width + 0.6}%` }
         }
       >
         <span
@@ -1071,33 +1115,8 @@ export function TimelineSchedule() {
                       className="relative border-b-2 border-[#93c5fd] p-0"
                     >
                       <div className="relative h-[58px] overflow-hidden">
-                        {/* 16 Month Grid Columns Background */}
-                        <div
-                          className="pointer-events-none absolute inset-0 grid"
-                          style={{
-                            gridTemplateColumns: "repeat(16, minmax(0, 1fr))",
-                          }}
-                          aria-hidden="true"
-                        >
-                          {TIMELINE_SLOTS.map((slot) => (
-                            <span
-                              key={slot.index}
-                              className={`border-r ${
-                                slot.index === 11
-                                  ? "border-r-2 border-r-[#f59e0b]/70"
-                                  : slot.index % 3 === 2 && slot.index < 11
-                                  ? "border-r-[#cbd5e1]"
-                                  : "border-r-[#eef2f6]"
-                              } ${
-                                slot.isPostFiscal
-                                  ? "bg-[#faf5ff]/45"
-                                  : slot.index % 2 === 1
-                                  ? "bg-[#f8fafc]/40"
-                                  : ""
-                              }`}
-                            />
-                          ))}
-                        </div>
+                        {/* 16 Month × 4 Week Grid Columns Background */}
+                        <MonthWeeklyGridBackground variant="global" />
 
                         <GlobalScheduleTrack
                           registrationDate={globalSchedule.registrationDate}
@@ -1123,7 +1142,7 @@ export function TimelineSchedule() {
                         </span>
                       </span>
                       <span className="text-[10px] font-normal text-[#15803d]">
-                        *เส้นสีส้มหลัง ก.ย. 70 คือจุดสิ้นสุดปีงบประมาณ 2570
+                        *แต่ละเดือนแบ่งเส้นประจางๆ 4 ช่อง (4 สัปดาห์) • เส้นสีส้มหลัง ก.ย. 70 คือจุดสิ้นสุดปีงบประมาณ 2570
                       </span>
                     </div>
                   </th>
@@ -1206,33 +1225,8 @@ export function TimelineSchedule() {
                       className="relative border-b border-[#cbd5e1] p-0"
                     >
                       <div className="relative h-[50px] overflow-hidden">
-                        {/* 16 Month Grid Columns Background */}
-                        <div
-                          className="pointer-events-none absolute inset-0 grid"
-                          style={{
-                            gridTemplateColumns: "repeat(16, minmax(0, 1fr))",
-                          }}
-                          aria-hidden="true"
-                        >
-                          {TIMELINE_SLOTS.map((slot) => (
-                            <span
-                              key={slot.index}
-                              className={`border-r ${
-                                slot.index === 11
-                                  ? "border-r-2 border-r-[#f59e0b]/70"
-                                  : slot.index % 3 === 2 && slot.index < 11
-                                  ? "border-r-[#cbd5e1]"
-                                  : "border-r-[#eef2f6]"
-                              } ${
-                                slot.isPostFiscal
-                                  ? "bg-[#faf5ff]/45"
-                                  : slot.index % 2 === 1
-                                  ? "bg-[#f8fafc]/40"
-                                  : ""
-                              }`}
-                            />
-                          ))}
-                        </div>
+                        {/* 16 Month × 4 Week Grid Columns Background */}
+                        <MonthWeeklyGridBackground variant="default" />
 
                         {effectiveHighlightFreeSlots && (
                           <div className="pointer-events-none absolute inset-0 z-0">
@@ -1349,32 +1343,7 @@ export function TimelineSchedule() {
                             className="relative border-b border-[#cbd5e1] p-0"
                           >
                             <div className="relative h-[48px] overflow-hidden">
-                              <div
-                                className="pointer-events-none absolute inset-0 grid"
-                                style={{
-                                  gridTemplateColumns:
-                                    "repeat(16, minmax(0, 1fr))",
-                                }}
-                                aria-hidden="true"
-                              >
-                                {TIMELINE_SLOTS.map((slot) => (
-                                  <span
-                                    key={slot.index}
-                                    className={`border-r ${
-                                      slot.index === 11
-                                        ? "border-r-2 border-r-[#f59e0b]/70"
-                                        : slot.index % 3 === 2 &&
-                                          slot.index < 11
-                                        ? "border-r-[#cbd5e1]"
-                                        : "border-r-[#eef2f6]"
-                                    } ${
-                                      slot.isPostFiscal
-                                        ? "bg-[#faf5ff]/55"
-                                        : ""
-                                    }`}
-                                  />
-                                ))}
-                              </div>
+                              <MonthWeeklyGridBackground variant="event" />
 
                               {effectiveHighlightFreeSlots && (
                                 <div className="pointer-events-none absolute inset-0 z-0">
