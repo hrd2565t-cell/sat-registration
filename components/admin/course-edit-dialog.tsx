@@ -596,7 +596,7 @@ export function CourseEditDialog({
 
             <div>
               <label htmlFor="course-eval" className={labelClass}>
-                เกณฑ์การสำเร็จการอบรมและการรับวุฒิบัตร (ขึ้นบรรทัดใหม่เพื่อแยกข้อ)
+                เกณฑ์การสำเร็จการอบรม (ขึ้นบรรทัดใหม่เพื่อแยกข้อ)
               </label>
               <textarea
                 id="course-eval"

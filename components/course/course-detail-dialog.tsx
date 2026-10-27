@@ -299,7 +299,7 @@ export function CourseDetailDialog({
                   🏆
                 </span>
                 <h3 className="text-[14.5px] font-bold text-[#16265E]">
-                  เกณฑ์การสำเร็จการอบรมและการรับวุฒิบัตร
+                  เกณฑ์การสำเร็จการอบรม
                 </h3>
               </div>
               <ul className="space-y-2 pl-1">
