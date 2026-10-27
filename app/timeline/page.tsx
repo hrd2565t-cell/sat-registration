@@ -50,37 +50,33 @@ export default function TimelinePage() {
           <div className="flex items-center justify-center gap-2 xl:gap-3">
             <CalendarIcon className="h-[clamp(22px,2vw,30px)] w-[clamp(22px,2vw,30px)] shrink-0" />
             <h1 className="text-balance text-[19px] font-bold leading-tight text-[#111827] sm:text-[20.5px] xl:text-[clamp(24px,2vw,30px)]">
-              Timeline &amp; แผนกำหนดการอบรมแต่ละหลักสูตร (ประจำปี 2570)
+              Timeline &amp; แผนกำหนดการอบรม (ประจำปี พ.ศ. 2570 – 2571)
             </h1>
           </div>
-          <p className="mx-auto mt-1.5 max-w-[620px] text-[11px] leading-relaxed text-[#4b5563] sm:text-[11.5px] xl:mt-2 xl:max-w-[clamp(620px,45vw,820px)] xl:text-[clamp(12.5px,0.95vw,15px)]">
-            ตรวจสอบช่วงเวลาการสมัคร การตรวจคุณสมบัติ และการจัดอบรมของทั้ง 5 หลักสูตร เพื่อวางแผนการเข้าร่วม
+          <p className="mx-auto mt-1.5 max-w-[660px] text-[11px] leading-relaxed text-[#4b5563] sm:text-[11.5px] xl:mt-2 xl:max-w-[clamp(660px,48vw,860px)] xl:text-[clamp(12.5px,0.95vw,15px)]">
+            เปรียบเทียบช่วงเวลาจัดอบรมแต่ละหลักสูตรกับปฏิทินการแข่งขันกีฬา กกท. รองรับทั้งมุมมองตาราง 12 เดือน และการ์ดสรุปรายเดือน
           </p>
         </div>
 
         <TimelineSchedule />
 
-        <div className="mx-auto mt-2.5 grid w-full max-w-[880px] grid-cols-1 gap-3 md:grid-cols-[1fr_217px] xl:mt-[clamp(10px,0.8vw,14px)] xl:max-w-[clamp(980px,72vw,1280px)] xl:grid-cols-[minmax(0,1fr)_32.4%] xl:gap-[clamp(14px,1.2vw,20px)]">
-          <section className="rounded-lg border border-[#e0e5e8] bg-white px-2.5 pb-2.5 pt-[7px] shadow-[0_1px_4px_rgba(16,24,40,0.05)] md:min-h-[109px] xl:min-h-[clamp(130px,9.7vw,150px)] xl:rounded-xl xl:px-[clamp(14px,1.1vw,18px)] xl:pb-[clamp(12px,0.9vw,16px)] xl:pt-[clamp(10px,0.8vw,14px)]">
+        <div className="mx-auto mt-2.5 grid w-full max-w-[920px] grid-cols-1 gap-3 md:grid-cols-[1fr_240px] xl:mt-[clamp(10px,0.8vw,14px)] xl:max-w-[clamp(1020px,76vw,1340px)] xl:grid-cols-[minmax(0,1fr)_30%] xl:gap-[clamp(14px,1.2vw,20px)]">
+          <section className="rounded-lg border border-[#e0e5e8] bg-white px-3 pb-2.5 pt-2 shadow-[0_1px_4px_rgba(16,24,40,0.05)] xl:rounded-xl xl:px-4 xl:py-3">
             <h2 className="text-[12px] font-bold leading-snug text-[#111827] xl:text-[clamp(13px,0.9vw,15px)]">
-              หลักสูตรที่กำลังเปิดรับสมัคร
+              คำแนะนำการใช้งานตาราง Timeline
             </h2>
-            <ul className="mt-1 space-y-0 text-[10.5px] leading-[1.4] text-[#1f2937] xl:mt-1.5 xl:text-[clamp(11.5px,0.8vw,13px)] xl:leading-[1.45]">
+            <ul className="mt-1.5 space-y-1 text-[10.5px] leading-[1.45] text-[#374151] xl:text-[clamp(11.5px,0.8vw,13px)]">
               <li className="flex gap-1.5">
                 <span aria-hidden="true">•</span>
-                เปิดรับสมัครถึงวันที่ 25 ตุลาคม 2570
+                สามารถสลับดูข้อมูลแยกตาม <strong>ปี พ.ศ. 2570</strong>, <strong>ปี พ.ศ. 2571</strong> หรือ <strong>ดูรวมทุกปี</strong> ได้จากปุ่มด้านบนตาราง
               </li>
               <li className="flex gap-1.5">
                 <span aria-hidden="true">•</span>
-                ตรวจสอบคุณสมบัติวันที่ 6 และ 15 พฤศจิกายน 2570
+                สลับมุมมองระหว่าง <strong>📊 ตาราง 12 เดือน (Gantt)</strong> และ <strong>🗓️ การ์ดสรุปรายเดือน</strong> เพื่อให้ดูง่ายเมื่อมีรายการจำนวนมาก
               </li>
               <li className="flex gap-1.5">
                 <span aria-hidden="true">•</span>
-                ผู้ตัดสินกีฬาอาชีพ (Professional Referee)
-              </li>
-              <li className="flex gap-1.5">
-                <span aria-hidden="true">•</span>
-                ประกาศผลผ่านไฟล์ PNG
+                ผู้ดูแลระบบ (Admin) สามารถเพิ่ม/แก้ไขหลักสูตรและรายการแข่งขันกีฬา พร้อมกด <strong>บันทึกเป็นข้อมูลหลักถาวร</strong> ได้ทันที
               </li>
             </ul>
           </section>

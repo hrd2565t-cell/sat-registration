@@ -22,42 +22,73 @@ const SHORT_MONTH_NAMES: Record<number, string> = {
   12: "ธ.ค.",
 };
 
-const FULL_MONTH_OPTIONS = [
-  { value: 1, label: "มกราคม 2570" },
-  { value: 2, label: "กุมภาพันธ์ 2570" },
-  { value: 3, label: "มีนาคม 2570" },
-  { value: 4, label: "เมษายน 2570" },
-  { value: 5, label: "พฤษภาคม 2570" },
-  { value: 6, label: "มิถุนายน 2570" },
-  { value: 7, label: "กรกฎาคม 2570" },
-  { value: 8, label: "สิงหาคม 2570" },
-  { value: 9, label: "กันยายน 2570" },
-  { value: 10, label: "ตุลาคม 2570" },
-  { value: 11, label: "พฤศจิกายน 2570" },
-  { value: 12, label: "ธันวาคม 2570" },
-];
+const FULL_MONTH_NAMES: Record<number, string> = {
+  1: "มกราคม",
+  2: "กุมภาพันธ์",
+  3: "มีนาคม",
+  4: "เมษายน",
+  5: "พฤษภาคม",
+  6: "มิถุนายน",
+  7: "กรกฎาคม",
+  8: "สิงหาคม",
+  9: "กันยายน",
+  10: "ตุลาคม",
+  11: "พฤศจิกายน",
+  12: "ธันวาคม",
+};
+
+const SUPPORTED_YEARS = [2570, 2571] as const;
 
 interface AddSportsEventDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  defaultYear?: number;
 }
 
 export function AddSportsEventDialog({
   isOpen,
   onClose,
+  defaultYear = 2570,
 }: AddSportsEventDialogProps) {
+  const initialYear = defaultYear === 2571 ? 2571 : 2570;
   const [title, setTitle] = useState("");
   const [english, setEnglish] = useState("");
   const [category, setCategory] = useState<EventCategory>("national");
   const [startDay, setStartDay] = useState(1);
   const [startMonth, setStartMonth] = useState(11);
+  const [startYear, setStartYear] = useState<number>(initialYear);
   const [endDay, setEndDay] = useState(5);
   const [endMonth, setEndMonth] = useState(11);
+  const [endYear, setEndYear] = useState<number>(initialYear);
   const [location, setLocation] = useState("");
   const [colorTone, setColorTone] = useState<"purple" | "indigo" | "amber" | "teal">("purple");
   const [error, setError] = useState("");
 
   if (!isOpen) return null;
+
+  const handleQuickYearSelect = (yr: number) => {
+    setStartYear(yr);
+    setEndYear(yr);
+    setError("");
+  };
+
+  const handleStartYearMonthChange = (encoded: number) => {
+    const yr = Math.floor(encoded / 100);
+    const mo = encoded % 100;
+    setStartYear(yr);
+    setStartMonth(mo);
+    if (yr * 100 + mo > endYear * 100 + endMonth) {
+      setEndYear(yr);
+      setEndMonth(mo);
+    }
+  };
+
+  const handleEndYearMonthChange = (encoded: number) => {
+    const yr = Math.floor(encoded / 100);
+    const mo = encoded % 100;
+    setEndYear(yr);
+    setEndMonth(mo);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,18 +98,22 @@ export function AddSportsEventDialog({
       return;
     }
 
-    // Date range validation
-    const startVal = startMonth * 100 + startDay;
-    const endVal = endMonth * 100 + endDay;
+    // Date range validation across year + month + day
+    const startVal = startYear * 10000 + startMonth * 100 + startDay;
+    const endVal = endYear * 10000 + endMonth * 100 + endDay;
     if (startVal > endVal) {
       setError("วันที่เริ่มต้นต้องไม่มากกว่าวันที่สิ้นสุด");
       return;
     }
 
-    const dateRange =
-      startMonth === endMonth
-        ? `${startDay} - ${endDay} ${SHORT_MONTH_NAMES[startMonth]} 2570`
-        : `${startDay} ${SHORT_MONTH_NAMES[startMonth]} - ${endDay} ${SHORT_MONTH_NAMES[endMonth]} 2570`;
+    let dateRange: string;
+    if (startYear !== endYear) {
+      dateRange = `${startDay} ${SHORT_MONTH_NAMES[startMonth]} ${startYear} - ${endDay} ${SHORT_MONTH_NAMES[endMonth]} ${endYear}`;
+    } else if (startMonth === endMonth) {
+      dateRange = `${startDay} - ${endDay} ${SHORT_MONTH_NAMES[startMonth]} ${startYear}`;
+    } else {
+      dateRange = `${startDay} ${SHORT_MONTH_NAMES[startMonth]} - ${endDay} ${SHORT_MONTH_NAMES[endMonth]} ${startYear}`;
+    }
 
     addSportsEvent({
       title: trimmedTitle,
@@ -88,6 +123,8 @@ export function AddSportsEventDialog({
       startMonth,
       endDay,
       endMonth,
+      year: startYear,
+      endYear,
       location: location.trim() || "สนามกีฬา กกท.",
       category,
       categoryLabel: CATEGORY_LABELS[category],
@@ -204,9 +241,30 @@ export function AddSportsEventDialog({
 
           {/* ช่วงวันที่จัดแข่งขัน */}
           <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3 space-y-3">
-            <span className="text-[12px] font-bold text-[#1e293b]">
-              📅 ช่วงวันและเดือนที่แข่งขัน (ประจำปี 2570)
-            </span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[12px] font-bold text-[#1e293b]">
+                📅 ช่วงวันและเดือนที่แข่งขัน (พ.ศ. 2570 – 2571)
+              </span>
+              <div className="inline-flex items-center rounded-lg border border-[#cbd5e1] bg-white p-0.5 text-[11px]">
+                {SUPPORTED_YEARS.map((yr) => {
+                  const active = startYear === yr && endYear === yr;
+                  return (
+                    <button
+                      key={yr}
+                      type="button"
+                      onClick={() => handleQuickYearSelect(yr)}
+                      className={`rounded-md px-2.5 py-0.5 font-bold transition ${
+                        active
+                          ? "bg-[#7c3aed] text-white shadow-sm"
+                          : "text-[#475569] hover:bg-[#f1f5f9]"
+                      }`}
+                    >
+                      ปี {yr}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[12px]">
               <div>
@@ -223,14 +281,18 @@ export function AddSportsEventDialog({
                     className="h-8 w-16 rounded border border-[#cbd5e1] bg-white text-center font-bold text-[#1e293b]"
                   />
                   <select
-                    value={startMonth}
-                    onChange={(e) => setStartMonth(parseInt(e.target.value))}
+                    value={startYear * 100 + startMonth}
+                    onChange={(e) => handleStartYearMonthChange(parseInt(e.target.value, 10))}
                     className="h-8 flex-1 rounded border border-[#cbd5e1] bg-white px-2 text-[11.5px]"
                   >
-                    {FULL_MONTH_OPTIONS.map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}
-                      </option>
+                    {SUPPORTED_YEARS.map((yr) => (
+                      <optgroup key={yr} label={`📅 ปี พ.ศ. ${yr}`}>
+                        {Object.entries(FULL_MONTH_NAMES).map(([m, name]) => (
+                          <option key={`${yr}-${m}`} value={yr * 100 + Number(m)}>
+                            {name} {yr}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -250,14 +312,18 @@ export function AddSportsEventDialog({
                     className="h-8 w-16 rounded border border-[#cbd5e1] bg-white text-center font-bold text-[#1e293b]"
                   />
                   <select
-                    value={endMonth}
-                    onChange={(e) => setEndMonth(parseInt(e.target.value))}
+                    value={endYear * 100 + endMonth}
+                    onChange={(e) => handleEndYearMonthChange(parseInt(e.target.value, 10))}
                     className="h-8 flex-1 rounded border border-[#cbd5e1] bg-white px-2 text-[11.5px]"
                   >
-                    {FULL_MONTH_OPTIONS.map((m) => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}
-                      </option>
+                    {SUPPORTED_YEARS.map((yr) => (
+                      <optgroup key={yr} label={`📅 ปี พ.ศ. ${yr}`}>
+                        {Object.entries(FULL_MONTH_NAMES).map(([m, name]) => (
+                          <option key={`${yr}-${m}`} value={yr * 100 + Number(m)}>
+                            {name} {yr}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>

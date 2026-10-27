@@ -16,15 +16,30 @@ export interface SportsEvent {
   english: string;
   dateRange: string;
   startDay: number;
-  startMonth: number; // 10, 11, 12
+  startMonth: number; // 1..12
   endDay: number;
-  endMonth: number; // 10, 11, 12
+  endMonth: number; // 1..12
+  year?: number; // П.ศ. เช่น 2570, 2571
+  endYear?: number; // พ.ศ. สิ้นสุด (กรณีข้ามปี)
   location: string;
   category: EventCategory;
   categoryLabel: string;
   left: number; // percentage (0 - 100)
   width: number; // percentage (0 - 100)
   colorTone: "purple" | "indigo" | "amber" | "teal";
+}
+
+export function getEventYear(
+  event: Pick<SportsEvent, "year" | "dateRange">
+): number {
+  if (typeof event.year === "number" && event.year >= 2568 && event.year <= 2580) {
+    return event.year;
+  }
+  const match = event.dateRange?.match(/(25\d{2})/);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  return 2570;
 }
 
 export const CATEGORY_LABELS: Record<EventCategory, string> = {
@@ -36,17 +51,14 @@ export const CATEGORY_LABELS: Record<EventCategory, string> = {
 };
 
 /**
- * Calculates timeline coordinates (left% & width%) across 12 months (4 Quarters):
- * Col 1 (0% - 25%): ม.ค. – มี.ค. 2570 (เดือน 1 - 3)
- * Col 2 (25% - 50%): เม.ย. – มิ.ย. 2570 (เดือน 4 - 6)
- * Col 3 (50% - 75%): ก.ค. – ก.ย. 2570 (เดือน 7 - 9)
- * Col 4 (75% - 100%): ต.ค. – ธ.ค. 2570 (เดือน 10 - 12)
+ * Calculates timeline coordinates (0% - 100%) across 12 months (Jan = Col 1 .. Dec = Col 12).
+ * Each month occupies exactly 100 / 12 = 8.3333% of the row width.
  */
 export function dateToTimelinePercent(day: number, month: number): number {
   const clampedMonth = Math.min(Math.max(month, 1), 12); // 1..12
   const clampedDay = Math.min(Math.max(day, 1), 31); // 1..31
   const fraction = (clampedMonth - 1 + (clampedDay - 1) / 31) / 12;
-  return Math.min(Math.max(1.5 + fraction * 95, 1), 96);
+  return Math.min(Math.max(fraction * 100, 0.4), 98.5);
 }
 
 export function computeEventBounds(
@@ -56,20 +68,22 @@ export function computeEventBounds(
   endMonth: number
 ): { left: number; width: number } {
   const left = Math.round(dateToTimelinePercent(startDay, startMonth) * 10) / 10;
-  const right = Math.round(dateToTimelinePercent(endDay, endMonth) * 10) / 10;
-  const width = Math.max(5.5, Math.round(Math.max(5.5, right - left) * 10) / 10);
-  return { left: Math.min(left, 100 - width - 0.5), width };
+  const right = Math.round(dateToTimelinePercent(endDay + 1, endMonth) * 10) / 10;
+  const rawWidth = right >= left ? right - left : 8.3 - (left % 8.33);
+  const width = Math.max(2.2, Math.round(rawWidth * 10) / 10);
+  return { left: Math.min(left, 100 - width - 0.4), width };
 }
 
 function normalizeEvents(list: SportsEvent[]): SportsEvent[] {
   return list.map((evt) => {
+    const year = getEventYear(evt);
     const { left, width } = computeEventBounds(
       evt.startDay,
       evt.startMonth,
       evt.endDay,
       evt.endMonth
     );
-    return { ...evt, left, width };
+    return { ...evt, year, endYear: evt.endYear ?? year, left, width };
   });
 }
 
