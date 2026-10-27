@@ -43,7 +43,7 @@ export function TimelineSummary() {
               Timeline การอบรม ปี 2569
             </h3>
             <p className="mt-0.5 text-[12px] leading-relaxed text-[#6b7280] sm:text-[12.5px]">
-              ดูช่วงเวลาสำคัญของทั้ง 5 หลักสูตรก่อนตัดสินใจสมัคร
+              ดูช่วงเวลาสำคัญของทั้ง 5 หลักสูตร พร้อมเทียบปฏิทินแข่งขันกีฬา กกท. และช่วงเวลาว่าง
             </p>
           </div>
         </div>

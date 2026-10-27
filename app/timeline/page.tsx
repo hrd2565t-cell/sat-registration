@@ -60,7 +60,7 @@ export default function TimelinePage() {
 
         <TimelineSchedule />
 
-        <div className="mx-auto mt-2 grid w-full max-w-[670px] grid-cols-1 gap-3 md:grid-cols-[1fr_217px] xl:mt-[clamp(10px,0.8vw,14px)] xl:max-w-[clamp(820px,62vw,1080px)] xl:grid-cols-[minmax(0,1fr)_32.4%] xl:gap-[clamp(14px,1.2vw,20px)]">
+        <div className="mx-auto mt-2.5 grid w-full max-w-[880px] grid-cols-1 gap-3 md:grid-cols-[1fr_217px] xl:mt-[clamp(10px,0.8vw,14px)] xl:max-w-[clamp(980px,72vw,1280px)] xl:grid-cols-[minmax(0,1fr)_32.4%] xl:gap-[clamp(14px,1.2vw,20px)]">
           <section className="rounded-lg border border-[#e0e5e8] bg-white px-2.5 pb-2.5 pt-[7px] shadow-[0_1px_4px_rgba(16,24,40,0.05)] md:min-h-[109px] xl:min-h-[clamp(130px,9.7vw,150px)] xl:rounded-xl xl:px-[clamp(14px,1.1vw,18px)] xl:pb-[clamp(12px,0.9vw,16px)] xl:pt-[clamp(10px,0.8vw,14px)]">
             <h2 className="text-[12px] font-bold leading-snug text-[#111827] xl:text-[clamp(13px,0.9vw,15px)]">
               หลักสูตรที่กำลังเปิดรับสมัคร
