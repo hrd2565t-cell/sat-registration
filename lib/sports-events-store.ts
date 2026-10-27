@@ -51,13 +51,30 @@ export const CATEGORY_LABELS: Record<EventCategory, string> = {
 };
 
 /**
- * Calculates timeline coordinates (0% - 100%) across 12 months (Jan = Col 1 .. Dec = Col 12).
+ * Converts calendar month (1 = ม.ค. .. 12 = ธ.ค.) to Thai Fiscal Year index (0..11):
+ * ไตรมาส 1 (ต.ค. – ธ.ค.): 10 -> 0, 11 -> 1, 12 -> 2
+ * ไตรมาส 2 (ม.ค. – มี.ค.): 1 -> 3, 2 -> 4, 3 -> 5
+ * ไตรมาส 3 (เม.ย. – มิ.ย.): 4 -> 6, 5 -> 7, 6 -> 8
+ * ไตรมาส 4 (ก.ค. – ก.ย.): 7 -> 9, 8 -> 10, 9 -> 11
+ */
+export function monthToFiscalIndex(month: number): number {
+  const clampedMonth = Math.min(Math.max(month, 1), 12); // 1..12
+  return clampedMonth >= 10 ? clampedMonth - 10 : clampedMonth + 2;
+}
+
+export function getFiscalQuarter(month: number): 1 | 2 | 3 | 4 {
+  const idx = monthToFiscalIndex(month);
+  return (Math.floor(idx / 3) + 1) as 1 | 2 | 3 | 4;
+}
+
+/**
+ * Calculates timeline coordinates (0% - 100%) across 12 Fiscal Year months (Oct = Col 1 .. Sep = Col 12).
  * Each month occupies exactly 100 / 12 = 8.3333% of the row width.
  */
 export function dateToTimelinePercent(day: number, month: number): number {
-  const clampedMonth = Math.min(Math.max(month, 1), 12); // 1..12
+  const fiscalIdx = monthToFiscalIndex(month); // 0..11
   const clampedDay = Math.min(Math.max(day, 1), 31); // 1..31
-  const fraction = (clampedMonth - 1 + (clampedDay - 1) / 31) / 12;
+  const fraction = (fiscalIdx + (clampedDay - 1) / 31) / 12;
   return Math.min(Math.max(fraction * 100, 0.4), 98.5);
 }
 

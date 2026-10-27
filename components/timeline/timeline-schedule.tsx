@@ -61,35 +61,22 @@ interface TimelineRow {
   subPhaseBars: TimelineBar[];
 }
 
-const MONTH_HEADERS = [
-  "ม.ค.",
-  "ก.พ.",
-  "มี.ค.",
-  "เม.ย.",
-  "พ.ค.",
-  "มิ.ย.",
-  "ก.ค.",
-  "ส.ค.",
-  "ก.ย.",
-  "ต.ค.",
-  "พ.ย.",
-  "ธ.ค.",
-];
+const FISCAL_MONTHS = [
+  { monthNumber: 10, short: "ต.ค.", full: "ตุลาคม", quarter: 1 },
+  { monthNumber: 11, short: "พ.ย.", full: "พฤศจิกายน", quarter: 1 },
+  { monthNumber: 12, short: "ธ.ค.", full: "ธันวาคม", quarter: 1 },
+  { monthNumber: 1, short: "ม.ค.", full: "มกราคม", quarter: 2 },
+  { monthNumber: 2, short: "ก.พ.", full: "กุมภาพันธ์", quarter: 2 },
+  { monthNumber: 3, short: "มี.ค.", full: "มีนาคม", quarter: 2 },
+  { monthNumber: 4, short: "เม.ย.", full: "เมษายน", quarter: 3 },
+  { monthNumber: 5, short: "พ.ค.", full: "พฤษภาคม", quarter: 3 },
+  { monthNumber: 6, short: "มิ.ย.", full: "มิถุนายน", quarter: 3 },
+  { monthNumber: 7, short: "ก.ค.", full: "กรกฎาคม", quarter: 4 },
+  { monthNumber: 8, short: "ส.ค.", full: "สิงหาคม", quarter: 4 },
+  { monthNumber: 9, short: "ก.ย.", full: "กันยายน", quarter: 4 },
+] as const;
 
-const FULL_MONTH_NAMES = [
-  "มกราคม",
-  "กุมภาพันธ์",
-  "มีนาคม",
-  "เมษายน",
-  "พฤษภาคม",
-  "มิถุนายน",
-  "กรกฎาคม",
-  "สิงหาคม",
-  "กันยายน",
-  "ตุลาคม",
-  "พฤศจิกายน",
-  "ธันวาคม",
-];
+const MONTH_HEADERS = FISCAL_MONTHS.map((m) => m.short);
 
 const bars: Record<BarTone, string> = {
   open: "bg-[#1869bc]",
@@ -453,7 +440,7 @@ export function TimelineSchedule() {
   const { events, deleteSportsEvent } = useSportsEvents();
 
   // New controls: Year Tab & View Mode
-  const [selectedYear, setSelectedYear] = useState<YearFilter>(2570);
+  const [selectedYear, setSelectedYear] = useState<YearFilter>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("gantt");
   const [showSportsEvents, setShowSportsEvents] = useState(true);
   const [showSubPhases, setShowSubPhases] = useState(false);
@@ -505,17 +492,17 @@ export function TimelineSchedule() {
           {/* Year Tabs */}
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="mr-1 text-[12px] font-bold text-[#1e293b]">
-              📅 เลือกปี พ.ศ.:
+              📅 ช่วงปี พ.ศ.:
             </span>
             {(
               [
-                { key: 2570 as const, label: "ปี 2570", count: count2570 },
-                { key: 2571 as const, label: "ปี 2571", count: count2571 },
                 {
                   key: "all" as const,
-                  label: "ดูรวมทุกปี (2570–2571)",
+                  label: "รวมปีงบประมาณ (ต.ค. – ก.ย.)",
                   count: allCourseRows.length + events.length,
                 },
+                { key: 2570 as const, label: "เฉพาะปี 2570", count: count2570 },
+                { key: 2571 as const, label: "เฉพาะปี 2571", count: count2571 },
               ] as const
             ).map((tab) => {
               const active = selectedYear === tab.key;
@@ -709,28 +696,28 @@ export function TimelineSchedule() {
                     scope="colgroup"
                     className="border border-[#27408b] py-1 text-center"
                   >
-                    ไตรมาส 1 (ม.ค. – มี.ค.)
+                    ไตรมาส 1 (ต.ค. – ธ.ค.)
                   </th>
                   <th
                     colSpan={3}
                     scope="colgroup"
                     className="border border-[#27408b] py-1 text-center"
                   >
-                    ไตรมาส 2 (เม.ย. – มิ.ย.)
+                    ไตรมาส 2 (ม.ค. – มี.ค.)
                   </th>
                   <th
                     colSpan={3}
                     scope="colgroup"
                     className="border border-[#27408b] py-1 text-center"
                   >
-                    ไตรมาส 3 (ก.ค. – ก.ย.)
+                    ไตรมาส 3 (เม.ย. – มิ.ย.)
                   </th>
                   <th
                     colSpan={3}
                     scope="colgroup"
                     className="border border-[#27408b] py-1 text-center"
                   >
-                    ไตรมาส 4 (ต.ค. – ธ.ค.)
+                    ไตรมาส 4 (ก.ค. – ก.ย.)
                   </th>
                 </tr>
 
@@ -1052,20 +1039,25 @@ export function TimelineSchedule() {
         {viewMode === "monthly" && (
           <div className="mt-3 space-y-3">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {FULL_MONTH_NAMES.map((monthName, monthIdx) => {
-                const monthNumber = monthIdx + 1;
+              {FISCAL_MONTHS.map((fm, monthIdx) => {
+                const monthNumber = fm.monthNumber;
+                const monthName = fm.full;
                 const monthCourses = filteredRows.filter((row) =>
                   row.sessions.some(
                     (s) =>
-                      s.startMonth + 1 <= monthNumber &&
-                      s.endMonth + 1 >= monthNumber
+                      s.startMonth + 1 === monthNumber ||
+                      s.endMonth + 1 === monthNumber ||
+                      (s.startMonth + 1 <= monthNumber &&
+                        s.endMonth + 1 >= monthNumber)
                   )
                 );
                 const monthEvents = showSportsEvents
                   ? filteredEvents.filter(
                       (evt) =>
-                        evt.startMonth <= monthNumber &&
-                        evt.endMonth >= monthNumber
+                        evt.startMonth === monthNumber ||
+                        evt.endMonth === monthNumber ||
+                        (evt.startMonth <= monthNumber &&
+                          evt.endMonth >= monthNumber)
                     )
                   : [];
 
@@ -1089,13 +1081,18 @@ export function TimelineSchedule() {
                     <div className="flex items-center justify-between border-b border-[#f1f5f9] pb-2">
                       <div className="flex items-center gap-2">
                         <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#16265E] text-[11px] font-bold text-white">
-                          {MONTH_HEADERS[monthIdx]}
+                          {fm.short}
                         </span>
                         <div>
-                          <h4 className="text-[13.5px] font-bold text-[#0f172a]">
-                            {monthName}{" "}
-                            {selectedYear !== "all" ? selectedYear : ""}
-                          </h4>
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="text-[13.5px] font-bold text-[#0f172a]">
+                              {monthName}{" "}
+                              {selectedYear !== "all" ? selectedYear : ""}
+                            </h4>
+                            <span className="rounded bg-[#eef2f9] px-1.5 py-0.2 text-[9.5px] font-bold text-[#16265E]">
+                              ไตรมาส {fm.quarter}
+                            </span>
+                          </div>
                         </div>
                       </div>
 

@@ -3,12 +3,12 @@ import Link from "next/link";
 import { Header } from "@/components/layout/header";
 import { TimelineSchedule } from "@/components/timeline/timeline-schedule";
 import { TimelineShareButton } from "@/components/timeline/timeline-share-button";
-import { ArrowLeftIcon, CalendarIcon, DownloadIcon } from "@/components/ui/icons";
+import { ArrowLeftIcon, CalendarIcon } from "@/components/ui/icons";
 
 export const metadata: Metadata = {
-  title: "Timeline แผนกำหนดการอบรม ประจำปี 2570",
+  title: "Timeline แผนกำหนดการอบรม (พ.ศ. 2570 – 2571)",
   description:
-    "ตรวจสอบช่วงเวลาการสมัคร การตรวจคุณสมบัติ และการจัดอบรมของทั้ง 5 หลักสูตร",
+    "ตรวจสอบช่วงเวลาการสมัคร การตรวจคุณสมบัติ และการจัดอบรม พร้อมเปรียบเทียบปฏิทินการแข่งขันกีฬา กกท.",
 };
 
 const navLinkClass =
@@ -81,18 +81,8 @@ export default function TimelinePage() {
             </ul>
           </section>
 
-          <section className="rounded-lg border border-[#e0e5e8] bg-white px-2 py-1.5 text-center shadow-[0_1px_4px_rgba(16,24,40,0.05)] md:min-h-[109px] xl:min-h-[clamp(130px,9.7vw,150px)] xl:rounded-xl xl:px-[clamp(10px,0.8vw,14px)] xl:py-[clamp(8px,0.65vw,12px)]">
-            <a
-              href="/files/timeline-2570.pdf"
-              download="timeline-2570.pdf"
-              className="flex h-[25px] w-full items-center justify-center gap-1 rounded-[4px] bg-[#122b5c] text-[10px] font-semibold text-white transition-colors hover:bg-[#0d2149] xl:h-[clamp(30px,2.2vw,36px)] xl:gap-1.5 xl:text-[clamp(11.5px,0.8vw,13px)]"
-            >
-              <DownloadIcon className="h-[1.2em] w-[1.2em] shrink-0" />
-              ดาวน์โหลดปฏิทินอบรมทั้งหมด (PDF)
-            </a>
-            <div className="mt-1 xl:mt-1.5">
-              <TimelineShareButton />
-            </div>
+          <section className="rounded-lg border border-[#e0e5e8] bg-white px-2.5 py-2 text-center shadow-[0_1px_4px_rgba(16,24,40,0.05)] xl:rounded-xl xl:px-[clamp(10px,0.8vw,14px)] xl:py-[clamp(10px,0.8vw,14px)]">
+            <TimelineShareButton />
             <div className="mt-1.5 border-t border-[#e5e7eb] pt-1.5 text-[#374151] xl:mt-2 xl:pt-2">
               <p className="text-[9px] leading-snug xl:text-[clamp(10px,0.75vw,12px)]">สอบถามข้อมูลเพิ่มเติม</p>
               <p className="mt-0.5 text-[8px] leading-snug xl:text-[clamp(9px,0.65vw,11px)]">
