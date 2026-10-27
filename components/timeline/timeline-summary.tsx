@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { ArrowRightIcon, CalendarIcon } from "@/components/ui/icons";
 import { useCourses } from "@/lib/courses-store";
-import { parseCourseDateSessions } from "@/lib/courses";
+import {
+  getGlobalCourseSchedule,
+  parseCourseDateSessions,
+  type CourseDateFields,
+} from "@/lib/courses";
 
 const THAI_MONTHS_SHORT = [
   "ม.ค.",
@@ -22,52 +26,63 @@ const THAI_MONTHS_SHORT = [
 
 export function TimelineSummary() {
   const { courses } = useCourses();
+  const globalSchedule = getGlobalCourseSchedule(courses);
 
-  // Compute dynamic earliest & latest training dates across all courses
-  let minMonth = 11;
-  let minDay = 31;
-  let maxMonth = 0;
-  let maxDay = 1;
+  // Compute dynamic earliest & latest training dates across all courses (including yearBE)
+  let earliest: CourseDateFields | null = null;
+  let earliestTime = Infinity;
+  let latest: CourseDateFields | null = null;
+  let latestTime = -Infinity;
 
   for (const c of courses) {
     const sessions = parseCourseDateSessions(c.date);
     for (const s of sessions) {
-      if (s.startMonth < minMonth || (s.startMonth === minMonth && s.startDay < minDay)) {
-        minMonth = s.startMonth;
-        minDay = s.startDay;
+      const startTime = new Date(
+        s.yearBE - 543,
+        s.startMonth,
+        s.startDay
+      ).getTime();
+      const endTime = new Date(
+        s.yearBE - 543,
+        s.endMonth,
+        s.endDay
+      ).getTime();
+      if (startTime < earliestTime) {
+        earliestTime = startTime;
+        earliest = s;
       }
-      if (s.endMonth > maxMonth || (s.endMonth === maxMonth && s.endDay > maxDay)) {
-        maxMonth = s.endMonth;
-        maxDay = s.endDay;
+      if (endTime > latestTime) {
+        latestTime = endTime;
+        latest = s;
       }
     }
   }
 
   const trainingRange =
-    courses.length > 0
-      ? `${minDay} ${THAI_MONTHS_SHORT[minMonth]} – ${maxDay} ${THAI_MONTHS_SHORT[maxMonth]} 2570`
-      : "ม.ค. – ธ.ค. 2570";
+    earliest && latest
+      ? earliest.yearBE === latest.yearBE
+        ? `${earliest.startDay} ${THAI_MONTHS_SHORT[earliest.startMonth]} – ${latest.endDay} ${THAI_MONTHS_SHORT[latest.endMonth]} ${latest.yearBE}`
+        : `${earliest.startDay} ${THAI_MONTHS_SHORT[earliest.startMonth]} ${earliest.yearBE} – ${latest.endDay} ${THAI_MONTHS_SHORT[latest.endMonth]} ${latest.yearBE}`
+      : "ต.ค. 2569 – ก.ย. 2570";
 
   const phases = [
     {
-      label: "เปิดรับสมัคร",
-      range: "ล่วงหน้าก่อนอบรม",
+      label: "1. เปิดรับสมัคร",
+      range: globalSchedule.registrationDate,
       border: "border-l-[#1869bc]",
+      textColor: "text-[#1e3a8a]",
     },
     {
-      label: "ตรวจคุณสมบัติ",
-      range: "ก่อนเริ่มแต่ละรุ่น",
-      border: "border-l-[#ef8507]",
+      label: "2. วันประกาศผล",
+      range: globalSchedule.resultDate,
+      border: "border-l-[#c4080f]",
+      textColor: "text-[#991b1b]",
     },
     {
-      label: "ช่วงเวลาจัดอบรม",
+      label: "3. ช่วงเวลาจัดอบรม",
       range: trainingRange,
       border: "border-l-[#198c32]",
-    },
-    {
-      label: "ประกาศผล",
-      range: "หลังจบการอบรม",
-      border: "border-l-[#c4080f]",
+      textColor: "text-[#166534]",
     },
   ];
 
@@ -103,16 +118,18 @@ export function TimelineSummary() {
         </Link>
       </div>
 
-      <ol className="mt-4 grid grid-cols-2 gap-2.5 md:grid-cols-4">
+      <ol className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         {phases.map((phase) => (
           <li
             key={phase.label}
-            className={`rounded-lg border border-l-[3px] border-[#e2e8f0] bg-white px-3 py-2.5 ${phase.border}`}
+            className={`rounded-lg border border-l-[3px] border-[#e2e8f0] bg-white px-3.5 py-2.5 ${phase.border}`}
           >
             <p className="text-[11.5px] font-semibold leading-snug text-[#475569]">
               {phase.label}
             </p>
-            <p className="mt-1 text-[12.5px] font-bold leading-snug text-[#16265E] sm:text-[13px]">
+            <p
+              className={`mt-1 text-[13px] font-bold leading-snug sm:text-[13.5px] ${phase.textColor}`}
+            >
               {phase.range}
             </p>
           </li>
