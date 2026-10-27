@@ -4,22 +4,22 @@ import { ArrowRightIcon, CalendarIcon } from "@/components/ui/icons";
 const phases = [
   {
     label: "เปิดรับสมัคร",
-    range: "10 ต.ค. – 15 พ.ย. 2569",
+    range: "10 ต.ค. – 15 พ.ย. 2570",
     border: "border-l-[#1869bc]",
   },
   {
     label: "ตรวจคุณสมบัติ",
-    range: "21 ต.ค. – 20 พ.ย. 2569",
+    range: "21 ต.ค. – 20 พ.ย. 2570",
     border: "border-l-[#ef8507]",
   },
   {
     label: "ช่วงเวลาจัดอบรม",
-    range: "1 พ.ย. – 18 ธ.ค. 2569",
+    range: "1 พ.ย. – 18 ธ.ค. 2570",
     border: "border-l-[#198c32]",
   },
   {
     label: "ประกาศผล",
-    range: "10 พ.ย. – 24 ธ.ค. 2569",
+    range: "10 พ.ย. – 24 ธ.ค. 2570",
     border: "border-l-[#c4080f]",
   },
 ];
@@ -40,7 +40,7 @@ export function TimelineSummary() {
               id="timeline-summary-title"
               className="text-[16px] font-bold leading-snug text-[#16265E] sm:text-[18px]"
             >
-              Timeline การอบรม ปี 2569
+              Timeline การอบรม ปี 2570
             </h3>
             <p className="mt-0.5 text-[12px] leading-relaxed text-[#6b7280] sm:text-[12.5px]">
               ดูช่วงเวลาสำคัญของทั้ง 5 หลักสูตร พร้อมเทียบปฏิทินแข่งขันกีฬา กกท. และช่วงเวลาว่าง

@@ -275,7 +275,7 @@ export function SettingsAdmin() {
           </section>
 
           <p className="text-center text-[9.5px] text-[#6b7280]">
-            ระบบต้นแบบ · SAT Admission 2569
+            ระบบต้นแบบ · SAT Admission 2570
           </p>
         </div>
       </div>

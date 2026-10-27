@@ -86,7 +86,7 @@ const rows: TimelineRow[] = [
   },
 ];
 
-const columns = ["หลักสูตร / รายการ", "ตุลาคม 2569", "6 พ.ย. 2569", "15 พ.ย. 2569", "ธันวาคม 2569"];
+const columns = ["หลักสูตร / รายการ", "ตุลาคม 2570", "6 พ.ย. 2570", "15 พ.ย. 2570", "ธันวาคม 2570"];
 
 /**
  * Free slots across the timeline without major conflicts
@@ -95,7 +95,7 @@ const FREE_SLOTS = [
   {
     id: "slot-1",
     label: "ว่าง 6 วัน",
-    dateRange: "1 - 6 พ.ย. 2569",
+    dateRange: "1 - 6 พ.ย. 2570",
     left: 25.0,
     width: 15.4,
     description: "ก่อนเริ่มกีฬาคนพิการแห่งชาติ เหมาะสำหรับจัดอบรม/สัมมนาสั้น",
@@ -103,7 +103,7 @@ const FREE_SLOTS = [
   {
     id: "slot-2",
     label: "ว่าง 7 วัน (แนะนำ)",
-    dateRange: "1 - 7 ธ.ค. 2569",
+    dateRange: "1 - 7 ธ.ค. 2570",
     left: 75.0,
     width: 6.0,
     description: "หลังจบชิงแชมป์ประเทศไทย และก่อนเริ่มกีฬาแห่งชาติ — เหมาะจัดอบรม 3-5 วัน",
@@ -111,7 +111,7 @@ const FREE_SLOTS = [
   {
     id: "slot-3",
     label: "ว่าง 12 วัน",
-    dateRange: "20 - 31 ธ.ค. 2569",
+    dateRange: "20 - 31 ธ.ค. 2570",
     left: 93.0,
     width: 7.0,
     description: "หลังจบกีฬาแห่งชาติ ครั้งที่ 49 และหลังการอบรมทุกหลักสูตรสิ้นสุดลง",
@@ -394,7 +394,7 @@ export function TimelineSchedule() {
                       <div className="flex items-center justify-between">
                         <span className="flex items-center gap-1.5">
                           <span>🏆</span>
-                          <span>ปฏิทินการแข่งขันกีฬาสำคัญ ประจำปี 2569 (กกท.)</span>
+                          <span>ปฏิทินการแข่งขันกีฬาสำคัญ ประจำปี 2570 (กกท.)</span>
                           <span className="rounded-full bg-[#ede9fe] px-2 py-0.5 text-[9.5px] font-medium text-[#7c3aed]">
                             เปรียบเทียบตารางว่าง ({events.length} รายการ)
                           </span>
@@ -528,7 +528,7 @@ export function TimelineSchedule() {
                     ช่วงที่ {index + 1}: {slot.label}
                   </span>
                   <span className="text-[10px] font-medium text-[#6b7280]">
-                    2569
+                    2570
                   </span>
                 </div>
                 <p className="mt-2 text-[13px] font-bold text-[#111827]">
@@ -546,7 +546,7 @@ export function TimelineSchedule() {
             <span className="text-base shrink-0">⚠️</span>
             <div>
               <span className="font-bold">ข้อสังเกตสำหรับผู้บริหาร: </span>
-              ช่วงวันที่ <span className="font-semibold underline">9 - 19 ธันวาคม 2569</span> เป็นช่วงจัดแข่งขัน{" "}
+              ช่วงวันที่ <span className="font-semibold underline">9 - 19 ธันวาคม 2570</span> เป็นช่วงจัดแข่งขัน{" "}
               <span className="font-semibold">มหกรรมกีฬาแห่งชาติ ครั้งที่ 49 (จ.จันทบุรี)</span> ซึ่งคาบเกี่ยวกับหลักสูตร{" "}
               <span className="font-semibold">จิตวิทยาการกีฬาสำหรับผู้ฝึกสอน (14 - 18 ธ.ค.)</span> ควรประสานงานสมาคมกีฬาเพื่อคัดเลือกผู้ฝึกสอนที่ไม่ได้ติดภารกิจคุมทีมแข่งขันในรายการดังกล่าว
             </div>

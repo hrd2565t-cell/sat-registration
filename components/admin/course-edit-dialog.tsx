@@ -398,7 +398,7 @@ export function CourseEditDialog({
                     setDate(event.target.value);
                     if (error) setError("");
                   }}
-                  placeholder="เช่น 15-20 พ.ค. 2569"
+                  placeholder="เช่น 15-20 พ.ค. 2570"
                   className={fieldClass}
                 />
               </div>

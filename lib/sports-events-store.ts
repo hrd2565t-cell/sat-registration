@@ -37,10 +37,10 @@ export const CATEGORY_LABELS: Record<EventCategory, string> = {
 /**
  * Calculates timeline coordinates (left% & width%)
  * Grid columns:
- * Col 1: ตุลาคม 2569 (0% - 25%)
- * Col 2: 1-10 พ.ย. 2569 (25% - 50%)
- * Col 3: 11-30 พ.ย. 2569 (50% - 75%)
- * Col 4: ธันวาคม 2569 (75% - 100%)
+ * Col 1: ตุลาคม 2570 (0% - 25%)
+ * Col 2: 1-10 พ.ย. 2570 (25% - 50%)
+ * Col 3: 11-30 พ.ย. 2570 (50% - 75%)
+ * Col 4: ธันวาคม 2570 (75% - 100%)
  */
 export function dateToTimelinePercent(day: number, month: number): number {
   if (month === 10) {
@@ -77,10 +77,10 @@ export function computeEventBounds(
 
 export const DEFAULT_SPORTS_EVENTS: SportsEvent[] = [
   {
-    id: "evt-youth-2569",
+    id: "evt-youth-2570",
     title: "กีฬาเยาวชนแห่งชาติ รอบคัดเลือกตัวแทนภาค",
     english: "(National Youth Games - Regional Qualifiers)",
-    dateRange: "18 - 28 ต.ค. 2569",
+    dateRange: "18 - 28 ต.ค. 2570",
     startDay: 18,
     startMonth: 10,
     endDay: 28,
@@ -93,10 +93,10 @@ export const DEFAULT_SPORTS_EVENTS: SportsEvent[] = [
     colorTone: "purple",
   },
   {
-    id: "evt-para-2569",
+    id: "evt-para-2570",
     title: "การแข่งขันกีฬาคนพิการแห่งชาติ",
     english: "(Thailand National Para Games)",
-    dateRange: "7 - 14 พ.ย. 2569",
+    dateRange: "7 - 14 พ.ย. 2570",
     startDay: 7,
     startMonth: 11,
     endDay: 14,
@@ -109,10 +109,10 @@ export const DEFAULT_SPORTS_EVENTS: SportsEvent[] = [
     colorTone: "indigo",
   },
   {
-    id: "evt-champ-2569",
+    id: "evt-champ-2570",
     title: "การแข่งขันกีฬาชิงชนะเลิศแห่งประเทศไทย",
-    english: "(Thailand National Championships 2026)",
-    dateRange: "24 - 30 พ.ย. 2569",
+    english: "(Thailand National Championships 2027)",
+    dateRange: "24 - 30 พ.ย. 2570",
     startDay: 24,
     startMonth: 11,
     endDay: 30,
@@ -125,10 +125,10 @@ export const DEFAULT_SPORTS_EVENTS: SportsEvent[] = [
     colorTone: "amber",
   },
   {
-    id: "evt-national-2569",
+    id: "evt-national-2570",
     title: "มหกรรมกีฬาแห่งชาติ ครั้งที่ 49",
     english: "(49th Thailand National Games)",
-    dateRange: "9 - 19 ธ.ค. 2569",
+    dateRange: "9 - 19 ธ.ค. 2570",
     startDay: 9,
     startMonth: 12,
     endDay: 19,
@@ -142,7 +142,7 @@ export const DEFAULT_SPORTS_EVENTS: SportsEvent[] = [
   },
 ];
 
-const STORAGE_KEY = "sat-sports-events-v1";
+const STORAGE_KEY = "sat-sports-events-v2";
 
 interface SportsEventsState {
   events: SportsEvent[];

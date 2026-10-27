@@ -8,9 +8,9 @@ import {
 } from "@/lib/sports-events-store";
 
 const MONTH_NAMES: Record<number, string> = {
-  10: "ตุลาคม 2569",
-  11: "พฤศจิกายน 2569",
-  12: "ธันวาคม 2569",
+  10: "ตุลาคม 2570",
+  11: "พฤศจิกายน 2570",
+  12: "ธันวาคม 2570",
 };
 
 const SHORT_MONTH_NAMES: Record<number, string> = {
@@ -59,8 +59,8 @@ export function AddSportsEventDialog({
 
     const dateRange =
       startMonth === endMonth
-        ? `${startDay} - ${endDay} ${SHORT_MONTH_NAMES[startMonth]} 2569`
-        : `${startDay} ${SHORT_MONTH_NAMES[startMonth]} - ${endDay} ${SHORT_MONTH_NAMES[endMonth]} 2569`;
+        ? `${startDay} - ${endDay} ${SHORT_MONTH_NAMES[startMonth]} 2570`
+        : `${startDay} ${SHORT_MONTH_NAMES[startMonth]} - ${endDay} ${SHORT_MONTH_NAMES[endMonth]} 2570`;
 
     addSportsEvent({
       title: trimmedTitle,
@@ -187,7 +187,7 @@ export function AddSportsEventDialog({
           {/* ช่วงวันที่จัดแข่งขัน */}
           <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3 space-y-3">
             <span className="text-[12px] font-bold text-[#1e293b]">
-              📅 ช่วงวันและเดือนที่แข่งขัน (ประจำปี 2569)
+              📅 ช่วงวันและเดือนที่แข่งขัน (ประจำปี 2570)
             </span>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[12px]">
@@ -209,9 +209,9 @@ export function AddSportsEventDialog({
                     onChange={(e) => setStartMonth(parseInt(e.target.value))}
                     className="h-8 flex-1 rounded border border-[#cbd5e1] bg-white px-2 text-[11.5px]"
                   >
-                    <option value={10}>ตุลาคม 2569</option>
-                    <option value={11}>พฤศจิกายน 2569</option>
-                    <option value={12}>ธันวาคม 2569</option>
+                    <option value={10}>ตุลาคม 2570</option>
+                    <option value={11}>พฤศจิกายน 2570</option>
+                    <option value={12}>ธันวาคม 2570</option>
                   </select>
                 </div>
               </div>
@@ -234,9 +234,9 @@ export function AddSportsEventDialog({
                     onChange={(e) => setEndMonth(parseInt(e.target.value))}
                     className="h-8 flex-1 rounded border border-[#cbd5e1] bg-white px-2 text-[11.5px]"
                   >
-                    <option value={10}>ตุลาคม 2569</option>
-                    <option value={11}>พฤศจิกายน 2569</option>
-                    <option value={12}>ธันวาคม 2569</option>
+                    <option value={10}>ตุลาคม 2570</option>
+                    <option value={11}>พฤศจิกายน 2570</option>
+                    <option value={12}>ธันวาคม 2570</option>
                   </select>
                 </div>
               </div>
