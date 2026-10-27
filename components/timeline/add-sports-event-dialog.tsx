@@ -37,7 +37,7 @@ const FULL_MONTH_NAMES: Record<number, string> = {
   12: "ธันวาคม",
 };
 
-const SUPPORTED_YEARS = [2570, 2571] as const;
+const SUPPORTED_YEARS = [2569, 2570, 2571] as const;
 
 interface AddSportsEventDialogProps {
   isOpen: boolean;

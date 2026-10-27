@@ -50,15 +50,58 @@ export const CATEGORY_LABELS: Record<EventCategory, string> = {
   international: "กีฬานานาชาติ / ซีเกมส์",
 };
 
+export interface TimelineMonthSlot {
+  index: number;
+  month: number; // 1..12
+  year: number; // 2569, 2570, 2571
+  shortLabel: string; // e.g. "ต.ค. 69"
+  monthShort: string; // e.g. "ต.ค."
+  fullLabel: string; // e.g. "ตุลาคม 2569"
+  quarter: 1 | 2 | 3 | 4 | 5;
+  quarterLabel: string;
+  isPostFiscal: boolean;
+}
+
 /**
- * Converts calendar month (1 = ม.ค. .. 12 = ธ.ค.) to Thai Fiscal Year index (0..11):
- * ไตรมาส 1 (ต.ค. – ธ.ค.): 10 -> 0, 11 -> 1, 12 -> 2
- * ไตรมาส 2 (ม.ค. – มี.ค.): 1 -> 3, 2 -> 4, 3 -> 5
- * ไตรมาส 3 (เม.ย. – มิ.ย.): 4 -> 6, 5 -> 7, 6 -> 8
- * ไตรมาส 4 (ก.ค. – ก.ย.): 7 -> 9, 8 -> 10, 9 -> 11
+ * 16-month continuous timeline:
+ * - ไตรมาส 1 (ต.ค. – ธ.ค. 2569): slots 0..2
+ * - ไตรมาส 2 (ม.ค. – มี.ค. 2570): slots 3..5
+ * - ไตรมาส 3 (เม.ย. – มิ.ย. 2570): slots 6..8
+ * - ไตรมาส 4 (ก.ค. – ก.ย. 2570): slots 9..11
+ * - ช่วงต่อเนื่องหลังปีงบฯ (ต.ค. 2570 – ม.ค. 2571): slots 12..15
  */
+export const TIMELINE_SLOTS: readonly TimelineMonthSlot[] = [
+  { index: 0, month: 10, year: 2569, shortLabel: "ต.ค. 69", monthShort: "ต.ค.", fullLabel: "ตุลาคม 2569", quarter: 1, quarterLabel: "ไตรมาส 1", isPostFiscal: false },
+  { index: 1, month: 11, year: 2569, shortLabel: "พ.ย. 69", monthShort: "พ.ย.", fullLabel: "พฤศจิกายน 2569", quarter: 1, quarterLabel: "ไตรมาส 1", isPostFiscal: false },
+  { index: 2, month: 12, year: 2569, shortLabel: "ธ.ค. 69", monthShort: "ธ.ค.", fullLabel: "ธันวาคม 2569", quarter: 1, quarterLabel: "ไตรมาส 1", isPostFiscal: false },
+  { index: 3, month: 1, year: 2570, shortLabel: "ม.ค. 70", monthShort: "ม.ค.", fullLabel: "มกราคม 2570", quarter: 2, quarterLabel: "ไตรมาส 2", isPostFiscal: false },
+  { index: 4, month: 2, year: 2570, shortLabel: "ก.พ. 70", monthShort: "ก.พ.", fullLabel: "กุมภาพันธ์ 2570", quarter: 2, quarterLabel: "ไตรมาส 2", isPostFiscal: false },
+  { index: 5, month: 3, year: 2570, shortLabel: "มี.ค. 70", monthShort: "มี.ค.", fullLabel: "มีนาคม 2570", quarter: 2, quarterLabel: "ไตรมาส 2", isPostFiscal: false },
+  { index: 6, month: 4, year: 2570, shortLabel: "เม.ย. 70", monthShort: "เม.ย.", fullLabel: "เมษายน 2570", quarter: 3, quarterLabel: "ไตรมาส 3", isPostFiscal: false },
+  { index: 7, month: 5, year: 2570, shortLabel: "พ.ค. 70", monthShort: "พ.ค.", fullLabel: "พฤษภาคม 2570", quarter: 3, quarterLabel: "ไตรมาส 3", isPostFiscal: false },
+  { index: 8, month: 6, year: 2570, shortLabel: "มิ.ย. 70", monthShort: "มิ.ย.", fullLabel: "มิถุนายน 2570", quarter: 3, quarterLabel: "ไตรมาส 3", isPostFiscal: false },
+  { index: 9, month: 7, year: 2570, shortLabel: "ก.ค. 70", monthShort: "ก.ค.", fullLabel: "กรกฎาคม 2570", quarter: 4, quarterLabel: "ไตรมาส 4", isPostFiscal: false },
+  { index: 10, month: 8, year: 2570, shortLabel: "ส.ค. 70", monthShort: "ส.ค.", fullLabel: "สิงหาคม 2570", quarter: 4, quarterLabel: "ไตรมาส 4", isPostFiscal: false },
+  { index: 11, month: 9, year: 2570, shortLabel: "ก.ย. 70", monthShort: "ก.ย.", fullLabel: "กันยายน 2570", quarter: 4, quarterLabel: "ไตรมาส 4", isPostFiscal: false },
+  { index: 12, month: 10, year: 2570, shortLabel: "ต.ค. 70", monthShort: "ต.ค.", fullLabel: "ตุลาคม 2570", quarter: 5, quarterLabel: "หลังปีงบฯ (ไตรมาส 1/71)", isPostFiscal: true },
+  { index: 13, month: 11, year: 2570, shortLabel: "พ.ย. 70", monthShort: "พ.ย.", fullLabel: "พฤศจิกายน 2570", quarter: 5, quarterLabel: "หลังปีงบฯ (ไตรมาส 1/71)", isPostFiscal: true },
+  { index: 14, month: 12, year: 2570, shortLabel: "ธ.ค. 70", monthShort: "ธ.ค.", fullLabel: "ธันวาคม 2570", quarter: 5, quarterLabel: "หลังปีงบฯ (ไตรมาส 1/71)", isPostFiscal: true },
+  { index: 15, month: 1, year: 2571, shortLabel: "ม.ค. 71", monthShort: "ม.ค.", fullLabel: "มกราคม 2571", quarter: 5, quarterLabel: "หลังปีงบฯ (ไตรมาส 2/71)", isPostFiscal: true },
+];
+
+export const TOTAL_TIMELINE_SLOTS = TIMELINE_SLOTS.length; // 16
+
+/**
+ * Maps (month 1..12, yearBE) to slot index 0..15 on the continuous Oct 2569 – Jan 2571 timeline.
+ */
+export function yearMonthToSlotIndex(month: number, yearBE = 2570): number {
+  const clampedMonth = Math.min(Math.max(month, 1), 12);
+  const raw = (yearBE - 2569) * 12 + (clampedMonth - 10);
+  return Math.min(Math.max(raw, 0), TOTAL_TIMELINE_SLOTS - 1);
+}
+
 export function monthToFiscalIndex(month: number): number {
-  const clampedMonth = Math.min(Math.max(month, 1), 12); // 1..12
+  const clampedMonth = Math.min(Math.max(month, 1), 12);
   return clampedMonth >= 10 ? clampedMonth - 10 : clampedMonth + 2;
 }
 
@@ -68,39 +111,49 @@ export function getFiscalQuarter(month: number): 1 | 2 | 3 | 4 {
 }
 
 /**
- * Calculates timeline coordinates (0% - 100%) across 12 Fiscal Year months (Oct = Col 1 .. Sep = Col 12).
- * Each month occupies exactly 100 / 12 = 8.3333% of the row width.
+ * Calculates timeline coordinates (0% - 100%) across the 16 continuous months (Oct 2569 .. Jan 2571).
  */
-export function dateToTimelinePercent(day: number, month: number): number {
-  const fiscalIdx = monthToFiscalIndex(month); // 0..11
+export function dateToTimelinePercent(
+  day: number,
+  month: number,
+  yearBE = 2570
+): number {
+  const slotIdx = yearMonthToSlotIndex(month, yearBE); // 0..15
   const clampedDay = Math.min(Math.max(day, 1), 31); // 1..31
-  const fraction = (fiscalIdx + (clampedDay - 1) / 31) / 12;
-  return Math.min(Math.max(fraction * 100, 0.4), 98.5);
+  const fraction = (slotIdx + (clampedDay - 1) / 31) / TOTAL_TIMELINE_SLOTS;
+  return Math.min(Math.max(fraction * 100, 0.3), 98.8);
 }
 
 export function computeEventBounds(
   startDay: number,
   startMonth: number,
   endDay: number,
-  endMonth: number
+  endMonth: number,
+  startYear = 2570,
+  endYear = startYear
 ): { left: number; width: number } {
-  const left = Math.round(dateToTimelinePercent(startDay, startMonth) * 10) / 10;
-  const right = Math.round(dateToTimelinePercent(endDay + 1, endMonth) * 10) / 10;
-  const rawWidth = right >= left ? right - left : 8.3 - (left % 8.33);
-  const width = Math.max(2.2, Math.round(rawWidth * 10) / 10);
-  return { left: Math.min(left, 100 - width - 0.4), width };
+  const left =
+    Math.round(dateToTimelinePercent(startDay, startMonth, startYear) * 10) / 10;
+  const right =
+    Math.round(dateToTimelinePercent(endDay + 1, endMonth, endYear) * 10) / 10;
+  const rawWidth = right >= left ? right - left : 3.0;
+  const width = Math.max(1.8, Math.round(rawWidth * 10) / 10);
+  return { left: Math.min(left, 100 - width - 0.3), width };
 }
 
 function normalizeEvents(list: SportsEvent[]): SportsEvent[] {
   return list.map((evt) => {
     const year = getEventYear(evt);
+    const endYear = evt.endYear ?? year;
     const { left, width } = computeEventBounds(
       evt.startDay,
       evt.startMonth,
       evt.endDay,
-      evt.endMonth
+      evt.endMonth,
+      year,
+      endYear
     );
-    return { ...evt, year, endYear: evt.endYear ?? year, left, width };
+    return { ...evt, year, endYear, left, width };
   });
 }
 
@@ -192,15 +245,21 @@ export function useSportsEvents() {
 export function addSportsEvent(
   input: Omit<SportsEvent, "id" | "left" | "width">
 ) {
+  const startYear = input.year ?? 2570;
+  const endYear = input.endYear ?? startYear;
   const { left, width } = computeEventBounds(
     input.startDay,
     input.startMonth,
     input.endDay,
-    input.endMonth
+    input.endMonth,
+    startYear,
+    endYear
   );
 
   const newEvent: SportsEvent = {
     ...input,
+    year: startYear,
+    endYear,
     id: `evt-custom-${Date.now()}`,
     left,
     width,
@@ -228,12 +287,16 @@ export function updateSportsEvent(
     const startMonth = patch.startMonth ?? evt.startMonth;
     const endDay = patch.endDay ?? evt.endDay;
     const endMonth = patch.endMonth ?? evt.endMonth;
+    const year = patch.year ?? getEventYear(evt);
+    const endYear = patch.endYear ?? evt.endYear ?? year;
 
     const { left, width } = computeEventBounds(
       startDay,
       startMonth,
       endDay,
-      endMonth
+      endMonth,
+      year,
+      endYear
     );
 
     updated = {
@@ -244,6 +307,8 @@ export function updateSportsEvent(
       startMonth,
       endDay,
       endMonth,
+      year,
+      endYear,
       left,
       width,
     };

@@ -18,8 +18,10 @@ import {
 import {
   useSportsEvents,
   type SportsEvent,
+  TIMELINE_SLOTS,
   dateToTimelinePercent,
   getEventYear,
+  yearMonthToSlotIndex,
   resetSportsEvents,
 } from "@/lib/sports-events-store";
 import { CourseEditDialog } from "@/components/admin/course-edit-dialog";
@@ -28,7 +30,6 @@ import { EditSportsEventDialog } from "@/components/timeline/edit-sports-event-d
 import { SyncDefaultsButton } from "@/components/admin/sync-defaults-button";
 
 type BarTone = "open" | "review" | "training" | "result";
-type YearFilter = 2570 | 2571 | "all";
 type ViewMode = "gantt" | "monthly";
 
 interface TimelineBar {
@@ -48,6 +49,7 @@ interface SessionSegment {
 interface TimelineRow {
   course: Course;
   year: number;
+  quarterLabel: string;
   title: string;
   shortBadge?: string;
   dateSummary: string;
@@ -60,23 +62,6 @@ interface TimelineRow {
   spanWidth: number;
   subPhaseBars: TimelineBar[];
 }
-
-const FISCAL_MONTHS = [
-  { monthNumber: 10, short: "ต.ค.", full: "ตุลาคม", quarter: 1 },
-  { monthNumber: 11, short: "พ.ย.", full: "พฤศจิกายน", quarter: 1 },
-  { monthNumber: 12, short: "ธ.ค.", full: "ธันวาคม", quarter: 1 },
-  { monthNumber: 1, short: "ม.ค.", full: "มกราคม", quarter: 2 },
-  { monthNumber: 2, short: "ก.พ.", full: "กุมภาพันธ์", quarter: 2 },
-  { monthNumber: 3, short: "มี.ค.", full: "มีนาคม", quarter: 2 },
-  { monthNumber: 4, short: "เม.ย.", full: "เมษายน", quarter: 3 },
-  { monthNumber: 5, short: "พ.ค.", full: "พฤษภาคม", quarter: 3 },
-  { monthNumber: 6, short: "มิ.ย.", full: "มิถุนายน", quarter: 3 },
-  { monthNumber: 7, short: "ก.ค.", full: "กรกฎาคม", quarter: 4 },
-  { monthNumber: 8, short: "ส.ค.", full: "สิงหาคม", quarter: 4 },
-  { monthNumber: 9, short: "ก.ย.", full: "กันยายน", quarter: 4 },
-] as const;
-
-const MONTH_HEADERS = FISCAL_MONTHS.map((m) => m.short);
 
 const bars: Record<BarTone, string> = {
   open: "bg-[#1869bc]",
@@ -97,6 +82,13 @@ function buildCourseTimelineRow(course: Course): TimelineRow {
   const sessions = parseCourseDateSessions(course.date);
   const year = getCourseYear(course);
 
+  const firstSession = sessions[0];
+  const firstSlotIdx = firstSession
+    ? yearMonthToSlotIndex(firstSession.startMonth + 1, firstSession.yearBE)
+    : 4;
+  const quarterLabel =
+    TIMELINE_SLOTS[firstSlotIdx]?.quarterLabel ?? "ไตรมาส 2";
+
   const totalDays = sessions.reduce((acc, s) => {
     const yearCE = s.yearBE - 543;
     const start = new Date(yearCE, s.startMonth, s.startDay);
@@ -107,9 +99,13 @@ function buildCourseTimelineRow(course: Course): TimelineRow {
   }, 0);
 
   const sessionSegments: SessionSegment[] = sessions.map((s) => {
-    const sLeft = dateToTimelinePercent(s.startDay, s.startMonth + 1);
-    const sRight = dateToTimelinePercent(s.endDay + 1, s.endMonth + 1);
-    const sWidth = Math.max(1.4, Math.round((sRight - sLeft) * 10) / 10);
+    const sLeft = dateToTimelinePercent(s.startDay, s.startMonth + 1, s.yearBE);
+    const sRight = dateToTimelinePercent(
+      s.endDay + 1,
+      s.endMonth + 1,
+      s.yearBE
+    );
+    const sWidth = Math.max(1.2, Math.round((sRight - sLeft) * 10) / 10);
     return {
       left: Math.round(sLeft * 10) / 10,
       width: sWidth,
@@ -117,24 +113,28 @@ function buildCourseTimelineRow(course: Course): TimelineRow {
     };
   });
 
-  const firstSeg = sessionSegments[0] ?? { left: 8, width: 4, label: course.date };
+  const firstSeg = sessionSegments[0] ?? {
+    left: 25,
+    width: 4,
+    label: course.date,
+  };
   const lastSeg = sessionSegments[sessionSegments.length - 1] ?? firstSeg;
 
   const spanLeft = firstSeg.left;
   const spanRight = lastSeg.left + lastSeg.width;
-  const spanWidth = Math.max(2.2, Math.round((spanRight - spanLeft) * 10) / 10);
+  const spanWidth = Math.max(2.0, Math.round((spanRight - spanLeft) * 10) / 10);
 
   const compactDateLabel = course.date.replace(/\s*25\d{2}$/, "").trim();
 
   // Sub-phase bars (only displayed if user toggles showSubPhases on)
   const subPhaseBars: TimelineBar[] = [];
-  if (spanLeft >= 14) {
-    const openLeft = Math.max(0.8, Math.round((spanLeft - 11.5) * 10) / 10);
-    const openWidth = 5.5;
-    const reviewLeft = Math.round((openLeft + openWidth + 0.4) * 10) / 10;
+  if (spanLeft >= 12) {
+    const openLeft = Math.max(0.6, Math.round((spanLeft - 10.0) * 10) / 10);
+    const openWidth = 4.8;
+    const reviewLeft = Math.round((openLeft + openWidth + 0.3) * 10) / 10;
     const reviewWidth = Math.max(
-      3.8,
-      Math.round((spanLeft - reviewLeft - 0.4) * 10) / 10
+      3.2,
+      Math.round((spanLeft - reviewLeft - 0.3) * 10) / 10
     );
     subPhaseBars.push({
       label: "รับสมัคร",
@@ -150,44 +150,45 @@ function buildCourseTimelineRow(course: Course): TimelineRow {
       left: reviewLeft,
       width: reviewWidth,
     });
-  } else if (spanLeft >= 5) {
-    const available = Math.max(3.5, spanLeft - 0.8);
+  } else if (spanLeft >= 4) {
+    const available = Math.max(3.0, spanLeft - 0.6);
     const openWidth = Math.round(available * 0.52 * 10) / 10;
     const reviewWidth = Math.max(
-      1.8,
-      Math.round((available - openWidth - 0.3) * 10) / 10
+      1.5,
+      Math.round((available - openWidth - 0.2) * 10) / 10
     );
     subPhaseBars.push({
       label: "รับสมัคร",
       tooltip: `เปิดรับสมัคร (${course.title})`,
       tone: "open",
-      left: 0.5,
+      left: 0.4,
       width: openWidth,
     });
     subPhaseBars.push({
       label: "ตรวจสิทธิ",
       tooltip: `ตรวจสอบคุณสมบัติ (${course.title})`,
       tone: "review",
-      left: Math.round((0.5 + openWidth + 0.2) * 10) / 10,
+      left: Math.round((0.4 + openWidth + 0.2) * 10) / 10,
       width: reviewWidth,
     });
   }
 
   const resultLeft = Math.min(
-    94.5,
-    Math.round((spanLeft + spanWidth + 0.5) * 10) / 10
+    95.0,
+    Math.round((spanLeft + spanWidth + 0.4) * 10) / 10
   );
   subPhaseBars.push({
     label: "ประกาศผล",
     tooltip: `ประกาศผลผู้ผ่านการอบรม (${course.title})`,
     tone: "result",
     left: resultLeft,
-    width: 4.5,
+    width: 4.2,
   });
 
   return {
     course,
     year,
+    quarterLabel,
     title: course.title,
     shortBadge: course.shortTitle,
     dateSummary: course.date,
@@ -206,32 +207,35 @@ function buildCourseTimelineRow(course: Course): TimelineRow {
 }
 
 /**
- * Free slots across the timeline without major conflicts
+ * Free slots across the Fiscal Year 2570 (Oct 2569 – Sep 2570)
  */
 const FREE_SLOTS = [
   {
     id: "slot-1",
-    label: "ว่างช่วง มี.ค. – เม.ย.",
-    dateRange: "5 มี.ค. – 30 เม.ย.",
-    left: dateToTimelinePercent(5, 3),
-    width: 15.2,
-    description: "ช่วงว่างไตรมาส 1 ต่อไตรมาส 2 เหมาะจัดอบรมเพิ่มเติม",
+    label: "ว่างไตรมาส 1 (ต.ค. – ธ.ค. 69)",
+    dateRange: "1 ต.ค. – 25 ธ.ค. 2569",
+    left: dateToTimelinePercent(1, 10, 2569),
+    width: 17.5,
+    description:
+      "ช่วงต้นปีงบประมาณ 2570 ก่อนเริ่มหลักสูตรผู้บริหารในเดือน ก.พ. 2570",
   },
   {
     id: "slot-2",
-    label: "ว่างช่วง มิ.ย. – ก.ค. (แนะนำ)",
-    dateRange: "1 มิ.ย. – 25 ก.ค.",
-    left: dateToTimelinePercent(1, 6),
-    width: 15.0,
-    description: "ช่วงกลางปี ไม่มีรายการแข่งขันกีฬาใหญ่ชน เหมาะจัดอบรม 3–10 วัน",
+    label: "ว่างช่วง มี.ค. – เม.ย. 70",
+    dateRange: "5 มี.ค. – 30 เม.ย. 2570",
+    left: dateToTimelinePercent(5, 3, 2570),
+    width: 11.4,
+    description:
+      "หลังจบหลักสูตรผู้บริหาร (ก.พ. 70) และก่อนเริ่มช่วงเดือน พ.ค. 70",
   },
   {
     id: "slot-3",
-    label: "ว่างช่วง ก.ย.",
-    dateRange: "1 – 30 ก.ย.",
-    left: dateToTimelinePercent(1, 9),
-    width: 8.0,
-    description: "ก่อนเข้าสู่ฤดูกาลแข่งขันกีฬาไตรมาส 4 (ต.ค.–ธ.ค.)",
+    label: "ว่างช่วง มิ.ย. – ก.ค. 70 (แนะนำ)",
+    dateRange: "1 มิ.ย. – 25 ก.ค. 2570",
+    left: dateToTimelinePercent(1, 6, 2570),
+    width: 11.2,
+    description:
+      "ช่วงกลางปีงบประมาณ ไม่มีรายการแข่งขันกีฬาใหญ่ชน เหมาะจัดอบรมเพิ่มเติม",
   },
 ];
 
@@ -259,10 +263,10 @@ function Legend({
   highlightFreeSlots: boolean;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 rounded-xl bg-[#f8fafc] px-3 py-2 text-[11px] text-[#374151] border border-[#e2e8f0]">
+    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-[11px] text-[#374151]">
       <span className="inline-flex items-center gap-1.5 font-semibold text-[#166534]">
         <span className="h-3 w-5 rounded-full bg-[#16803c] shadow-xs" />
-        ช่วงวันจัดอบรมจริง
+        ช่วงวันจัดอบรมจริง (ปีงบฯ 2570)
       </span>
 
       {showSubPhases && (
@@ -283,14 +287,19 @@ function Legend({
       )}
 
       {showSportsEvents && (
-        <span className="inline-flex items-center gap-1.5 font-semibold text-[#6d28d9] bg-[#f5f3ff] px-2.5 py-0.5 rounded-full border border-[#ddd6fe]">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-[#ddd6fe] bg-[#f5f3ff] px-2.5 py-0.5 font-semibold text-[#6d28d9]">
           <span>🏆</span>
           รายการแข่งขันกีฬา กกท.
         </span>
       )}
 
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e2e8f0] bg-white px-2.5 py-0.5 text-[10.5px] font-medium text-[#4c1d95]">
+        <span className="h-2 w-2 rounded-full bg-[#6d28d9]" />
+        คอลัมน์ขวาสุด (ต.ค. 70 – ม.ค. 71) = ช่วงต่อเนื่องหลังสิ้นสุดปีงบฯ 2570
+      </span>
+
       {highlightFreeSlots && (
-        <span className="inline-flex items-center gap-1.5 font-semibold text-[#059669] bg-[#ecfdf5] px-2.5 py-0.5 rounded-full border border-[#a7f3d0]">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-[#a7f3d0] bg-[#ecfdf5] px-2.5 py-0.5 font-semibold text-[#059669]">
           <span>✨</span>
           ช่วงเวลาว่าง (Free Slot)
         </span>
@@ -306,8 +315,7 @@ function CourseTrainingTrack({
   row: TimelineRow;
   showSubPhases: boolean;
 }) {
-  // Position the outside label on the right unless the bar ends past 68% of the timeline
-  const placeLabelOnLeft = row.spanLeft + row.spanWidth > 68;
+  const placeLabelOnLeft = row.spanLeft + row.spanWidth > 66;
   const sessionDetails = row.sessions
     .map((s, idx) => `ช่วงที่ ${idx + 1}: ${formatCourseDateFields(s, false)}`)
     .join(" | ");
@@ -319,7 +327,6 @@ function CourseTrainingTrack({
 
   return (
     <>
-      {/* Optional Sub-Phase Bars (Open / Review / Result) */}
       {showSubPhases &&
         row.subPhaseBars.map((bar, idx) => (
           <div
@@ -332,7 +339,6 @@ function CourseTrainingTrack({
           </div>
         ))}
 
-      {/* Multi-session connecting background bar (when >1 session) */}
       {row.sessionSegments.length > 1 && (
         <div
           title={fullTooltip}
@@ -341,7 +347,6 @@ function CourseTrainingTrack({
         />
       )}
 
-      {/* Individual Training Session Bars */}
       {row.sessionSegments.map((seg, idx) => (
         <div
           key={`${row.course.id}-seg-${idx}`}
@@ -349,21 +354,18 @@ function CourseTrainingTrack({
           className="group absolute top-1/2 z-20 flex h-[22px] -translate-y-1/2 items-center justify-center rounded-full bg-gradient-to-r from-[#16a34a] to-[#15803d] px-1.5 text-[9px] font-bold text-white shadow-[0_2px_5px_rgba(22,163,74,0.3)] ring-1 ring-white transition-transform hover:scale-105"
           style={{ left: `${seg.left}%`, width: `${seg.width}%` }}
         >
-          {seg.width >= 7.5 && (
-            <span className="truncate">{seg.label}</span>
-          )}
+          {seg.width >= 7.5 && <span className="truncate">{seg.label}</span>}
         </div>
       ))}
 
-      {/* Crisp Outside Date Label — Never Truncated! */}
       {!showSubPhases && (
         <div
           title={fullTooltip}
           className="pointer-events-none absolute top-1/2 z-30 -translate-y-1/2 whitespace-nowrap"
           style={
             placeLabelOnLeft
-              ? { right: `${100 - row.spanLeft + 0.8}%` }
-              : { left: `${row.spanLeft + row.spanWidth + 0.8}%` }
+              ? { right: `${100 - row.spanLeft + 0.7}%` }
+              : { left: `${row.spanLeft + row.spanWidth + 0.7}%` }
           }
         >
           <span className="inline-flex items-center gap-1 rounded-md border border-[#bbf7d0] bg-[#f0fdf4]/95 px-2 py-0.5 text-[10px] font-bold text-[#166534] shadow-2xs">
@@ -390,43 +392,38 @@ function SportsEventBarItem({
   isAdmin?: boolean;
 }) {
   const gradient = EVENT_GRADIENTS[event.colorTone] || EVENT_GRADIENTS.purple;
-  const badgeStyle = EVENT_TEXT_COLORS[event.colorTone] || EVENT_TEXT_COLORS.purple;
-  const placeLabelOnLeft = event.left + event.width > 68;
-  const cleanDate = event.dateRange.replace(/\s*25\d{2}$/, "").trim();
+  const badgeStyle =
+    EVENT_TEXT_COLORS[event.colorTone] || EVENT_TEXT_COLORS.purple;
+  const placeLabelOnLeft = event.left + event.width > 64;
 
   return (
     <>
-      {/* Colored Bar on the 12-Month Grid */}
       <div
         onMouseEnter={() => onHover(event)}
         onMouseLeave={() => onHover(null)}
         onClick={() => isAdmin && onClickEdit?.(event)}
-        className={`group absolute top-1/2 z-20 flex h-[22px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-full px-1.5 text-[9px] font-bold leading-none text-white shadow-[0_2px_6px_rgba(109,40,217,0.3)] ring-1 ring-white transition-all hover:scale-105 hover:z-30 ${gradient}`}
+        className={`group absolute top-1/2 z-20 flex h-[22px] -translate-y-1/2 cursor-pointer items-center justify-center rounded-full px-1.5 text-[9px] font-bold leading-none text-white shadow-[0_2px_6px_rgba(109,40,217,0.3)] ring-1 ring-white transition-all hover:z-30 hover:scale-105 ${gradient}`}
         style={{ left: `${event.left}%`, width: `${event.width}%` }}
         title={`${event.title} (${event.dateRange}) ณ ${event.location}`}
       >
         <span className="text-[10px]">🏆</span>
-        {event.width >= 9 && (
-          <span className="ml-1 truncate">{cleanDate}</span>
-        )}
       </div>
 
-      {/* Crisp Outside Date Label — Never Truncated! */}
       <div
         onMouseEnter={() => onHover(event)}
         onMouseLeave={() => onHover(null)}
         onClick={() => isAdmin && onClickEdit?.(event)}
-        className=" absolute top-1/2 z-25 -translate-y-1/2 cursor-pointer whitespace-nowrap"
+        className="absolute top-1/2 z-25 -translate-y-1/2 cursor-pointer whitespace-nowrap"
         style={
           placeLabelOnLeft
-            ? { right: `${100 - event.left + 0.8}%` }
-            : { left: `${event.left + event.width + 0.8}%` }
+            ? { right: `${100 - event.left + 0.7}%` }
+            : { left: `${event.left + event.width + 0.7}%` }
         }
       >
         <span
           className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold shadow-2xs transition hover:brightness-95 ${badgeStyle}`}
         >
-          <span>{cleanDate}</span>
+          <span>{event.dateRange}</span>
           <span className="font-normal opacity-80">• {event.location}</span>
         </span>
       </div>
@@ -439,8 +436,6 @@ export function TimelineSchedule() {
   const { courses } = useCourses();
   const { events, deleteSportsEvent } = useSportsEvents();
 
-  // New controls: Year Tab & View Mode
-  const [selectedYear, setSelectedYear] = useState<YearFilter>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("gantt");
   const [showSportsEvents, setShowSportsEvents] = useState(true);
   const [showSubPhases, setShowSubPhases] = useState(false);
@@ -452,28 +447,7 @@ export function TimelineSchedule() {
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [hoveredEvent, setHoveredEvent] = useState<SportsEvent | null>(null);
 
-  const allCourseRows = courses.map(buildCourseTimelineRow);
-
-  // Counts per year
-  const count2570 =
-    allCourseRows.filter((r) => r.year === 2570).length +
-    events.filter((e) => getEventYear(e) === 2570 || e.endYear === 2570).length;
-  const count2571 =
-    allCourseRows.filter((r) => r.year === 2571).length +
-    events.filter((e) => getEventYear(e) === 2571 || e.endYear === 2571).length;
-
-  // Filtered rows and events by selectedYear
-  const filteredRows =
-    selectedYear === "all"
-      ? allCourseRows
-      : allCourseRows.filter((r) => r.year === selectedYear);
-
-  const filteredEvents =
-    selectedYear === "all"
-      ? events
-      : events.filter(
-          (e) => getEventYear(e) === selectedYear || e.endYear === selectedYear
-        );
+  const courseRows = courses.map(buildCourseTimelineRow);
 
   function handleSaveCourse(patch: CourseUpdate): boolean {
     if (!editingCourse) return false;
@@ -481,58 +455,23 @@ export function TimelineSchedule() {
     return true;
   }
 
-  const activeYearLabel =
-    selectedYear === "all" ? "ปี 2570 – 2571" : `ปี พ.ศ. ${selectedYear}`;
-
   return (
     <>
-      <section className="mx-auto mt-[7px] w-full max-w-[920px] rounded-2xl border border-[#e0e5e8] bg-white p-3.5 shadow-[0_2px_10px_rgba(16,24,40,0.06)] xl:mt-[clamp(8px,0.75vw,12px)] xl:max-w-[clamp(1020px,76vw,1340px)] xl:rounded-[clamp(14px,1vw,18px)] xl:p-[clamp(14px,1.1vw,20px)]">
-        {/* Row 1: Year Switcher Tabs + View Mode Switcher */}
+      <section className="mx-auto mt-[7px] w-full max-w-[960px] rounded-2xl border border-[#e0e5e8] bg-white p-3.5 shadow-[0_2px_10px_rgba(16,24,40,0.06)] xl:mt-[clamp(8px,0.75vw,12px)] xl:max-w-[clamp(1060px,80vw,1400px)] xl:rounded-[clamp(14px,1vw,18px)] xl:p-[clamp(14px,1.1vw,20px)]">
+        {/* Top Row: Fiscal Year Title Badge + View Mode Switcher */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5 border-b border-[#eef2f6] pb-3">
-          {/* Year Tabs */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="mr-1 text-[12px] font-bold text-[#1e293b]">
-              📅 ช่วงปี พ.ศ.:
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-[#16265E] px-3 py-1.5 text-[12px] font-bold text-white shadow-xs">
+              <span>📅</span>
+              <span>ปีงบประมาณ พ.ศ. 2570 (ต.ค. 2569 – ก.ย. 2570)</span>
             </span>
-            {(
-              [
-                {
-                  key: "all" as const,
-                  label: "รวมปีงบประมาณ (ต.ค. – ก.ย.)",
-                  count: allCourseRows.length + events.length,
-                },
-                { key: 2570 as const, label: "เฉพาะปี 2570", count: count2570 },
-                { key: 2571 as const, label: "เฉพาะปี 2571", count: count2571 },
-              ] as const
-            ).map((tab) => {
-              const active = selectedYear === tab.key;
-              return (
-                <button
-                  key={String(tab.key)}
-                  type="button"
-                  onClick={() => setSelectedYear(tab.key)}
-                  className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[12px] font-bold transition ${
-                    active
-                      ? "bg-[#16265E] text-white shadow-xs"
-                      : "border border-[#cbd5e1] bg-[#f8fafc] text-[#334155] hover:bg-[#eef2f9] hover:text-[#16265E]"
-                  }`}
-                >
-                  <span>{tab.label}</span>
-                  <span
-                    className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
-                      active
-                        ? "bg-white/20 text-white"
-                        : "bg-[#e2e8f0] text-[#475569]"
-                    }`}
-                  >
-                    {tab.count}
-                  </span>
-                </button>
-              );
-            })}
+            <span className="inline-flex items-center gap-1 rounded-lg border border-[#ddd6fe] bg-[#f5f3ff] px-2.5 py-1 text-[11.5px] font-semibold text-[#5b21b6]">
+              <span>➕</span>
+              <span>รวมช่วงต่อเนื่อง ต.ค. 2570 – ม.ค. 2571</span>
+            </span>
           </div>
 
-          {/* View Mode Toggle: Clean 12-Month Gantt vs Monthly Cards */}
+          {/* View Mode Toggle */}
           <div className="inline-flex items-center rounded-xl border border-[#cbd5e1] bg-[#f8fafc] p-0.5">
             <button
               type="button"
@@ -544,7 +483,7 @@ export function TimelineSchedule() {
               }`}
             >
               <span>📊</span>
-              <span>ตาราง 12 เดือน (Gantt)</span>
+              <span>ตาราง Timeline ต่อเนื่อง</span>
             </button>
             <button
               type="button"
@@ -564,7 +503,6 @@ export function TimelineSchedule() {
         {/* Row 2: Display Options & Admin Actions */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2">
-            {/* Toggle: Sports Events */}
             <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-2.5 py-1 text-[11.5px] font-semibold text-[#334155] transition hover:bg-[#f1f5f9]">
               <input
                 type="checkbox"
@@ -576,14 +514,13 @@ export function TimelineSchedule() {
                 <span>🏆</span>
                 <span>แสดงปฏิทินแข่งขันกีฬา</span>
                 <span className="rounded-full bg-[#f3e8ff] px-1.5 text-[10px] font-bold text-[#7c3aed]">
-                  {filteredEvents.length}
+                  {events.length}
                 </span>
               </span>
             </label>
 
             {viewMode === "gantt" && (
               <>
-                {/* Toggle: Sub-phases (Open / Review / Result) */}
                 <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-2.5 py-1 text-[11.5px] font-semibold text-[#334155] transition hover:bg-[#f1f5f9]">
                   <input
                     type="checkbox"
@@ -594,7 +531,6 @@ export function TimelineSchedule() {
                   <span>แสดงวันรับสมัคร/ประกาศผล</span>
                 </label>
 
-                {/* Toggle: Free Slots Highlight */}
                 <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-2.5 py-1 text-[11.5px] font-semibold text-[#334155] transition hover:bg-[#f1f5f9]">
                   <input
                     type="checkbox"
@@ -627,10 +563,7 @@ export function TimelineSchedule() {
                 onClick={() => setIsAddModalOpen(true)}
                 className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#7c3aed] px-3 text-[11.5px] font-semibold text-white shadow-sm transition hover:bg-[#6d28d9] active:scale-[0.98]"
               >
-                <span>
-                  + เพิ่มรายการแข่งขัน{" "}
-                  {selectedYear !== "all" ? `(ปี ${selectedYear})` : ""}
-                </span>
+                <span>+ เพิ่มรายการแข่งขัน</span>
               </button>
               <SyncDefaultsButton />
               <button
@@ -668,19 +601,19 @@ export function TimelineSchedule() {
           highlightFreeSlots={highlightFreeSlots}
         />
 
-        {/* ==================== VIEW MODE 1: CLEAN 12-MONTH GANTT ==================== */}
+        {/* ==================== VIEW MODE 1: 16-MONTH CONTINUOUS GANTT ==================== */}
         {viewMode === "gantt" && (
           <div className="mt-3 overflow-x-auto pb-1">
-            <table className="w-full min-w-[820px] table-fixed border-collapse text-[#1f2937]">
+            <table className="w-full min-w-[920px] table-fixed border-collapse text-[#1f2937]">
               <colgroup>
-                <col className="w-[27%]" />
-                {MONTH_HEADERS.map((m) => (
-                  <col key={m} className="w-[6.083%]" />
+                <col className="w-[24%]" />
+                {TIMELINE_SLOTS.map((slot) => (
+                  <col key={slot.index} className="w-[4.75%]" />
                 ))}
               </colgroup>
               <thead>
                 {/* Quarter Header Row */}
-                <tr className="bg-[#16265E] text-[11px] font-bold text-white">
+                <tr className="bg-[#16265E] text-[10.5px] font-bold text-white">
                   <th
                     rowSpan={2}
                     scope="col"
@@ -688,7 +621,7 @@ export function TimelineSchedule() {
                   >
                     <div>หลักสูตร / รายการแข่งขัน</div>
                     <div className="mt-0.5 text-[10px] font-normal text-white/80">
-                      กำลังแสดง: {activeYearLabel}
+                      ปีงบฯ 2570 (ต.ค. 69 – ก.ย. 70) + ต่อเนื่อง
                     </div>
                   </th>
                   <th
@@ -696,42 +629,57 @@ export function TimelineSchedule() {
                     scope="colgroup"
                     className="border border-[#27408b] py-1 text-center"
                   >
-                    ไตรมาส 1 (ต.ค. – ธ.ค.)
+                    ไตรมาส 1 (ต.ค. – ธ.ค. 69)
                   </th>
                   <th
                     colSpan={3}
                     scope="colgroup"
                     className="border border-[#27408b] py-1 text-center"
                   >
-                    ไตรมาส 2 (ม.ค. – มี.ค.)
+                    ไตรมาส 2 (ม.ค. – มี.ค. 70)
                   </th>
                   <th
                     colSpan={3}
                     scope="colgroup"
                     className="border border-[#27408b] py-1 text-center"
                   >
-                    ไตรมาส 3 (เม.ย. – มิ.ย.)
+                    ไตรมาส 3 (เม.ย. – มิ.ย. 70)
                   </th>
                   <th
                     colSpan={3}
                     scope="colgroup"
-                    className="border border-[#27408b] py-1 text-center"
+                    className="border border-[#27408b] border-r-2 border-r-[#f59e0b] py-1 text-center"
                   >
-                    ไตรมาส 4 (ก.ค. – ก.ย.)
+                    ไตรมาส 4 (ก.ค. – ก.ย. 70)
+                  </th>
+                  <th
+                    colSpan={4}
+                    scope="colgroup"
+                    className="border border-[#5b21b6] bg-[#4c1d95] py-1 text-center text-[#f3e8ff]"
+                  >
+                    หลังปีงบฯ (ต.ค. 70 – ม.ค. 71)
                   </th>
                 </tr>
 
-                {/* 12 Individual Month Header Row */}
-                <tr className="bg-[#f1f5f9] text-[10.5px] font-bold text-[#334155]">
-                  {MONTH_HEADERS.map((month, idx) => (
+                {/* 16 Individual Month Header Row */}
+                <tr className="bg-[#f1f5f9] text-[9.5px] font-bold text-[#334155]">
+                  {TIMELINE_SLOTS.map((slot) => (
                     <th
-                      key={month}
+                      key={slot.index}
                       scope="col"
                       className={`h-[26px] border border-[#cbd5e1] px-0.5 text-center ${
-                        idx % 3 === 2 ? "border-r-[#94a3b8]" : ""
+                        slot.index === 11
+                          ? "border-r-2 border-r-[#f59e0b]"
+                          : slot.index % 3 === 2 && slot.index < 11
+                          ? "border-r-[#94a3b8]"
+                          : ""
+                      } ${
+                        slot.isPostFiscal
+                          ? "bg-[#f5f3ff] text-[#5b21b6]"
+                          : ""
                       }`}
                     >
-                      {month}
+                      {slot.shortLabel}
                     </th>
                   ))}
                 </tr>
@@ -741,293 +689,279 @@ export function TimelineSchedule() {
                 {/* Courses Section Header */}
                 <tr className="bg-[#f0fdf4] text-[11px] font-bold text-[#166534]">
                   <th
-                    colSpan={13}
+                    colSpan={17}
                     className="border border-x-0 border-[#bbf7d0] px-3 py-1.5 text-left"
                   >
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
                         <span>🎓</span>
                         <span>
-                          แผนกำหนดการฝึกอบรม ({activeYearLabel} •{" "}
-                          {filteredRows.length} หลักสูตร)
+                          แผนกำหนดการฝึกอบรม ปีงบประมาณ 2570 (
+                          {courseRows.length} หลักสูตร)
                         </span>
                       </span>
                       <span className="text-[10px] font-normal text-[#15803d]">
-                        *ตัวเลขหลังแถบสีเขียว คือช่วงวันอบรมจริง
+                        *เส้นสีส้มหลัง ก.ย. 70 คือจุดสิ้นสุดปีงบประมาณ 2570
                       </span>
                     </div>
                   </th>
                 </tr>
 
-                {filteredRows.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={13}
-                      className="border-b border-[#e2e8f0] py-6 text-center text-[12px] text-[#64748b]"
+                {courseRows.map((row, rowIndex) => (
+                  <tr
+                    key={row.course.id}
+                    className={`transition hover:bg-[#f8fafc] ${
+                      rowIndex % 2 === 1 ? "bg-[#fcfdfe]" : "bg-white"
+                    }`}
+                  >
+                    <th
+                      scope="row"
+                      className="border-b border-r border-[#cbd5e1] px-3 py-2 text-left align-middle text-[10.5px] leading-[1.3]"
                     >
-                      ยังไม่มีหลักสูตรอบรมใน {activeYearLabel} (สามารถเปลี่ยนปีของหลักสูตรได้ที่ปุ่มแก้ไขหลักสูตร หรือสลับดูปีอื่นด้านบน)
-                    </td>
-                  </tr>
-                ) : (
-                  filteredRows.map((row, rowIndex) => (
-                    <tr
-                      key={row.course.id}
-                      className={`transition hover:bg-[#f8fafc] ${
-                        rowIndex % 2 === 1 ? "bg-[#fcfdfe]" : "bg-white"
-                      }`}
-                    >
-                      <th
-                        scope="row"
-                        className="border-b border-r border-[#cbd5e1] px-3 py-2 text-left align-middle text-[10.5px] leading-[1.3]"
-                      >
-                        <div className="flex flex-col gap-0.5">
-                          <div className="flex flex-wrap items-center gap-1">
-                            <span className="inline-flex items-center rounded bg-[#16265E] px-1.5 py-0.2 text-[9px] font-bold text-white">
-                              หลักสูตรที่ {rowIndex + 1}
-                            </span>
-                            {row.shortBadge && (
-                              <span className="inline-flex items-center rounded bg-[#eef2f9] px-1.5 py-0.2 text-[9px] font-bold text-[#16265E]">
-                                {row.shortBadge}
-                              </span>
-                            )}
-                            {selectedYear === "all" && (
-                              <span className="inline-flex items-center rounded bg-[#dcfce7] px-1.5 py-0.2 text-[9px] font-bold text-[#166534]">
-                                ปี {row.year}
-                              </span>
-                            )}
-                            <span className="text-[9px] font-semibold text-[#059669]">
-                              • {row.sessionSummary}
-                            </span>
-                          </div>
-
-                          <span
-                            className="mt-0.5 line-clamp-2 font-bold text-[#0f172a]"
-                            title={row.title}
-                          >
-                            {row.title}
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex flex-wrap items-center gap-1">
+                          <span className="inline-flex items-center rounded bg-[#16265E] px-1.5 py-0.2 text-[9px] font-bold text-white">
+                            หลักสูตรที่ {rowIndex + 1}
                           </span>
-
-                          <div className="mt-0.5 flex flex-wrap items-center justify-between gap-1">
-                            <span className="text-[9.5px] font-medium text-[#475569]">
-                              📅 {row.dateSummary}
+                          {row.shortBadge && (
+                            <span className="inline-flex items-center rounded bg-[#eef2f9] px-1.5 py-0.2 text-[9px] font-bold text-[#16265E]">
+                              {row.shortBadge}
                             </span>
-                            {isAdmin && (
-                              <button
-                                type="button"
-                                onClick={() => setEditingCourse(row.course)}
-                                className="inline-flex items-center gap-0.5 rounded border border-[#cbd5e1] bg-white px-1.5 py-0.5 text-[9px] font-semibold text-[#16265E] transition hover:border-[#16265E] hover:bg-[#eef2f9]"
-                              >
-                                <span>✏️ แก้ไข</span>
-                              </button>
-                            )}
-                          </div>
+                          )}
+                          <span className="inline-flex items-center rounded bg-[#dcfce7] px-1.5 py-0.2 text-[9px] font-bold text-[#166534]">
+                            {row.quarterLabel}
+                          </span>
+                          <span className="text-[9px] font-semibold text-[#059669]">
+                            • {row.sessionSummary}
+                          </span>
                         </div>
-                      </th>
 
-                      {/* 12-Month Timeline Track */}
-                      <td
-                        colSpan={12}
-                        className="relative border-b border-[#cbd5e1] p-0"
-                      >
-                        <div className="relative h-[50px] overflow-hidden">
-                          {/* 12 Month Grid Columns Background */}
-                          <div
-                            className="pointer-events-none absolute inset-0 grid grid-cols-12"
-                            aria-hidden="true"
-                          >
-                            {MONTH_HEADERS.map((m, idx) => (
-                              <span
-                                key={m}
-                                className={`border-r ${
-                                  idx % 3 === 2
-                                    ? "border-r-[#cbd5e1]"
-                                    : "border-r-[#eef2f6]"
-                                } ${idx % 2 === 1 ? "bg-[#f8fafc]/45" : ""}`}
+                        <span
+                          className="mt-0.5 line-clamp-2 font-bold text-[#0f172a]"
+                          title={row.title}
+                        >
+                          {row.title}
+                        </span>
+
+                        <div className="mt-0.5 flex flex-wrap items-center justify-between gap-1">
+                          <span className="text-[9.5px] font-medium text-[#475569]">
+                            📅 {row.dateSummary}
+                          </span>
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingCourse(row.course)}
+                              className="inline-flex items-center gap-0.5 rounded border border-[#cbd5e1] bg-white px-1.5 py-0.5 text-[9px] font-semibold text-[#16265E] transition hover:border-[#16265E] hover:bg-[#eef2f9]"
+                            >
+                              <span>✏️ แก้ไข</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </th>
+
+                    {/* 16-Month Timeline Track */}
+                    <td
+                      colSpan={16}
+                      className="relative border-b border-[#cbd5e1] p-0"
+                    >
+                      <div className="relative h-[50px] overflow-hidden">
+                        {/* 16 Month Grid Columns Background */}
+                        <div
+                          className="pointer-events-none absolute inset-0 grid"
+                          style={{
+                            gridTemplateColumns: "repeat(16, minmax(0, 1fr))",
+                          }}
+                          aria-hidden="true"
+                        >
+                          {TIMELINE_SLOTS.map((slot) => (
+                            <span
+                              key={slot.index}
+                              className={`border-r ${
+                                slot.index === 11
+                                  ? "border-r-2 border-r-[#f59e0b]/70"
+                                  : slot.index % 3 === 2 && slot.index < 11
+                                  ? "border-r-[#cbd5e1]"
+                                  : "border-r-[#eef2f6]"
+                              } ${
+                                slot.isPostFiscal
+                                  ? "bg-[#faf5ff]/45"
+                                  : slot.index % 2 === 1
+                                  ? "bg-[#f8fafc]/40"
+                                  : ""
+                              }`}
+                            />
+                          ))}
+                        </div>
+
+                        {highlightFreeSlots && (
+                          <div className="pointer-events-none absolute inset-0 z-0">
+                            {FREE_SLOTS.map((slot) => (
+                              <div
+                                key={slot.id}
+                                className="absolute top-0 bottom-0 border-x border-emerald-400/40 bg-emerald-500/[0.08]"
+                                style={{
+                                  left: `${slot.left}%`,
+                                  width: `${slot.width}%`,
+                                }}
                               />
                             ))}
                           </div>
+                        )}
 
-                          {/* Optional Free Slots Vertical Shading */}
-                          {highlightFreeSlots && (
-                            <div className="pointer-events-none absolute inset-0 z-0">
-                              {FREE_SLOTS.map((slot) => (
-                                <div
-                                  key={slot.id}
-                                  className="absolute top-0 bottom-0 border-x border-emerald-400/40 bg-emerald-500/[0.08]"
-                                  style={{
-                                    left: `${slot.left}%`,
-                                    width: `${slot.width}%`,
-                                  }}
-                                />
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Clean Course Training Bar + Crisp Outside Label */}
-                          <CourseTrainingTrack
-                            row={row}
-                            showSubPhases={showSubPhases}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                        <CourseTrainingTrack
+                          row={row}
+                          showSubPhases={showSubPhases}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
 
                 {/* Sports Events Section */}
                 {showSportsEvents && (
                   <>
                     <tr className="bg-gradient-to-r from-[#f5f3ff] to-[#faf5ff] text-[11px] font-bold text-[#6d28d9]">
                       <th
-                        colSpan={13}
+                        colSpan={17}
                         className="border border-x-0 border-[#ddd6fe] px-3 py-1.5 text-left"
                       >
                         <div className="flex items-center justify-between">
                           <span className="flex items-center gap-1.5">
                             <span>🏆</span>
                             <span>
-                              ปฏิทินการแข่งขันกีฬาสำคัญ ({activeYearLabel} •{" "}
-                              {filteredEvents.length} รายการ)
+                              ปฏิทินการแข่งขันกีฬาสำคัญ ({events.length} รายการ)
                             </span>
                           </span>
                           <span className="text-[10px] font-normal text-[#7c3aed]">
                             {isAdmin
                               ? "*คลิกที่แถบสีหรือปุ่มแก้ไขเพื่อเปลี่ยนวันที่/ปี พ.ศ."
-                              : "*เปรียบเทียบเพื่อหลีกเลี่ยงช่วงเวลาชนกับการอบรม"}
+                              : "*วางตำแหน่งตามเดือนและปี พ.ศ. จริงของรายการแข่งขัน"}
                           </span>
                         </div>
                       </th>
                     </tr>
 
-                    {filteredEvents.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={13}
-                          className="border-b border-[#e2e8f0] bg-[#faf5ff]/30 py-6 text-center text-[12px] text-[#64748b]"
+                    {events.map((event) => {
+                      const evtYear = getEventYear(event);
+                      const slotIdx = yearMonthToSlotIndex(
+                        event.startMonth,
+                        evtYear
+                      );
+                      const slotInfo = TIMELINE_SLOTS[slotIdx];
+                      return (
+                        <tr
+                          key={event.id}
+                          className="bg-[#faf5ff]/25 transition hover:bg-[#f5f3ff]/60"
                         >
-                          <div className="flex flex-col items-center gap-2">
-                            <span>
-                              ยังไม่มีรายการแข่งขันกีฬาใน {activeYearLabel}
-                            </span>
-                            {isAdmin && (
-                              <button
-                                type="button"
-                                onClick={() => setIsAddModalOpen(true)}
-                                className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#7c3aed] px-3 text-[11.5px] font-semibold text-white shadow-xs hover:bg-[#6d28d9]"
-                              >
-                                + เพิ่มรายการแข่งขันใน {activeYearLabel}
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredEvents.map((event) => {
-                        const evtYear = getEventYear(event);
-                        return (
-                          <tr
-                            key={event.id}
-                            className="bg-[#faf5ff]/30 transition hover:bg-[#f5f3ff]/60"
+                          <th
+                            scope="row"
+                            className="border-b border-r border-[#cbd5e1] px-3 py-2 text-left align-middle text-[10.5px] leading-[1.25]"
                           >
-                            <th
-                              scope="row"
-                              className="border-b border-r border-[#cbd5e1] px-3 py-2 text-left align-middle text-[10.5px] leading-[1.25]"
-                            >
-                              <div className="flex flex-col gap-0.5">
-                                <div className="flex flex-wrap items-center gap-1">
-                                  <span className="rounded bg-[#ede9fe] px-1.5 py-0.2 text-[8.5px] font-bold text-[#6d28d9]">
-                                    {event.categoryLabel}
-                                  </span>
-                                  <span className="rounded bg-[#f1f5f9] px-1.5 py-0.2 text-[8.5px] font-semibold text-[#475569]">
-                                    ปี {evtYear}
-                                  </span>
-                                </div>
-                                <span className="mt-0.5 font-bold text-[#1e1b4b]">
-                                  {event.title}
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex flex-wrap items-center gap-1">
+                                <span className="rounded bg-[#ede9fe] px-1.5 py-0.2 text-[8.5px] font-bold text-[#6d28d9]">
+                                  {event.categoryLabel}
                                 </span>
-                                <div className="mt-0.5 flex flex-wrap items-center justify-between gap-1">
-                                  <span className="text-[9.5px] font-medium text-[#64748b]">
-                                    📅 {event.dateRange} • 📍 {event.location}
-                                  </span>
-                                  {isAdmin && (
-                                    <div className="flex items-center gap-1">
-                                      <button
-                                        type="button"
-                                        onClick={() => setEditingEvent(event)}
-                                        className="inline-flex items-center gap-0.5 rounded border border-[#ddd6fe] bg-[#f5f3ff] px-1.5 py-0.5 text-[9px] font-semibold text-[#6d28d9] hover:bg-[#ede9fe]"
-                                      >
-                                        <span>✏️ แก้ไข</span>
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          if (
-                                            confirm(
-                                              `ต้องการลบรายการ "${event.title}" ออกจากปฏิทินหรือไม่?`
-                                            )
-                                          ) {
-                                            deleteSportsEvent(event.id);
-                                          }
-                                        }}
-                                        className="inline-flex items-center gap-0.5 rounded border border-[#fecaca] bg-[#fef2f2] px-1.5 py-0.5 text-[9px] font-semibold text-[#b91c1c] hover:bg-[#fee2e2]"
-                                      >
-                                        <span>🗑️ ลบ</span>
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
+                                <span className="rounded bg-[#f1f5f9] px-1.5 py-0.2 text-[8.5px] font-semibold text-[#475569]">
+                                  {slotInfo?.quarterLabel ?? `ปี ${evtYear}`}
+                                </span>
                               </div>
-                            </th>
+                              <span className="mt-0.5 font-bold text-[#1e1b4b]">
+                                {event.title}
+                              </span>
+                              <div className="mt-0.5 flex flex-wrap items-center justify-between gap-1">
+                                <span className="text-[9.5px] font-medium text-[#64748b]">
+                                  📅 {event.dateRange} • 📍 {event.location}
+                                </span>
+                                {isAdmin && (
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingEvent(event)}
+                                      className="inline-flex items-center gap-0.5 rounded border border-[#ddd6fe] bg-[#f5f3ff] px-1.5 py-0.5 text-[9px] font-semibold text-[#6d28d9] hover:bg-[#ede9fe]"
+                                    >
+                                      <span>✏️ แก้ไข</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (
+                                          confirm(
+                                            `ต้องการลบรายการ "${event.title}" ออกจากปฏิทินหรือไม่?`
+                                          )
+                                        ) {
+                                          deleteSportsEvent(event.id);
+                                        }
+                                      }}
+                                      className="inline-flex items-center gap-0.5 rounded border border-[#fecaca] bg-[#fef2f2] px-1.5 py-0.5 text-[9px] font-semibold text-[#b91c1c] hover:bg-[#fee2e2]"
+                                    >
+                                      <span>🗑️ ลบ</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </th>
 
-                            <td
-                              colSpan={12}
-                              className="relative border-b border-[#cbd5e1] p-0"
-                            >
-                              <div className="relative h-[48px] overflow-hidden">
-                                {/* 12 Month Grid Columns Background */}
-                                <div
-                                  className="pointer-events-none absolute inset-0 grid grid-cols-12"
-                                  aria-hidden="true"
-                                >
-                                  {MONTH_HEADERS.map((m, idx) => (
-                                    <span
-                                      key={m}
-                                      className={`border-r ${
-                                        idx % 3 === 2
-                                          ? "border-r-[#cbd5e1]"
-                                          : "border-r-[#eef2f6]"
-                                      }`}
+                          <td
+                            colSpan={16}
+                            className="relative border-b border-[#cbd5e1] p-0"
+                          >
+                            <div className="relative h-[48px] overflow-hidden">
+                              <div
+                                className="pointer-events-none absolute inset-0 grid"
+                                style={{
+                                  gridTemplateColumns:
+                                    "repeat(16, minmax(0, 1fr))",
+                                }}
+                                aria-hidden="true"
+                              >
+                                {TIMELINE_SLOTS.map((slot) => (
+                                  <span
+                                    key={slot.index}
+                                    className={`border-r ${
+                                      slot.index === 11
+                                        ? "border-r-2 border-r-[#f59e0b]/70"
+                                        : slot.index % 3 === 2 &&
+                                          slot.index < 11
+                                        ? "border-r-[#cbd5e1]"
+                                        : "border-r-[#eef2f6]"
+                                    } ${
+                                      slot.isPostFiscal
+                                        ? "bg-[#faf5ff]/55"
+                                        : ""
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+
+                              {highlightFreeSlots && (
+                                <div className="pointer-events-none absolute inset-0 z-0">
+                                  {FREE_SLOTS.map((slot) => (
+                                    <div
+                                      key={slot.id}
+                                      className="absolute top-0 bottom-0 border-x border-emerald-400/40 bg-emerald-500/[0.08]"
+                                      style={{
+                                        left: `${slot.left}%`,
+                                        width: `${slot.width}%`,
+                                      }}
                                     />
                                   ))}
                                 </div>
+                              )}
 
-                                {highlightFreeSlots && (
-                                  <div className="pointer-events-none absolute inset-0 z-0">
-                                    {FREE_SLOTS.map((slot) => (
-                                      <div
-                                        key={slot.id}
-                                        className="absolute top-0 bottom-0 border-x border-emerald-400/40 bg-emerald-500/[0.08]"
-                                        style={{
-                                          left: `${slot.left}%`,
-                                          width: `${slot.width}%`,
-                                        }}
-                                      />
-                                    ))}
-                                  </div>
-                                )}
-
-                                <SportsEventBarItem
-                                  event={event}
-                                  onHover={setHoveredEvent}
-                                  onClickEdit={setEditingEvent}
-                                  isAdmin={isAdmin}
-                                />
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
+                              <SportsEventBarItem
+                                event={event}
+                                onHover={setHoveredEvent}
+                                onClickEdit={setEditingEvent}
+                                isAdmin={isAdmin}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </>
                 )}
               </tbody>
@@ -1039,26 +973,35 @@ export function TimelineSchedule() {
         {viewMode === "monthly" && (
           <div className="mt-3 space-y-3">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {FISCAL_MONTHS.map((fm, monthIdx) => {
-                const monthNumber = fm.monthNumber;
-                const monthName = fm.full;
-                const monthCourses = filteredRows.filter((row) =>
-                  row.sessions.some(
-                    (s) =>
-                      s.startMonth + 1 === monthNumber ||
-                      s.endMonth + 1 === monthNumber ||
-                      (s.startMonth + 1 <= monthNumber &&
-                        s.endMonth + 1 >= monthNumber)
-                  )
+              {TIMELINE_SLOTS.map((slot) => {
+                const monthCourses = courseRows.filter((row) =>
+                  row.sessions.some((s) => {
+                    const startSlot = yearMonthToSlotIndex(
+                      s.startMonth + 1,
+                      s.yearBE
+                    );
+                    const endSlot = yearMonthToSlotIndex(
+                      s.endMonth + 1,
+                      s.yearBE
+                    );
+                    return slot.index >= startSlot && slot.index <= endSlot;
+                  })
                 );
+
                 const monthEvents = showSportsEvents
-                  ? filteredEvents.filter(
-                      (evt) =>
-                        evt.startMonth === monthNumber ||
-                        evt.endMonth === monthNumber ||
-                        (evt.startMonth <= monthNumber &&
-                          evt.endMonth >= monthNumber)
-                    )
+                  ? events.filter((evt) => {
+                      const yr = getEventYear(evt);
+                      const endYr = evt.endYear ?? yr;
+                      const startSlot = yearMonthToSlotIndex(
+                        evt.startMonth,
+                        yr
+                      );
+                      const endSlot = yearMonthToSlotIndex(
+                        evt.endMonth,
+                        endYr
+                      );
+                      return slot.index >= startSlot && slot.index <= endSlot;
+                    })
                   : [];
 
                 const hasActivity =
@@ -1070,46 +1013,46 @@ export function TimelineSchedule() {
 
                 return (
                   <div
-                    key={monthName}
+                    key={slot.index}
                     className={`flex flex-col rounded-xl border p-3.5 transition ${
                       hasActivity
                         ? "border-[#cbd5e1] bg-white shadow-xs"
                         : "border-[#e2e8f0] bg-[#f8fafc]/60 opacity-75"
                     }`}
                   >
-                    {/* Month Card Header */}
                     <div className="flex items-center justify-between border-b border-[#f1f5f9] pb-2">
                       <div className="flex items-center gap-2">
-                        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#16265E] text-[11px] font-bold text-white">
-                          {fm.short}
+                        <span
+                          className={`flex h-7 px-2 items-center justify-center rounded-lg text-[10.5px] font-bold text-white ${
+                            slot.isPostFiscal ? "bg-[#4c1d95]" : "bg-[#16265E]"
+                          }`}
+                        >
+                          {slot.shortLabel}
                         </span>
                         <div>
-                          <div className="flex items-center gap-1.5">
-                            <h4 className="text-[13.5px] font-bold text-[#0f172a]">
-                              {monthName}{" "}
-                              {selectedYear !== "all" ? selectedYear : ""}
-                            </h4>
-                            <span className="rounded bg-[#eef2f9] px-1.5 py-0.2 text-[9.5px] font-bold text-[#16265E]">
-                              ไตรมาส {fm.quarter}
-                            </span>
-                          </div>
+                          <h4 className="text-[13px] font-bold text-[#0f172a]">
+                            {slot.fullLabel}
+                          </h4>
+                          <span className="text-[10px] font-semibold text-[#64748b]">
+                            {slot.quarterLabel}
+                          </span>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-1">
                         {monthCourses.length > 0 && (
                           <span className="rounded-full bg-[#dcfce7] px-2 py-0.5 text-[10px] font-bold text-[#166534]">
-                            🎓 {monthCourses.length} หลักสูตร
+                            🎓 {monthCourses.length}
                           </span>
                         )}
                         {monthEvents.length > 0 && (
                           <span className="rounded-full bg-[#f3e8ff] px-2 py-0.5 text-[10px] font-bold text-[#6d28d9]">
-                            🏆 {monthEvents.length} แข่งขัน
+                            🏆 {monthEvents.length}
                           </span>
                         )}
                         {!hasActivity && (
                           <span className="text-[10.5px] text-[#94a3b8]">
-                            ว่างตลอดเดือน
+                            ว่าง
                           </span>
                         )}
                       </div>
@@ -1117,22 +1060,21 @@ export function TimelineSchedule() {
 
                     {hasBoth && (
                       <div className="mt-2 rounded-lg border border-[#fde68a] bg-[#fffbeb] px-2.5 py-1 text-[10.5px] font-medium text-[#92400e]">
-                        💡 เดือนนี้มีทั้งการอบรมและการแข่งขันกีฬา โปรดตรวจสอบวันเดินทาง
+                        💡 เดือนนี้มีทั้งการอบรมและการแข่งขันกีฬา
                       </div>
                     )}
 
-                    {/* Month Content */}
                     <div className="mt-2.5 flex-1 space-y-2">
                       {monthCourses.map((row) => (
                         <div
-                          key={`m-${monthIdx}-c-${row.course.id}`}
+                          key={`m-${slot.index}-c-${row.course.id}`}
                           className="rounded-lg border border-[#bbf7d0] bg-[#f0fdf4]/70 p-2.5"
                         >
                           <div className="flex items-center justify-between gap-1">
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#166534]">
                               <span>🎓 อบรม</span>
                               {row.shortBadge && (
-                                <span className="rounded bg-white px-1.5 py-0.2 text-[#16265E] border border-[#bbf7d0]">
+                                <span className="rounded border border-[#bbf7d0] bg-white px-1.5 py-0.2 text-[#16265E]">
                                   {row.shortBadge}
                                 </span>
                               )}
@@ -1158,7 +1100,7 @@ export function TimelineSchedule() {
 
                       {monthEvents.map((evt) => (
                         <div
-                          key={`m-${monthIdx}-e-${evt.id}`}
+                          key={`m-${slot.index}-e-${evt.id}`}
                           className="rounded-lg border border-[#ddd6fe] bg-[#f5f3ff]/70 p-2.5"
                         >
                           <div className="flex items-center justify-between gap-1">
@@ -1221,9 +1163,9 @@ export function TimelineSchedule() {
         )}
       </section>
 
-      {/* Executive Gap Analysis Card (Only shown when highlightFreeSlots is checked) */}
+      {/* Executive Gap Analysis Card */}
       {highlightFreeSlots && (
-        <section className="mx-auto mt-3.5 w-full max-w-[920px] rounded-2xl border border-[#a7f3d0] bg-gradient-to-br from-[#f0fdf4] to-[#f8fafc] p-4 shadow-[0_2px_8px_rgba(16,185,129,0.08)] xl:max-w-[clamp(1020px,76vw,1340px)]">
+        <section className="mx-auto mt-3.5 w-full max-w-[960px] rounded-2xl border border-[#a7f3d0] bg-gradient-to-br from-[#f0fdf4] to-[#f8fafc] p-4 shadow-[0_2px_8px_rgba(16,185,129,0.08)] xl:max-w-[clamp(1060px,80vw,1400px)]">
           <div className="flex items-center justify-between gap-3 border-b border-[#bbf7d0] pb-2.5">
             <div className="flex items-center gap-2">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#d1fae5] text-base">
@@ -1231,7 +1173,7 @@ export function TimelineSchedule() {
               </span>
               <div>
                 <h3 className="text-[14px] font-bold text-[#065f46]">
-                  บทวิเคราะห์ช่วงเวลาว่างสำหรับผู้บริหาร (Executive Slot Analysis)
+                  บทวิเคราะห์ช่วงเวลาว่างสำหรับผู้บริหาร (ปีงบประมาณ 2570: ต.ค. 69 – ก.ย. 70)
                 </h3>
                 <p className="text-[11px] text-[#047857]">
                   ระบุช่วงเวลาที่ไม่มีการอบรมและการแข่งขันชนกัน เพื่อใช้ในการพิจารณาเพิ่มหรือขยับตารางหลักสูตร
@@ -1270,7 +1212,6 @@ export function TimelineSchedule() {
       <AddSportsEventDialog
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        defaultYear={selectedYear === 2571 ? 2571 : 2570}
       />
 
       {/* Edit Sports Event Modal */}
