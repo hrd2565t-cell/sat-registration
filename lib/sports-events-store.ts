@@ -149,6 +149,11 @@ interface SportsEventsState {
   revision: number;
 }
 
+const INITIAL_STATE: SportsEventsState = {
+  events: DEFAULT_SPORTS_EVENTS,
+  revision: 0,
+};
+
 let state: SportsEventsState = {
   events: [...DEFAULT_SPORTS_EVENTS],
   revision: 0,
@@ -190,6 +195,10 @@ function hydrate() {
   }
 }
 
+function getServerSnapshot(): SportsEventsState {
+  return INITIAL_STATE;
+}
+
 export function useSportsEvents() {
   hydrate();
   const snapshot = useSyncExternalStore(
@@ -198,12 +207,13 @@ export function useSportsEvents() {
       return () => listeners.delete(callback);
     },
     () => state,
-    () => ({ events: DEFAULT_SPORTS_EVENTS, revision: 0 })
+    getServerSnapshot
   );
 
   return {
     events: snapshot.events,
     addSportsEvent,
+    updateSportsEvent,
     deleteSportsEvent,
     resetSportsEvents,
   };
@@ -233,6 +243,52 @@ export function addSportsEvent(
   persist();
   emit();
   return newEvent;
+}
+
+export function updateSportsEvent(
+  id: string,
+  patch: Partial<Omit<SportsEvent, "id">>
+): SportsEvent | undefined {
+  let updated: SportsEvent | undefined;
+
+  const nextEvents = state.events.map((evt) => {
+    if (evt.id !== id) return evt;
+
+    const startDay = patch.startDay ?? evt.startDay;
+    const startMonth = patch.startMonth ?? evt.startMonth;
+    const endDay = patch.endDay ?? evt.endDay;
+    const endMonth = patch.endMonth ?? evt.endMonth;
+
+    const { left, width } = computeEventBounds(
+      startDay,
+      startMonth,
+      endDay,
+      endMonth
+    );
+
+    updated = {
+      ...evt,
+      ...patch,
+      id: evt.id,
+      startDay,
+      startMonth,
+      endDay,
+      endMonth,
+      left,
+      width,
+    };
+    return updated;
+  });
+
+  if (!updated) return undefined;
+
+  state = {
+    events: nextEvents,
+    revision: state.revision + 1,
+  };
+  persist();
+  emit();
+  return updated;
 }
 
 export function deleteSportsEvent(id: string) {

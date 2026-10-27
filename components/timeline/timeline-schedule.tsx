@@ -10,6 +10,7 @@ import {
   resetSportsEvents,
 } from "@/lib/sports-events-store";
 import { AddSportsEventDialog } from "@/components/timeline/add-sports-event-dialog";
+import { EditSportsEventDialog } from "@/components/timeline/edit-sports-event-dialog";
 
 type BarTone = "open" | "review" | "training" | "result";
 
@@ -230,6 +231,7 @@ export function TimelineSchedule() {
   const [showSportsEvents, setShowSportsEvents] = useState(true);
   const [highlightFreeSlots, setHighlightFreeSlots] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<SportsEvent | null>(null);
   const [hoveredEvent, setHoveredEvent] = useState<SportsEvent | null>(null);
 
   return (
@@ -414,9 +416,9 @@ export function TimelineSchedule() {
                     >
                       <th
                         scope="row"
-                        className="border border-t-0 border-l-0 border-[#d8dee4] px-2 py-0.5 text-left align-middle text-[9.5px] font-semibold leading-[1.2] xl:px-3 xl:text-[clamp(10.5px,0.8vw,12.5px)]"
+                        className="border border-t-0 border-l-0 border-[#d8dee4] px-2 py-1.5 text-left align-middle text-[9.5px] font-semibold leading-[1.2] xl:px-3 xl:text-[clamp(10.5px,0.8vw,12.5px)]"
                       >
-                        <div className="flex items-start justify-between gap-1">
+                        <div className="flex flex-col justify-between gap-1">
                           <div>
                             <div className="flex items-center gap-1">
                               <span className="rounded bg-[#ede9fe] px-1 py-0.2 text-[8px] font-bold text-[#7c3aed]">
@@ -431,21 +433,35 @@ export function TimelineSchedule() {
                             </span>
                           </div>
 
-                          {isAdmin && event.id.startsWith("evt-custom-") && (
-                            <button
-                              type="button"
-                              onClick={() => deleteSportsEvent(event.id)}
-                              title="ลบรายการนี้"
-                              className="text-[#94a3b8] hover:text-[#dc2626] text-[11px] p-0.5"
-                            >
-                              ✕
-                            </button>
+                          {isAdmin && (
+                            <div className="mt-1 flex items-center gap-1.5 pt-0.5">
+                              <button
+                                type="button"
+                                onClick={() => setEditingEvent(event)}
+                                title="แก้ไขข้อมูลรายการแข่งขันนี้"
+                                className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[8.5px] font-semibold text-[#6d28d9] bg-[#f5f3ff] border border-[#ddd6fe] hover:bg-[#ede9fe] transition active:scale-[0.98]"
+                              >
+                                <span>✏️ แก้ไข</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (confirm(`ต้องการลบรายการ "${event.title}" ออกจากปฏิทินหรือไม่?`)) {
+                                    deleteSportsEvent(event.id);
+                                  }
+                                }}
+                                title="ลบรายการแข่งขันนี้"
+                                className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[8.5px] font-semibold text-[#b91c1c] bg-[#fef2f2] border border-[#fecaca] hover:bg-[#fee2e2] transition active:scale-[0.98]"
+                              >
+                                <span>🗑️ ลบ</span>
+                              </button>
+                            </div>
                           )}
                         </div>
                       </th>
 
                       <td colSpan={4} className="relative border border-t-0 border-r-0 border-[#d8dee4] p-0">
-                        <div className="relative h-[37px] overflow-hidden xl:h-[clamp(43px,3.1vw,58px)]">
+                        <div className="relative h-[48px] overflow-hidden xl:h-[clamp(50px,3.4vw,62px)]">
                           {/* Grid background 4 columns */}
                           <div className="pointer-events-none absolute inset-0 grid grid-cols-4" aria-hidden="true">
                             <span className="border-r border-[#edf0f2]" />
@@ -558,6 +574,12 @@ export function TimelineSchedule() {
       <AddSportsEventDialog
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
+      />
+
+      {/* Edit Sports Event Modal */}
+      <EditSportsEventDialog
+        event={editingEvent}
+        onClose={() => setEditingEvent(null)}
       />
     </>
   );
