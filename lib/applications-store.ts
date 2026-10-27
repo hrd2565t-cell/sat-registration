@@ -2,7 +2,6 @@
 
 import { useSyncExternalStore } from "react";
 import {
-  adminApplicants,
   adminCourseOptions,
   adminUser,
   type AiVerdict,
@@ -14,7 +13,6 @@ import {
   type Course,
 } from "@/lib/courses";
 import { getCoursesSnapshot, syncCourseSeatsWithApprovedCounts } from "@/lib/courses-store";
-import { MOCK_ID_CARD } from "@/lib/registration";
 import {
   isSupabaseConfigured,
   getSupabaseClient,
@@ -90,289 +88,15 @@ interface ApplicationsState {
   revision: number;
 }
 
-const STORAGE_KEY = "sat-applications-v1";
-const SEED_TARGET = 185;
+const STORAGE_KEY = "sat-applications-v2";
 const SEED_REVIEWER = adminUser.name;
-const BASE_TIME = Date.UTC(2026, 9, 18, 8, 0, 0);
-const HOUR = 60 * 60 * 1000;
-const DAY = 24 * HOUR;
-
-const affiliations = [
-  "สมาคมกีฬาแห่งประเทศไทย",
-  "การกีฬาแห่งประเทศไทย",
-  "สมาคมกีฬาจังหวัด",
-  "สำนักงานพัฒนาการกีฬาและนันทนาการ",
-];
-
-const positions = [
-  "ผู้ฝึกสอนชำนาญการ",
-  "เจ้าหน้าที่พัฒนากีฬา",
-  "ผู้ตัดสินระดับชาติ",
-  "นักวิทยาศาสตร์การกีฬา",
-  "ผู้จัดการทีมกีฬา",
-];
-
-const extraNames = [
-  "นาย กิตติศักดิ์ พงษ์ไพร",
-  "นางสาว ปวีณา ศรีสุข",
-  "นาย อนุชา ทองดี",
-  "นางสาว อารยา บุญมี",
-  "นาย ธนวัฒน์ ใจกล้า",
-  "นางสาว ชลิตา แก้วใส",
-  "นาย ภูวดล วงศ์ไทย",
-  "นางสาว มณีรัตน์ สุขใจ",
-  "นาย ศุภชัย ดีงาม",
-  "นางสาว สุนิสา พูลผล",
-  "นาย วรากร เมืองทอง",
-  "นางสาว นภาพร แสงทอง",
-  "นาย ธีรภัทร แก้วมณี",
-  "นางสาว รุ่งทิพย์ ทองคำ",
-  "นาย พีระพงษ์ สายทอง",
-  "นางสาว จิราพร สุขสันต์",
-  "นาย ณัฐพล ใจมั่น",
-  "นางสาว กนกวรรณ ศรีทอง",
-  "นาย สุรชัย กล้าหาญ",
-  "นางสาว ปิยะดา วงศ์งาม",
-];
-
-const AI_FAIL_REASONS = [
-  "ขาดเอกสารสำคัญ",
-  "เอกสารไม่ครบถ้วน",
-  "ไม่ผ่านเกณฑ์คุณสมบัติ",
-];
 
 function padRef(value: number) {
   return `SAT-${String(value).padStart(5, "0")}`;
 }
 
-function buildRef(index: number) {
-  return padRef(452 + index);
-}
-
-function buildIdCard(index: number) {
-  if (index === 0) return MOCK_ID_CARD;
-  return `1100091${String(index + 2).padStart(6, "0")}`;
-}
-
-function buildPhone(index: number) {
-  const suffix = String(2675323 + index * 137).slice(-7);
-  return `08${suffix.slice(0, 1)}-${suffix.slice(1, 4)}-${suffix.slice(4)}`;
-}
-
-function buildDocuments(
-  index: number,
-  courseId: number,
-  hasFiles: boolean,
-  rejected: boolean
-): ApplicantDocument[] {
-  const documents: ApplicantDocument[] = [
-    {
-      id: `${index}-photo`,
-      kind: "photo",
-      name: "รูปถ่ายหน้าตรง.jpg",
-      size: "1.1 MB",
-    },
-  ];
-
-  if (hasFiles || !rejected) {
-    documents.push({
-      id: `${index}-cover`,
-      kind: "cover",
-      name: "หนังสือนำส่งจากต้นสังกัด.pdf",
-      size: `${(1.4 + (index % 5) * 0.3).toFixed(1)} MB`,
-    });
-  }
-
-  if (hasFiles) {
-    documents.push({
-      id: `${index}-certificate`,
-      kind: "certificate",
-      name: "หนังสือรับรองคุณวุฒิ.pdf",
-      size: `${(0.8 + (index % 4) * 0.2).toFixed(1)} MB`,
-    });
-  }
-
-  if ((courseId === 1 || courseId === 4) && !rejected) {
-    documents.push({
-      id: `${index}-saka`,
-      kind: "saka",
-      name: "เอกสาร ส.ฬ.8.pdf",
-      size: "0.9 MB",
-    });
-  }
-
-  return documents;
-}
-
-function buildNotes(
-  index: number,
-  status: ApplicantStatus,
-  submittedAt: string,
-  ai: AiVerdict,
-  reserveOrder?: number
-): ReviewNote[] {
-  const notes: ReviewNote[] = [
-    {
-      id: `${index}-created`,
-      at: submittedAt,
-      author: "ระบบรับสมัคร",
-      kind: "created",
-      text: "ได้รับข้อมูลการสมัครและเอกสารเรียบร้อยแล้ว",
-    },
-  ];
-
-  if (status !== "pending") {
-    const text =
-      status === "approved"
-        ? "ตรวจสอบคุณสมบัติและเอกสารครบถ้วน อนุมัติเข้ารับการอบรม (ตัวจริง)"
-        : status === "reserve"
-          ? `ผ่านการตรวจสอบคุณสมบัติ จัดให้อยู่ในบัญชีรายชื่อสำรอง ลำดับที่ ${reserveOrder ?? 1}`
-          : `ไม่ผ่านการตรวจสอบ: ${
-              ai.line2 || AI_FAIL_REASONS[index % AI_FAIL_REASONS.length]
-            }`;
-
-    notes.push({
-      id: `${index}-review`,
-      at: new Date(Date.parse(submittedAt) + DAY).toISOString(),
-      author: SEED_REVIEWER,
-      kind: status,
-      text,
-    });
-  }
-
-  return notes;
-}
-
-function buildExtraAi(
-  index: number,
-  status: ApplicantStatus
-): AiVerdict {
-  if (status === "rejected") {
-    return {
-      tone: "fail",
-      line1: `แนะนำไม่ให้ผ่าน (${8 + ((index * 7) % 23)}%)`,
-      line2: AI_FAIL_REASONS[index % AI_FAIL_REASONS.length],
-    };
-  }
-  if (status === "approved") {
-    return {
-      tone: "pass",
-      line1: `แนะนำให้ผ่าน (${82 + ((index * 5) % 17)}%)`,
-      line2: "เอกสารครบถ้วน",
-    };
-  }
-  return index % 3 === 0
-    ? {
-        tone: "review",
-        line1: "รอการตรวจสอบ",
-        line2: "เอกสารยังไม่ครบถ้วน",
-      }
-    : {
-        tone: "pass",
-        line1: `แนะนำให้ผ่าน (${76 + ((index * 4) % 20)}%)`,
-        line2: "รอเจ้าหน้าที่ตรวจสอบ",
-      };
-}
-
 function buildSeedApplications(): ApplicantRecord[] {
-  const records: ApplicantRecord[] = [];
-
-  adminApplicants.forEach((applicant, index) => {
-    const submittedAt = new Date(BASE_TIME - index * 6 * HOUR).toISOString();
-    const course = courses.find((item) => item.id === applicant.courseId);
-    const hasFiles = applicant.fileSize !== null;
-    const name = index === 0 ? "นาย สมชาย สิงห์" : applicant.name;
-    const ref = buildRef(index);
-    const notes = buildNotes(index, applicant.status, submittedAt, applicant.ai);
-
-    records.push({
-      id: applicant.id,
-      ref,
-      receiptNo: `${ref}-69`,
-      name,
-      idCard: buildIdCard(index),
-      email: `applicant${String(index + 1).padStart(3, "0")}@sat.or.th`,
-      phone: buildPhone(index),
-      affiliation:
-        index === 0 ? affiliations[0] : affiliations[index % affiliations.length],
-      position:
-        index === 0 ? positions[0] : positions[index % positions.length],
-      courseId: applicant.courseId,
-      course: applicant.course,
-      courseTitle: course?.title ?? applicant.course,
-      submittedAt,
-      updatedAt: notes.at(-1)?.at ?? submittedAt,
-      fileSize: applicant.fileSize,
-      documents: buildDocuments(
-        index,
-        applicant.courseId,
-        hasFiles,
-        applicant.status === "rejected"
-      ),
-      ai: applicant.ai,
-      status: applicant.status,
-      reviewReason:
-        applicant.status === "rejected" ? applicant.ai.line2 : undefined,
-      reviewedAt:
-        applicant.status === "pending" ? undefined : notes.at(-1)?.at,
-      reviewedBy:
-        applicant.status === "pending" ? undefined : SEED_REVIEWER,
-      notes,
-    });
-  });
-
-  const extraStatuses: ApplicantStatus[] = [
-    ...(Array(20).fill("pending") as ApplicantStatus[]),
-    ...(Array(108).fill("approved") as ApplicantStatus[]),
-    ...(Array(12).fill("reserve") as ApplicantStatus[]),
-    ...(Array(3).fill("rejected") as ApplicantStatus[]),
-  ];
-
-  for (let index = records.length; index < SEED_TARGET; index += 1) {
-    const id = index + 1;
-    const status = extraStatuses[index - adminApplicants.length];
-    const courseId = (index % 5) + 1;
-    const courseOption = adminCourseOptions[courseId - 1];
-    const course = courses.find((item) => item.id === courseId);
-    const submittedAt = new Date(BASE_TIME - index * 6 * HOUR).toISOString();
-    const ai = buildExtraAi(index, status);
-    const hasFiles = status !== "rejected" && index % 9 !== 4;
-    const documents = buildDocuments(index, courseId, hasFiles, status === "rejected");
-    const reserveOrder =
-      status === "reserve"
-        ? records.filter((r) => r.courseId === courseId && r.status === "reserve").length + 1
-        : undefined;
-    const notes = buildNotes(index, status, submittedAt, ai, reserveOrder);
-    const ref = buildRef(index);
-
-    records.push({
-      id,
-      ref,
-      receiptNo: `${ref}-69`,
-      name: extraNames[index % extraNames.length],
-      idCard: buildIdCard(index),
-      email: `applicant${String(index + 1).padStart(3, "0")}@sat.or.th`,
-      phone: buildPhone(index),
-      affiliation: affiliations[index % affiliations.length],
-      position: positions[index % positions.length],
-      courseId,
-      course: courseOption.label,
-      courseTitle: course?.title ?? courseOption.title,
-      submittedAt,
-      updatedAt: notes.at(-1)?.at ?? submittedAt,
-      fileSize: hasFiles ? 0.8 + (index % 6) * 0.3 : null,
-      documents,
-      ai,
-      status,
-      reserveOrder,
-      reviewReason: status === "rejected" ? ai.line2 : undefined,
-      reviewedAt: status === "pending" ? undefined : notes.at(-1)?.at,
-      reviewedBy: status === "pending" ? undefined : SEED_REVIEWER,
-      notes,
-    });
-  }
-
-  return records;
+  return [];
 }
 
 const INITIAL_STATE: ApplicationsState = {
@@ -527,7 +251,7 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
   const numericRefs = state.applications
     .map((item) => Number(item.ref.replace(/\D/g, "")))
     .filter((value) => Number.isFinite(value));
-  const nextRef = Math.max(452, ...numericRefs) + 1;
+  const nextRef = Math.max(0, ...numericRefs) + 1;
   const ref = padRef(nextRef);
   const id = Math.max(0, ...state.applications.map((item) => item.id)) + 1;
   const now = new Date().toISOString();
@@ -539,7 +263,7 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
   const record: ApplicantRecord = {
     id,
     ref,
-    receiptNo: `${ref}-69`,
+    receiptNo: `${ref}-70`,
     name: input.name.trim() || "ผู้สมัครไม่ระบุชื่อ",
     idCard: input.idCard.replace(/\D/g, ""),
     email: input.email.trim(),
@@ -547,8 +271,8 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
     affiliation: input.affiliation,
     position: input.position.trim(),
     courseId: input.courseId,
-    course: courseOption.label,
-    courseTitle: course?.title ?? courseOption.title,
+    course: course?.shortTitle ?? courseOption?.label ?? "หลักสูตรอบรม",
+    courseTitle: course?.title ?? courseOption?.title ?? "หลักสูตรอบรม กกท.",
     submittedAt: now,
     updatedAt: now,
     fileSize: fileSize > 0 ? Math.round(fileSize * 10) / 10 : null,

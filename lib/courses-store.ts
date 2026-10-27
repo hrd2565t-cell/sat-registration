@@ -15,7 +15,7 @@ interface CoursesState {
   revision: number;
 }
 
-const STORAGE_KEY = "sat-courses-v2";
+const STORAGE_KEY = "sat-courses-v3";
 
 function cloneSeedCourses() {
   return seedCourses.map((course) => ({ ...course }));
