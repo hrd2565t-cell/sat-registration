@@ -58,6 +58,8 @@ interface TimelineRow {
   quarterLabel: string;
   title: string;
   shortBadge?: string;
+  location: string;
+  compactSeats: string;
   isCustomSchedule: boolean;
   registrationDate: string;
   resultDate: string;
@@ -212,12 +214,23 @@ function buildCourseTimelineRow(
     course.title
   );
 
+  const normalizedShortBadge =
+    course.shortTitle === "วิทยาศาสตร์การกีฬา" &&
+    course.title.includes("งบประมาณ")
+      ? "งบประมาณและพัสดุ"
+      : course.shortTitle;
+
+  const compactSeats =
+    course.seats.replace(/^จำนวนที่นั่ง\s*/, "").trim() || course.seats;
+
   return {
     course,
     year,
     quarterLabel,
     title: course.title,
-    shortBadge: course.shortTitle,
+    shortBadge: normalizedShortBadge,
+    location: course.location,
+    compactSeats,
     isCustomSchedule: sched.isCustom,
     registrationDate: sched.registrationDate,
     resultDate: sched.resultDate,
@@ -692,7 +705,10 @@ export function TimelineSchedule() {
     }, 4500);
   };
 
-  const courseRows = courses.map((c) => buildCourseTimelineRow(c, courses));
+  const courseRows = courses
+    .map((c) => buildCourseTimelineRow(c, courses))
+    .sort((a, b) => a.spanLeft - b.spanLeft);
+  const sortedEvents = [...events].sort((a, b) => a.left - b.left);
 
   function handleSaveCourse(patch: CourseUpdate): boolean {
     if (!editingCourse) return false;
@@ -1158,6 +1174,15 @@ export function TimelineSchedule() {
                           </span>
                         </div>
 
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] text-[#475569]">
+                          <span className="font-medium">
+                            📍 {row.location}
+                          </span>
+                          <span className="font-semibold text-[#1e3a8a]">
+                            • 👥 {row.compactSeats}
+                          </span>
+                        </div>
+
                         <div className="mt-0.5 flex flex-wrap items-center justify-between gap-1">
                           <span className="text-[9.5px] font-semibold text-[#166534]">
                             🎓 อบรม: {row.dateSummary}
@@ -1257,7 +1282,7 @@ export function TimelineSchedule() {
                       </th>
                     </tr>
 
-                    {events.map((event) => {
+                    {sortedEvents.map((event) => {
                       const evtYear = getEventYear(event);
                       const slotIdx = yearMonthToSlotIndex(
                         event.startMonth,
@@ -1517,6 +1542,9 @@ export function TimelineSchedule() {
                           </div>
                           <p className="mt-0.5 text-[11px] font-semibold text-[#15803d]">
                             🎓 อบรม: {row.dateSummary} ({row.sessionSummary})
+                          </p>
+                          <p className="mt-0.5 text-[10.5px] font-medium text-[#475569]">
+                            📍 {row.location} • 👥 {row.compactSeats}
                           </p>
                         </div>
                       ))}

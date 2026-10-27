@@ -523,12 +523,38 @@ export function CourseEditDialog({
               />
             </div>
 
-            <div>
-              <div className="flex items-center justify-between">
+            <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-2.5">
+              <div className="flex items-center justify-between gap-2">
                 <label htmlFor="course-short-title" className={labelClass}>
-                  ชื่อย่อ / Keyword (สำหรับ Dropdown และตัวกรอง)
+                  🏷️ ป้ายหมวดหมู่ย่อ (แสดงบนตาราง Timeline และตัวกรอง)
                 </label>
-                <span className="text-[10px] text-[#6b7280]">ไม่บังคับ</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const t = title.trim();
+                    let suggested = "ทั่วไป";
+                    if (t.includes("งบประมาณ") || t.includes("จัดซื้อ")) {
+                      suggested = "งบประมาณและพัสดุ";
+                    } else if (t.includes("นานาชาติ") || t.includes("ส่งเสริมศักยภาพการบริหาร")) {
+                      suggested = "การจัดการ";
+                    } else if (t.includes("ผู้บริหาร") || t.includes("บริหารจัดการองค์")) {
+                      suggested = "ผู้บริหาร";
+                    } else if (t.includes("ผู้ฝึกสอน") || t.includes("โค้ช")) {
+                      suggested = "ผู้ฝึกสอน";
+                    } else if (t.includes("ผู้ตัดสิน") || t.includes("กรรมการ")) {
+                      suggested = "ผู้ตัดสิน";
+                    } else if (t.includes("วิทยาศาสตร์")) {
+                      suggested = "วิทยาศาสตร์การกีฬา";
+                    } else {
+                      suggested = t.replace(/^หลักสูตร\s*/, "").slice(0, 18);
+                    }
+                    setShortTitle(suggested);
+                    if (error) setError("");
+                  }}
+                  className="rounded border border-[#cbd5e1] bg-white px-2 py-0.5 text-[10px] font-semibold text-[#16265E] transition hover:bg-[#eef2f9]"
+                >
+                  ✨ ตั้งอัตโนมัติตามชื่อหลักสูตร
+                </button>
               </div>
               <input
                 id="course-short-title"
@@ -537,12 +563,38 @@ export function CourseEditDialog({
                   setShortTitle(event.target.value);
                   if (error) setError("");
                 }}
-                placeholder="ปล่อยว่างเพื่อให้ระบบสกัดอัตโนมัติจากชื่อหลักสูตร"
+                placeholder="เช่น ผู้บริหาร, ผู้ฝึกสอน, งบประมาณและพัสดุ, การจัดการ"
                 className={fieldClass}
               />
-              <p className="mt-1 text-[10.5px] leading-relaxed text-[#6b7280]">
-                ใช้แสดงใน Dropdown คัดกรองผู้สมัครและแผนภูมิให้กระชับ ไม่ยาวรกตา (เช่น &quot;ผู้ฝึกสอน&quot;, &quot;ผู้ตัดสิน&quot;) หากปล่อยว่างระบบจะดึงคำสำคัญอัตโนมัติ
-              </p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                <span className="text-[10px] font-medium text-[#64748b]">
+                  เลือกด่วน:
+                </span>
+                {[
+                  "ผู้บริหาร",
+                  "ผู้ฝึกสอน",
+                  "งบประมาณและพัสดุ",
+                  "การจัดการ",
+                  "วิทยาศาสตร์การกีฬา",
+                  "ผู้ตัดสิน",
+                ].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => {
+                      setShortTitle(preset);
+                      if (error) setError("");
+                    }}
+                    className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold transition ${
+                      shortTitle === preset
+                        ? "border-[#16265E] bg-[#16265E] text-white"
+                        : "border-[#cbd5e1] bg-white text-[#334155] hover:border-[#16265E] hover:text-[#16265E]"
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* ==================== 3-STEP COURSE SCHEDULE PICKER ==================== */}

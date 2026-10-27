@@ -87,7 +87,12 @@ function mergeStoredCourses(stored: Course[]): Course[] {
       image: customImage ?? seed?.image ?? "/assets/course-national-coach.png",
       imageAlt: saved.imageAlt || seed?.imageAlt || `${saved.title} - รูปประกอบ`,
       shortTitle:
-        saved.shortTitle !== undefined ? saved.shortTitle : seed?.shortTitle,
+        saved.shortTitle === "วิทยาศาสตร์การกีฬา" &&
+        saved.title.includes("งบประมาณ")
+          ? "งบประมาณและพัสดุ"
+          : saved.shortTitle !== undefined
+          ? saved.shortTitle
+          : seed?.shortTitle,
       useCustomSchedule: isCustom,
       registrationDate: isCustom
         ? saved.registrationDate || seed?.registrationDate || globalSched.registrationDate
