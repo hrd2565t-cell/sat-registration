@@ -204,7 +204,7 @@ export function CourseEditDialog({
 
     const maxStartDay = getDaysInMonth(newStartMonth, target.yearBE);
     const clampedStartDay = Math.min(Math.max(1, newStartDay), maxStartDay);
-    const durationToKeep = Math.min(Math.max(1, computeDurationDays(target)), 30);
+    const durationToKeep = Math.min(Math.max(1, computeDurationDays(target)), 90);
     const yearCE = target.yearBE - 543;
     const endDate = new Date(
       yearCE,
@@ -616,9 +616,10 @@ export function CourseEditDialog({
                             { days: 1, label: "1 วัน" },
                             { days: 2, label: "2 วัน" },
                             { days: 3, label: "3 วัน" },
-                            { days: 4, label: "4 วัน" },
                             { days: 5, label: "5 วัน" },
                             { days: 7, label: "7 วัน" },
+                            { days: 10, label: "10 วัน" },
+                            { days: 14, label: "14 วัน" },
                           ].map((preset) => {
                             const isActive = sessionDays === preset.days;
                             return (
@@ -638,6 +639,33 @@ export function CourseEditDialog({
                               </button>
                             );
                           })}
+
+                          {/* กำหนดจำนวนวันเองได้อิสระ (เช่น 8, 12, 15, 21 วัน) */}
+                          <div
+                            title="ระบุจำนวนวันอบรมตามต้องการ ระบบจะคำนวณวันสิ้นสุดให้อัตโนมัติ"
+                            className="ml-0.5 inline-flex items-center gap-1 rounded border border-[#93c5fd] bg-[#eff6ff] px-1.5 py-0.5"
+                          >
+                            <span className="text-[9.5px] font-medium text-[#1e40af]">
+                              ระบุเอง:
+                            </span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={90}
+                              aria-label={`จำนวนวันอบรม ช่วงที่ ${idx + 1}`}
+                              value={sessionDays}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                if (Number.isFinite(val) && val >= 1 && val <= 90) {
+                                  applySessionDurationPreset(idx, val);
+                                }
+                              }}
+                              className="h-5 w-11 rounded border border-[#bfdbfe] bg-white px-1 text-center text-[10.5px] font-bold text-[#1e3a8a] outline-none focus:border-[#1e3a8a]"
+                            />
+                            <span className="text-[9.5px] font-medium text-[#1e40af]">
+                              วัน
+                            </span>
+                          </div>
 
                           {sessions.length > 1 && (
                             <button
