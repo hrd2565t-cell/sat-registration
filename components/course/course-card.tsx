@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import { getCourseScheduleDates } from "@/lib/courses";
 
 export interface CourseCardProps {
   id: number;
@@ -10,6 +11,8 @@ export interface CourseCardProps {
   status: "open" | "full";
   seatsLeft?: number;
   title: string;
+  registrationDate?: string;
+  resultDate?: string;
   date: string;
   location: string;
   seats: string;
@@ -120,6 +123,8 @@ export function CourseCard({
   status,
   seatsLeft,
   title,
+  registrationDate,
+  resultDate,
   date,
   location,
   seats,
@@ -130,6 +135,11 @@ export function CourseCard({
 }: CourseCardProps) {
   const isFull = status === "full";
   const isLow = (seatsLeft ?? 0) <= 5;
+  const schedule = getCourseScheduleDates({
+    date,
+    registrationDate,
+    resultDate,
+  });
 
   const badge = isFull ? (
     <span className="inline-flex min-w-[76px] items-center justify-center rounded-md bg-[#dc2626] px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
@@ -167,10 +177,28 @@ export function CourseCard({
           {title}
         </h3>
 
+        <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-2.5 py-2 text-[11.5px] space-y-1">
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="font-semibold text-[#1869bc]">📥 รับสมัคร:</span>
+            <span className="font-bold text-[#1e3a8a] text-right">
+              {schedule.registrationDate}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-1.5 border-t border-[#eef2f6] pt-1">
+            <span className="font-semibold text-[#c4080f]">📣 ประกาศผล:</span>
+            <span className="font-bold text-[#991b1b] text-right">
+              {schedule.resultDate}
+            </span>
+          </div>
+        </div>
+
         <div className="space-y-1.5 text-[12.5px] text-[#4b5563]">
           <div className="flex items-center gap-1.5">
             <CalendarIcon />
-            <span>{date}</span>
+            <span>
+              <strong className="font-semibold text-[#166534]">อบรม:</strong>{" "}
+              {date}
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
             <PinIcon />

@@ -76,6 +76,12 @@ function mergeStoredCourses(stored: Course[]): Course[] {
       imageAlt: saved.imageAlt || seed?.imageAlt || `${saved.title} - รูปประกอบ`,
       shortTitle:
         saved.shortTitle !== undefined ? saved.shortTitle : seed?.shortTitle,
+      registrationDate:
+        saved.registrationDate !== undefined
+          ? saved.registrationDate
+          : seed?.registrationDate,
+      resultDate:
+        saved.resultDate !== undefined ? saved.resultDate : seed?.resultDate,
       targetQuotas: saved.targetQuotas ?? seed?.targetQuotas ?? { ...DEFAULT_TARGET_QUOTAS },
       courseObjective: saved.courseObjective || seed?.courseObjective,
       qualifications:
@@ -242,6 +248,8 @@ export type CourseUpdate = Partial<
     | "seatsLeft"
     | "title"
     | "shortTitle"
+    | "registrationDate"
+    | "resultDate"
     | "date"
     | "location"
     | "seats"
@@ -289,6 +297,14 @@ export function updateCourse(
         patch.shortTitle !== undefined
           ? patch.shortTitle.trim() || undefined
           : course.shortTitle,
+      registrationDate:
+        patch.registrationDate !== undefined
+          ? patch.registrationDate.trim() || undefined
+          : course.registrationDate,
+      resultDate:
+        patch.resultDate !== undefined
+          ? patch.resultDate.trim() || undefined
+          : course.resultDate,
       targetQuotas:
         patch.targetQuotas !== undefined
           ? patch.targetQuotas
@@ -359,6 +375,8 @@ export function addCourse(
     id: newId,
     title: data.title.trim(),
     shortTitle: data.shortTitle?.trim() || data.title.trim().slice(0, 20),
+    registrationDate: data.registrationDate?.trim() || undefined,
+    resultDate: data.resultDate?.trim() || undefined,
     date: data.date?.trim() || "1 - 5 พ.ย. 2570",
     location: data.location?.trim() || "สนามกีฬาสถาบันการกีฬาแห่งชาติ กทม.",
     seats: data.seats?.trim() || "จำนวนที่นั่ง 50 คน",

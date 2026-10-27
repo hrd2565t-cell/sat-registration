@@ -35,6 +35,8 @@ export interface Course {
   seatsLeft?: number;
   title: string;
   shortTitle?: string;
+  registrationDate?: string;
+  resultDate?: string;
   date: string;
   location: string;
   seats: string;
@@ -321,6 +323,89 @@ export function formatCourseDateSessions(
       return formatCourseDateFields(s, isLast);
     })
     .join(", ");
+}
+
+/**
+ * คำนวณค่าเริ่มต้นของ "ช่วงวันเปิดรับสมัคร" และ "วันประกาศผลผู้มีสิทธิ์เข้าอบรม"
+ * อัตโนมัติจากวันเริ่มการอบรมช่วงแรก
+ */
+export function computeDefaultCourseScheduleFields(
+  trainingSessions: CourseDateFields[]
+): { regFields: CourseDateFields; resultFields: CourseDateFields } {
+  const first = trainingSessions[0] ?? {
+    startDay: 15,
+    startMonth: 4,
+    endDay: 19,
+    endMonth: 4,
+    yearBE: 2570,
+  };
+  const yearCE = first.yearBE - 543;
+  const trainStart = new Date(yearCE, first.startMonth, first.startDay);
+
+  // เปิดรับสมัคร: ล่วงหน้า 30 วัน ถึง 14 วันก่อนวันเริ่มอบรม
+  const regStart = new Date(
+    trainStart.getFullYear(),
+    trainStart.getMonth(),
+    trainStart.getDate() - 30
+  );
+  const regEnd = new Date(
+    trainStart.getFullYear(),
+    trainStart.getMonth(),
+    trainStart.getDate() - 14
+  );
+
+  // วันประกาศผลรายชื่อผู้มีสิทธิ์เข้าอบรม: ล่วงหน้า 7 วันก่อนวันเริ่มอบรม
+  const resDate = new Date(
+    trainStart.getFullYear(),
+    trainStart.getMonth(),
+    trainStart.getDate() - 7
+  );
+
+  return {
+    regFields: {
+      startDay: regStart.getDate(),
+      startMonth: regStart.getMonth(),
+      endDay: regEnd.getDate(),
+      endMonth: regEnd.getMonth(),
+      yearBE: regEnd.getFullYear() + 543,
+    },
+    resultFields: {
+      startDay: resDate.getDate(),
+      startMonth: resDate.getMonth(),
+      endDay: resDate.getDate(),
+      endMonth: resDate.getMonth(),
+      yearBE: resDate.getFullYear() + 543,
+    },
+  };
+}
+
+export function computeDefaultCourseSchedule(trainingDateStr: string): {
+  registrationDate: string;
+  resultDate: string;
+} {
+  const sessions = parseCourseDateSessions(trainingDateStr);
+  const { regFields, resultFields } =
+    computeDefaultCourseScheduleFields(sessions);
+  return {
+    registrationDate: formatCourseDateFields(regFields, true),
+    resultDate: formatCourseDateFields(resultFields, true),
+  };
+}
+
+export function getCourseScheduleDates(
+  course: Pick<Course, "date" | "registrationDate" | "resultDate">
+): {
+  registrationDate: string;
+  resultDate: string;
+  trainingDate: string;
+} {
+  const defaults = computeDefaultCourseSchedule(course.date);
+  return {
+    registrationDate:
+      course.registrationDate?.trim() || defaults.registrationDate,
+    resultDate: course.resultDate?.trim() || defaults.resultDate,
+    trainingDate: course.date,
+  };
 }
 
 export interface ParsedDateRange {

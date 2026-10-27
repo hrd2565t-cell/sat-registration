@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useIsAdmin } from "@/lib/admin-auth";
 import {
   formatCourseDateFields,
+  getCourseScheduleDates,
+  parseCourseDateFields,
   parseCourseDateSessions,
   type Course,
   type CourseDateFields,
@@ -52,6 +54,8 @@ interface TimelineRow {
   quarterLabel: string;
   title: string;
   shortBadge?: string;
+  registrationDate: string;
+  resultDate: string;
   dateSummary: string;
   compactDateLabel: string;
   sessionSummary: string;
@@ -125,64 +129,52 @@ function buildCourseTimelineRow(course: Course): TimelineRow {
   const spanWidth = Math.max(2.0, Math.round((spanRight - spanLeft) * 10) / 10);
 
   const compactDateLabel = course.date.replace(/\s*25\d{2}$/, "").trim();
+  const sched = getCourseScheduleDates(course);
 
-  // Sub-phase bars (only displayed if user toggles showSubPhases on)
+  // Sub-phase bars computed from the course's real registrationDate & resultDate
   const subPhaseBars: TimelineBar[] = [];
-  if (spanLeft >= 12) {
-    const openLeft = Math.max(0.6, Math.round((spanLeft - 10.0) * 10) / 10);
-    const openWidth = 4.8;
-    const reviewLeft = Math.round((openLeft + openWidth + 0.3) * 10) / 10;
-    const reviewWidth = Math.max(
-      3.2,
-      Math.round((spanLeft - reviewLeft - 0.3) * 10) / 10
-    );
-    subPhaseBars.push({
-      label: "รับสมัคร",
-      tooltip: `เปิดรับสมัครล่วงหน้า (${course.title})`,
-      tone: "open",
-      left: openLeft,
-      width: openWidth,
-    });
-    subPhaseBars.push({
-      label: "ตรวจสิทธิ",
-      tooltip: `ตรวจสอบคุณสมบัติ (${course.title})`,
-      tone: "review",
-      left: reviewLeft,
-      width: reviewWidth,
-    });
-  } else if (spanLeft >= 4) {
-    const available = Math.max(3.0, spanLeft - 0.6);
-    const openWidth = Math.round(available * 0.52 * 10) / 10;
-    const reviewWidth = Math.max(
-      1.5,
-      Math.round((available - openWidth - 0.2) * 10) / 10
-    );
-    subPhaseBars.push({
-      label: "รับสมัคร",
-      tooltip: `เปิดรับสมัคร (${course.title})`,
-      tone: "open",
-      left: 0.4,
-      width: openWidth,
-    });
-    subPhaseBars.push({
-      label: "ตรวจสิทธิ",
-      tooltip: `ตรวจสอบคุณสมบัติ (${course.title})`,
-      tone: "review",
-      left: Math.round((0.4 + openWidth + 0.2) * 10) / 10,
-      width: reviewWidth,
-    });
-  }
-
-  const resultLeft = Math.min(
-    95.0,
-    Math.round((spanLeft + spanWidth + 0.4) * 10) / 10
+  const regF = parseCourseDateFields(sched.registrationDate);
+  const regStartYear =
+    regF.startMonth > regF.endMonth ? regF.yearBE - 1 : regF.yearBE;
+  const regLeft = dateToTimelinePercent(
+    regF.startDay,
+    regF.startMonth + 1,
+    regStartYear
   );
+  const regRight = dateToTimelinePercent(
+    regF.endDay + 1,
+    regF.endMonth + 1,
+    regF.yearBE
+  );
+  const regWidth = Math.max(1.8, Math.round((regRight - regLeft) * 10) / 10);
+  subPhaseBars.push({
+    label: "รับสมัคร",
+    tooltip: `📥 เปิดรับสมัคร: ${sched.registrationDate} (${course.title})`,
+    tone: "open",
+    left: Math.round(regLeft * 10) / 10,
+    width: regWidth,
+  });
+
+  const resF = parseCourseDateFields(sched.resultDate);
+  const resStartYear =
+    resF.startMonth > resF.endMonth ? resF.yearBE - 1 : resF.yearBE;
+  const resLeft = dateToTimelinePercent(
+    resF.startDay,
+    resF.startMonth + 1,
+    resStartYear
+  );
+  const resRight = dateToTimelinePercent(
+    resF.endDay + 1,
+    resF.endMonth + 1,
+    resF.yearBE
+  );
+  const resWidth = Math.max(1.2, Math.round((resRight - resLeft) * 10) / 10);
   subPhaseBars.push({
     label: "ประกาศผล",
-    tooltip: `ประกาศผลผู้ผ่านการอบรม (${course.title})`,
+    tooltip: `📣 วันประกาศผล: ${sched.resultDate} (${course.title})`,
     tone: "result",
-    left: resultLeft,
-    width: 4.2,
+    left: Math.round(resLeft * 10) / 10,
+    width: resWidth,
   });
 
   return {
@@ -191,6 +183,8 @@ function buildCourseTimelineRow(course: Course): TimelineRow {
     quarterLabel,
     title: course.title,
     shortBadge: course.shortTitle,
+    registrationDate: sched.registrationDate,
+    resultDate: sched.resultDate,
     dateSummary: course.date,
     compactDateLabel,
     sessionSummary:
@@ -743,9 +737,18 @@ export function TimelineSchedule() {
                           {row.title}
                         </span>
 
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px]">
+                          <span className="font-semibold text-[#1869bc]">
+                            📥 รับสมัคร: {row.registrationDate}
+                          </span>
+                          <span className="font-semibold text-[#c4080f]">
+                            📣 ประกาศผล: {row.resultDate}
+                          </span>
+                        </div>
+
                         <div className="mt-0.5 flex flex-wrap items-center justify-between gap-1">
-                          <span className="text-[9.5px] font-medium text-[#475569]">
-                            📅 {row.dateSummary}
+                          <span className="text-[9.5px] font-semibold text-[#166534]">
+                            🎓 อบรม: {row.dateSummary}
                           </span>
                           {isAdmin && (
                             <button
@@ -1092,8 +1095,16 @@ export function TimelineSchedule() {
                           <p className="mt-1 text-[11.5px] font-bold leading-snug text-[#0f172a]">
                             {row.title}
                           </p>
-                          <p className="mt-1 text-[11px] font-semibold text-[#15803d]">
-                            📅 {row.dateSummary} ({row.sessionSummary})
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px]">
+                            <span className="font-semibold text-[#1869bc]">
+                              📥 รับสมัคร: {row.registrationDate}
+                            </span>
+                            <span className="font-semibold text-[#c4080f]">
+                              📣 ประกาศผล: {row.resultDate}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-[11px] font-semibold text-[#15803d]">
+                            🎓 อบรม: {row.dateSummary} ({row.sessionSummary})
                           </p>
                         </div>
                       ))}

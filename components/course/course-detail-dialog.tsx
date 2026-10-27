@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect } from "react";
 import type { Course } from "@/lib/courses";
-import { TARGET_GROUPS } from "@/lib/courses";
+import { TARGET_GROUPS, getCourseScheduleDates } from "@/lib/courses";
 
 interface CourseDetailDialogProps {
   course: Course | null;
@@ -37,6 +37,7 @@ export function CourseDetailDialog({
   if (!course) return null;
 
   const isFull = course.status === "full" || course.seatsLeft === 0;
+  const schedule = getCourseScheduleDates(course);
 
   return (
     <div
@@ -100,18 +101,51 @@ export function CourseDetailDialog({
 
         {/* Scrollable Body */}
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6 space-y-6 text-[#1f2937]">
-          {/* Quick Info Grid */}
-          <div className="grid grid-cols-1 gap-2.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3.5 text-[12.5px] sm:grid-cols-3">
-            <div className="flex items-start gap-2">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#dbeafe] text-[#1e40af]">
-                📅
+          {/* 3-Step Schedule Strip */}
+          <div className="grid grid-cols-1 gap-2.5 rounded-xl border border-[#bfdbfe] bg-gradient-to-r from-[#eff6ff] via-[#f8fafc] to-[#f0fdf4] p-3.5 text-[12.5px] sm:grid-cols-3">
+            <div className="flex items-start gap-2 rounded-lg border border-[#dbeafe] bg-white px-3 py-2 shadow-2xs">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#1869bc] text-white text-xs font-bold">
+                📥
               </span>
               <div>
-                <p className="text-[11px] font-medium text-[#6b7280]">ช่วงเวลาอบรม</p>
-                <p className="font-semibold text-[#1e293b]">{course.date}</p>
+                <p className="text-[11px] font-semibold text-[#1869bc]">
+                  1. เปิดรับสมัคร
+                </p>
+                <p className="font-bold text-[#1e3a8a]">
+                  {schedule.registrationDate}
+                </p>
               </div>
             </div>
 
+            <div className="flex items-start gap-2 rounded-lg border border-[#fecaca] bg-white px-3 py-2 shadow-2xs">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#c4080f] text-white text-xs font-bold">
+                📣
+              </span>
+              <div>
+                <p className="text-[11px] font-semibold text-[#c4080f]">
+                  2. วันประกาศผล
+                </p>
+                <p className="font-bold text-[#991b1b]">
+                  {schedule.resultDate}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 rounded-lg border border-[#bbf7d0] bg-white px-3 py-2 shadow-2xs">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#16803c] text-white text-xs font-bold">
+                🎓
+              </span>
+              <div>
+                <p className="text-[11px] font-semibold text-[#16803c]">
+                  3. ช่วงเวลาจัดอบรม
+                </p>
+                <p className="font-bold text-[#166534]">{course.date}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Info Grid */}
+          <div className="grid grid-cols-1 gap-2.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3.5 text-[12.5px] sm:grid-cols-2">
             <div className="flex items-start gap-2">
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#dbeafe] text-[#1e40af]">
                 📍

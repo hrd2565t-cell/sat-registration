@@ -2,7 +2,10 @@
 
 import { DownloadIcon } from "@/components/ui/icons";
 import { useCourses } from "@/lib/courses-store";
-import { parseCourseDateSessions } from "@/lib/courses";
+import {
+  getCourseScheduleDates,
+  parseCourseDateSessions,
+} from "@/lib/courses";
 import {
   useSportsEvents,
   TIMELINE_SLOTS,
@@ -34,6 +37,7 @@ export function TimelineExportButtons() {
 
     const courseRowsHtml = courses
       .map((course, idx) => {
+        const sched = getCourseScheduleDates(course);
         const sessions = parseCourseDateSessions(course.date);
         const first = sessions[0];
         const firstSlotIdx = first
@@ -103,7 +107,12 @@ export function TimelineExportButtons() {
                 }</span>
               </div>
               <div class="item-title">${escapeHtml(course.title)}</div>
-              <div class="item-sub">📅 ${escapeHtml(course.date)} • 📍 ${escapeHtml(
+              <div class="item-sub" style="color:#1869bc;font-weight:600;">📥 รับสมัคร: ${escapeHtml(
+                sched.registrationDate
+              )} • <span style="color:#c4080f;">📣 ประกาศผล: ${escapeHtml(
+          sched.resultDate
+        )}</span></div>
+              <div class="item-sub">🎓 อบรม: ${escapeHtml(course.date)} • 📍 ${escapeHtml(
           course.location
         )}</div>
             </td>
@@ -449,13 +458,16 @@ export function TimelineExportButtons() {
       "ปี พ.ศ.",
       "หมวดหมู่ / ชื่อย่อ",
       "ชื่อหลักสูตร / รายการแข่งขัน",
-      "ช่วงวันที่",
+      "ช่วงวันเปิดรับสมัคร",
+      "วันประกาศผล",
+      "ช่วงวันจัดอบรม / แข่งขัน",
       "สถานที่ / รายละเอียด",
     ];
 
     const rows: string[][] = [];
 
     courses.forEach((c) => {
+      const sched = getCourseScheduleDates(c);
       const sessions = parseCourseDateSessions(c.date);
       const first = sessions[0];
       const q = first ? getFiscalQuarter(first.startMonth + 1) : 2;
@@ -466,6 +478,8 @@ export function TimelineExportButtons() {
         String(yr),
         c.shortTitle || "-",
         c.title,
+        sched.registrationDate,
+        sched.resultDate,
         c.date,
         `${c.location} (${c.seats})`,
       ]);
@@ -481,6 +495,8 @@ export function TimelineExportButtons() {
         String(yr),
         e.categoryLabel,
         e.title,
+        "-",
+        "-",
         e.dateRange,
         e.location,
       ]);

@@ -12,10 +12,12 @@ import {
   DEFAULT_TARGET_QUOTAS,
   TARGET_GROUPS,
   THAI_MONTHS,
+  computeDefaultCourseScheduleFields,
   formatCourseDateFields,
   formatCourseDateSessions,
   getDaysInMonth,
   isCourseDateOverlapping,
+  parseCourseDateFields,
   parseCourseDateSessions,
   type Course,
   type CourseDateFields,
@@ -79,6 +81,49 @@ export function CourseEditDialog({
   const [date, setDate] = useState(() =>
     formatCourseDateSessions(parseCourseDateSessions(course.date))
   );
+
+  // วันเปิดรับสมัคร (registrationDate) และ วันประกาศผล (resultDate)
+  const [regFields, setRegFields] = useState<CourseDateFields>(() => {
+    if (course.registrationDate?.trim()) {
+      return parseCourseDateFields(course.registrationDate);
+    }
+    return computeDefaultCourseScheduleFields(
+      parseCourseDateSessions(course.date)
+    ).regFields;
+  });
+  const [registrationDate, setRegistrationDate] = useState(() => {
+    if (course.registrationDate?.trim()) {
+      return formatCourseDateFields(
+        parseCourseDateFields(course.registrationDate),
+        true
+      );
+    }
+    const def = computeDefaultCourseScheduleFields(
+      parseCourseDateSessions(course.date)
+    ).regFields;
+    return formatCourseDateFields(def, true);
+  });
+
+  const [resultFields, setResultFields] = useState<CourseDateFields>(() => {
+    if (course.resultDate?.trim()) {
+      return parseCourseDateFields(course.resultDate);
+    }
+    return computeDefaultCourseScheduleFields(
+      parseCourseDateSessions(course.date)
+    ).resultFields;
+  });
+  const [resultDate, setResultDate] = useState(() => {
+    if (course.resultDate?.trim()) {
+      return formatCourseDateFields(
+        parseCourseDateFields(course.resultDate),
+        true
+      );
+    }
+    const def = computeDefaultCourseScheduleFields(
+      parseCourseDateSessions(course.date)
+    ).resultFields;
+    return formatCourseDateFields(def, true);
+  });
   const [location, setLocation] = useState(course.location);
   const [seats, setSeats] = useState(course.seats);
   const [status, setStatus] = useState<Course["status"]>(course.status);
@@ -174,12 +219,99 @@ export function CourseEditDialog({
   };
 
   const computeDurationDays = (fields: CourseDateFields) => {
-    const yearCE = fields.yearBE - 543;
-    const s = new Date(yearCE, fields.startMonth, fields.startDay);
-    const e = new Date(yearCE, fields.endMonth, fields.endDay);
+    const endYearCE = fields.yearBE - 543;
+    const startYearCE =
+      fields.startMonth > fields.endMonth ? endYearCE - 1 : endYearCE;
+    const s = new Date(startYearCE, fields.startMonth, fields.startDay);
+    const e = new Date(endYearCE, fields.endMonth, fields.endDay);
     const diff =
       Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     return Math.max(1, diff);
+  };
+
+  const syncRegFields = (next: CourseDateFields) => {
+    setRegFields(next);
+    setRegistrationDate(formatCourseDateFields(next, true));
+    if (error) setError("");
+  };
+
+  const syncResultFields = (next: CourseDateFields) => {
+    setResultFields(next);
+    setResultDate(formatCourseDateFields(next, true));
+    if (error) setError("");
+  };
+
+  const updateSingleRangeStart = (
+    current: CourseDateFields,
+    newStartDay: number,
+    newStartMonth: number
+  ): CourseDateFields => {
+    const maxStartDay = getDaysInMonth(newStartMonth, current.yearBE);
+    const clampedStartDay = Math.min(Math.max(1, newStartDay), maxStartDay);
+    const durationToKeep = Math.min(Math.max(1, computeDurationDays(current)), 60);
+    const yearCE = current.yearBE - 543;
+    const endDate = new Date(
+      yearCE,
+      newStartMonth,
+      clampedStartDay + durationToKeep - 1
+    );
+    return {
+      ...current,
+      startDay: clampedStartDay,
+      startMonth: newStartMonth,
+      endDay: endDate.getDate(),
+      endMonth: endDate.getMonth(),
+      yearBE: endDate.getFullYear() + 543,
+    };
+  };
+
+  const updateSingleRangeEnd = (
+    current: CourseDateFields,
+    newEndDay: number,
+    newEndMonth: number
+  ): CourseDateFields => {
+    const maxEndDay = getDaysInMonth(newEndMonth, current.yearBE);
+    const clampedEndDay = Math.min(Math.max(1, newEndDay), maxEndDay);
+    const yearCE = current.yearBE - 543;
+    const startObj = new Date(yearCE, current.startMonth, current.startDay);
+    const endObj = new Date(yearCE, newEndMonth, clampedEndDay);
+    if (endObj < startObj) {
+      return {
+        ...current,
+        endDay: current.startDay,
+        endMonth: current.startMonth,
+      };
+    }
+    return {
+      ...current,
+      endDay: clampedEndDay,
+      endMonth: newEndMonth,
+    };
+  };
+
+  const updateSingleRangeDuration = (
+    current: CourseDateFields,
+    daysCount: number
+  ): CourseDateFields => {
+    const yearCE = current.yearBE - 543;
+    const endDate = new Date(
+      yearCE,
+      current.startMonth,
+      current.startDay + daysCount - 1
+    );
+    return {
+      ...current,
+      endDay: endDate.getDate(),
+      endMonth: endDate.getMonth(),
+      yearBE: endDate.getFullYear() + 543,
+    };
+  };
+
+  const handleAutoCalculateSchedule = () => {
+    const { regFields: autoReg, resultFields: autoRes } =
+      computeDefaultCourseScheduleFields(sessions);
+    syncRegFields(autoReg);
+    syncResultFields(autoRes);
   };
 
   const totalDurationDays = sessions.reduce(
@@ -401,6 +533,8 @@ export function CourseEditDialog({
     const result = onSave({
       title: trimmedTitle,
       shortTitle: trimmedShortTitle || undefined,
+      registrationDate: registrationDate.trim() || undefined,
+      resultDate: resultDate.trim() || undefined,
       date: trimmedDate,
       location: trimmedLocation,
       seats: trimmedSeats,
@@ -567,26 +701,409 @@ export function CourseEditDialog({
               </p>
             </div>
 
-            {/* Multi-Session Smart Date Range Picker */}
-            <div className="rounded-lg border border-[#dbe3ef] bg-[#f8fafc] p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+            {/* ==================== 3-STEP COURSE SCHEDULE PICKER ==================== */}
+            <div className="space-y-3 rounded-xl border border-[#cbd5e1] bg-[#f8fafc] p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e2e8f0] pb-2.5">
                 <div>
-                  <label className="text-[12px] font-semibold text-[#1e3a8a]">
-                    📅 ช่วงวันที่อบรม (Smart Date Picker)
-                  </label>
+                  <h3 className="text-[12.5px] font-bold text-[#16265E]">
+                    🗓️ กำหนดการหลักสูตร (รับสมัคร • ประกาศผล • จัดอบรม)
+                  </h3>
                   <p className="text-[10px] text-[#64748b]">
-                    รองรับทั้งการอบรมรวดเดียว หรือแบ่งเป็นหลายช่วง (เช่น ช่วงละ 2 วัน และ 5 วัน)
+                    ปรับตั้งค่าทั้ง 3 ช่วงเวลาได้ด้วยตัวเอง หรือกดปุ่มคำนวณล่วงหน้าอัตโนมัติจากวันเริ่มอบรม
                   </p>
                 </div>
-                <div className="inline-flex items-center gap-1.5 rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-2.5 py-0.5 text-[11px] font-bold text-[#1e40af]">
-                  <span>ผลลัพธ์: {date}</span>
-                  <span className="rounded-full bg-[#1e3a8a] px-1.5 py-0.2 text-[9.5px] font-semibold text-white">
-                    {sessions.length > 1
-                      ? `${sessions.length} ช่วง · รวม ${totalDurationDays} วัน`
-                      : `${totalDurationDays} วัน`}
-                  </span>
+                <button
+                  type="button"
+                  onClick={handleAutoCalculateSchedule}
+                  className="inline-flex items-center gap-1 rounded-lg border border-[#3b82f6] bg-[#eff6ff] px-2.5 py-1 text-[10.5px] font-bold text-[#1d4ed8] shadow-2xs transition hover:bg-[#dbeafe] active:scale-[0.98]"
+                >
+                  <span>⚡ คำนวณวันรับสมัคร &amp; วันประกาศผลอัตโนมัติ</span>
+                </button>
+              </div>
+
+              {/* 1. ช่วงวันเปิดรับสมัคร (registrationDate) */}
+              <div className="rounded-lg border border-[#bfdbfe] bg-white p-2.5 shadow-2xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f5f9] pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-flex items-center rounded bg-[#1869bc] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      1. 📥 เปิดรับสมัคร
+                    </span>
+                    <span className="text-[11px] font-bold text-[#1e3a8a]">
+                      {registrationDate} ({computeDurationDays(regFields)} วัน)
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="text-[9.5px] text-[#64748b]">ระยะเวลา:</span>
+                    {[
+                      { days: 7, label: "7 วัน" },
+                      { days: 14, label: "14 วัน" },
+                      { days: 17, label: "17 วัน (มาตรฐาน)" },
+                      { days: 30, label: "30 วัน" },
+                    ].map((preset) => {
+                      const active = computeDurationDays(regFields) === preset.days;
+                      return (
+                        <button
+                          key={preset.days}
+                          type="button"
+                          onClick={() =>
+                            syncRegFields(
+                              updateSingleRangeDuration(regFields, preset.days)
+                            )
+                          }
+                          className={`rounded px-1.5 py-0.5 text-[9.5px] font-semibold transition ${
+                            active
+                              ? "bg-[#1869bc] text-white"
+                              : "border border-[#cbd5e1] bg-[#f8fafc] text-[#334155] hover:bg-[#e2e8f0]"
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_95px]">
+                  <div>
+                    <span className="block text-[9.5px] font-semibold text-[#475569]">
+                      วันเริ่มเปิดรับสมัคร
+                    </span>
+                    <div className="mt-1 grid grid-cols-[64px_1fr] gap-1">
+                      <select
+                        aria-label="วันเริ่มเปิดรับสมัคร"
+                        value={regFields.startDay}
+                        onChange={(e) =>
+                          syncRegFields(
+                            updateSingleRangeStart(
+                              regFields,
+                              Number(e.target.value),
+                              regFields.startMonth
+                            )
+                          )
+                        }
+                        className="h-7.5 rounded border border-[#d1d5db] bg-white px-1.5 text-[11px] font-medium text-[#111827]"
+                      >
+                        {Array.from(
+                          {
+                            length: getDaysInMonth(
+                              regFields.startMonth,
+                              regFields.yearBE
+                            ),
+                          },
+                          (_, i) => i + 1
+                        ).map((d) => (
+                          <option key={d} value={d}>
+                            วันที่ {d}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        aria-label="เดือนเริ่มเปิดรับสมัคร"
+                        value={regFields.startMonth}
+                        onChange={(e) =>
+                          syncRegFields(
+                            updateSingleRangeStart(
+                              regFields,
+                              regFields.startDay,
+                              Number(e.target.value)
+                            )
+                          )
+                        }
+                        className="h-7.5 rounded border border-[#d1d5db] bg-white px-1.5 text-[11px] font-medium text-[#111827]"
+                      >
+                        {THAI_MONTHS.map((m) => (
+                          <option key={m.index} value={m.index}>
+                            {m.full} ({m.abbr})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="block text-[9.5px] font-semibold text-[#475569]">
+                      วันปิดรับสมัคร
+                    </span>
+                    <div className="mt-1 grid grid-cols-[64px_1fr] gap-1">
+                      <select
+                        aria-label="วันปิดรับสมัคร"
+                        value={regFields.endDay}
+                        onChange={(e) =>
+                          syncRegFields(
+                            updateSingleRangeEnd(
+                              regFields,
+                              Number(e.target.value),
+                              regFields.endMonth
+                            )
+                          )
+                        }
+                        className="h-7.5 rounded border border-[#d1d5db] bg-white px-1.5 text-[11px] font-medium text-[#111827]"
+                      >
+                        {Array.from(
+                          {
+                            length: getDaysInMonth(
+                              regFields.endMonth,
+                              regFields.yearBE
+                            ),
+                          },
+                          (_, i) => i + 1
+                        ).map((d) => (
+                          <option key={d} value={d}>
+                            วันที่ {d}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        aria-label="เดือนปิดรับสมัคร"
+                        value={regFields.endMonth}
+                        onChange={(e) =>
+                          syncRegFields(
+                            updateSingleRangeEnd(
+                              regFields,
+                              regFields.endDay,
+                              Number(e.target.value)
+                            )
+                          )
+                        }
+                        className="h-7.5 rounded border border-[#d1d5db] bg-white px-1.5 text-[11px] font-medium text-[#111827]"
+                      >
+                        {THAI_MONTHS.map((m) => (
+                          <option key={m.index} value={m.index}>
+                            {m.full} ({m.abbr})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="block text-[9.5px] font-semibold text-[#475569]">
+                      ปี พ.ศ.
+                    </span>
+                    <select
+                      aria-label="ปี พ.ศ. เปิดรับสมัคร"
+                      value={regFields.yearBE}
+                      onChange={(e) =>
+                        syncRegFields({
+                          ...regFields,
+                          yearBE: Number(e.target.value),
+                        })
+                      }
+                      className="mt-1 h-7.5 w-full rounded border border-[#d1d5db] bg-white px-1.5 text-[11px] font-medium text-[#111827]"
+                    >
+                      <option value={2569}>2569</option>
+                      <option value={2570}>2570</option>
+                      <option value={2571}>2571</option>
+                    </select>
+                  </div>
                 </div>
               </div>
+
+              {/* 2. วันประกาศผลผู้มีสิทธิ์เข้าอบรม (resultDate) */}
+              <div className="rounded-lg border border-[#fecaca] bg-white p-2.5 shadow-2xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f5f9] pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-flex items-center rounded bg-[#c4080f] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      2. 📣 วันประกาศผล
+                    </span>
+                    <span className="text-[11px] font-bold text-[#991b1b]">
+                      {resultDate}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="text-[9.5px] text-[#64748b]">รูปแบบ:</span>
+                    {[
+                      { days: 1, label: "วันเดียว (1 วัน)" },
+                      { days: 2, label: "ช่วง 2 วัน" },
+                      { days: 3, label: "ช่วง 3 วัน" },
+                    ].map((preset) => {
+                      const active =
+                        computeDurationDays(resultFields) === preset.days;
+                      return (
+                        <button
+                          key={preset.days}
+                          type="button"
+                          onClick={() =>
+                            syncResultFields(
+                              updateSingleRangeDuration(resultFields, preset.days)
+                            )
+                          }
+                          className={`rounded px-1.5 py-0.5 text-[9.5px] font-semibold transition ${
+                            active
+                              ? "bg-[#c4080f] text-white"
+                              : "border border-[#cbd5e1] bg-[#f8fafc] text-[#334155] hover:bg-[#e2e8f0]"
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_95px]">
+                  <div>
+                    <span className="block text-[9.5px] font-semibold text-[#475569]">
+                      วันที่ประกาศผล (เริ่ม)
+                    </span>
+                    <div className="mt-1 grid grid-cols-[64px_1fr] gap-1">
+                      <select
+                        aria-label="วันเริ่มประกาศผล"
+                        value={resultFields.startDay}
+                        onChange={(e) =>
+                          syncResultFields(
+                            updateSingleRangeStart(
+                              resultFields,
+                              Number(e.target.value),
+                              resultFields.startMonth
+                            )
+                          )
+                        }
+                        className="h-7.5 rounded border border-[#d1d5db] bg-white px-1.5 text-[11px] font-medium text-[#111827]"
+                      >
+                        {Array.from(
+                          {
+                            length: getDaysInMonth(
+                              resultFields.startMonth,
+                              resultFields.yearBE
+                            ),
+                          },
+                          (_, i) => i + 1
+                        ).map((d) => (
+                          <option key={d} value={d}>
+                            วันที่ {d}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        aria-label="เดือนเริ่มประกาศผล"
+                        value={resultFields.startMonth}
+                        onChange={(e) =>
+                          syncResultFields(
+                            updateSingleRangeStart(
+                              resultFields,
+                              resultFields.startDay,
+                              Number(e.target.value)
+                            )
+                          )
+                        }
+                        className="h-7.5 rounded border border-[#d1d5db] bg-white px-1.5 text-[11px] font-medium text-[#111827]"
+                      >
+                        {THAI_MONTHS.map((m) => (
+                          <option key={m.index} value={m.index}>
+                            {m.full} ({m.abbr})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="block text-[9.5px] font-semibold text-[#475569]">
+                      ถึงวันที่ (กรณีประกาศเป็นช่วง)
+                    </span>
+                    <div className="mt-1 grid grid-cols-[64px_1fr] gap-1">
+                      <select
+                        aria-label="วันสิ้นสุดประกาศผล"
+                        value={resultFields.endDay}
+                        onChange={(e) =>
+                          syncResultFields(
+                            updateSingleRangeEnd(
+                              resultFields,
+                              Number(e.target.value),
+                              resultFields.endMonth
+                            )
+                          )
+                        }
+                        className="h-7.5 rounded border border-[#d1d5db] bg-white px-1.5 text-[11px] font-medium text-[#111827]"
+                      >
+                        {Array.from(
+                          {
+                            length: getDaysInMonth(
+                              resultFields.endMonth,
+                              resultFields.yearBE
+                            ),
+                          },
+                          (_, i) => i + 1
+                        ).map((d) => (
+                          <option key={d} value={d}>
+                            วันที่ {d}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        aria-label="เดือนสิ้นสุดประกาศผล"
+                        value={resultFields.endMonth}
+                        onChange={(e) =>
+                          syncResultFields(
+                            updateSingleRangeEnd(
+                              resultFields,
+                              resultFields.endDay,
+                              Number(e.target.value)
+                            )
+                          )
+                        }
+                        className="h-7.5 rounded border border-[#d1d5db] bg-white px-1.5 text-[11px] font-medium text-[#111827]"
+                      >
+                        {THAI_MONTHS.map((m) => (
+                          <option key={m.index} value={m.index}>
+                            {m.full} ({m.abbr})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="block text-[9.5px] font-semibold text-[#475569]">
+                      ปี พ.ศ.
+                    </span>
+                    <select
+                      aria-label="ปี พ.ศ. ประกาศผล"
+                      value={resultFields.yearBE}
+                      onChange={(e) =>
+                        syncResultFields({
+                          ...resultFields,
+                          yearBE: Number(e.target.value),
+                        })
+                      }
+                      className="mt-1 h-7.5 w-full rounded border border-[#d1d5db] bg-white px-1.5 text-[11px] font-medium text-[#111827]"
+                    >
+                      <option value={2569}>2569</option>
+                      <option value={2570}>2570</option>
+                      <option value={2571}>2571</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Multi-Session Smart Date Range Picker (ช่วงวันที่อบรม) */}
+              <div className="rounded-lg border border-[#bbf7d0] bg-[#f0fdf4]/40 p-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-flex items-center rounded bg-[#16803c] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                        3. 🎓 ช่วงวันจัดอบรมจริง
+                      </span>
+                      <label className="text-[11.5px] font-bold text-[#166534]">
+                        ช่วงวันที่อบรม (Smart Date Picker)
+                      </label>
+                    </div>
+                    <p className="mt-0.5 text-[10px] text-[#64748b]">
+                      รองรับทั้งการอบรมรวดเดียว หรือแบ่งเป็นหลายช่วง (เช่น ช่วงละ 2 วัน และ 5 วัน)
+                    </p>
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 rounded-full border border-[#bbf7d0] bg-white px-2.5 py-0.5 text-[11px] font-bold text-[#166534]">
+                    <span>ผลลัพธ์: {date}</span>
+                    <span className="rounded-full bg-[#16803c] px-1.5 py-0.2 text-[9.5px] font-semibold text-white">
+                      {sessions.length > 1
+                        ? `${sessions.length} ช่วง · รวม ${totalDurationDays} วัน`
+                        : `${totalDurationDays} วัน`}
+                    </span>
+                  </div>
+                </div>
 
               {/* Sessions List */}
               <div className="mt-2.5 space-y-2.5">
@@ -876,6 +1393,7 @@ export function CourseEditDialog({
                   {overlappingCourses.map((c) => `${c.title} (${c.date})`).join(", ")}
                 </div>
               )}
+              </div>
             </div>
 
             <div>

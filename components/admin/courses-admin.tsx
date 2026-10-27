@@ -10,6 +10,7 @@ import {
   DEFAULT_SAT_SUPPORT,
   DEFAULT_TARGET_QUOTAS,
   TARGET_GROUPS,
+  getCourseScheduleDates,
   getTargetGroupKey,
   type Course,
 } from "@/lib/courses";
@@ -359,10 +360,38 @@ export function CoursesAdmin() {
                 <h2 className="text-[13px] font-semibold leading-snug text-[#111827]">
                   {course.title}
                 </h2>
+                {(() => {
+                  const sched = getCourseScheduleDates(course);
+                  return (
+                    <div className="mt-1.5 rounded-[5px] border border-[#e2e8f0] bg-[#f8fafc] px-2 py-1.5 text-[10px] space-y-0.5">
+                      <p className="flex items-center justify-between gap-1">
+                        <span className="font-semibold text-[#1869bc]">
+                          📥 เปิดรับสมัคร:
+                        </span>
+                        <span className="font-bold text-[#1e3a8a]">
+                          {sched.registrationDate}
+                        </span>
+                      </p>
+                      <p className="flex items-center justify-between gap-1">
+                        <span className="font-semibold text-[#c4080f]">
+                          📣 ประกาศผล:
+                        </span>
+                        <span className="font-bold text-[#991b1b]">
+                          {sched.resultDate}
+                        </span>
+                      </p>
+                    </div>
+                  );
+                })()}
                 <div className="mt-1.5 space-y-1 text-[10.5px] text-[#4b5563]">
                   <p className="flex items-start gap-1.5">
                     <CalendarIcon />
-                    <span>{course.date}</span>
+                    <span>
+                      <strong className="font-semibold text-[#166534]">
+                        อบรม:
+                      </strong>{" "}
+                      {course.date}
+                    </span>
                   </p>
                   <p className="flex items-start gap-1.5">
                     <PinIcon />
