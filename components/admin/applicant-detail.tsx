@@ -11,6 +11,7 @@ import {
 } from "@/components/admin/review-decision-dialog";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { ArrowLeftIcon } from "@/components/ui/icons";
+import { CopyButton } from "@/components/ui/copy-button";
 import {
   addApplicationNote,
   formatThaiDate,
@@ -416,7 +417,25 @@ export function ApplicantDetail({
             <SectionTitle title="ข้อมูลผู้สมัคร" />
             <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
               <Field label="ชื่อ-นามสกุล" value={applicant.name} />
-              <Field label="เลขบัตรประจำตัวประชาชน" value={applicant.idCard} />
+              <Field
+                label="เลขบัตรประจำตัวประชาชน"
+                value={
+                  <span className="inline-flex items-center gap-1.5 font-mono text-[12.5px] font-semibold text-[#1e3a8a]">
+                    <span>
+                      {applicant.idCard.replace(
+                        /(\d{1})(\d{4})(\d{5})(\d{2})(\d{1})/,
+                        "$1-$2-$3-$4-$5"
+                      )}
+                    </span>
+                    <CopyButton
+                      text={applicant.idCard}
+                      label="คัดลอก"
+                      size="xs"
+                      variant="badge"
+                    />
+                  </span>
+                }
+              />
               <Field label="โทรศัพท์" value={applicant.phone} />
               <Field label="อีเมล" value={applicant.email || "-"} />
               <Field label="สังกัด" value={applicant.affiliation} />

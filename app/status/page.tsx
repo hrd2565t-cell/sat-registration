@@ -9,6 +9,7 @@ import { AdminNavButton } from "@/components/layout/admin-nav-button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeftIcon, DownloadIcon } from "@/components/ui/icons";
 import { IdCardInput } from "@/components/ui/id-card-input";
+import { CopyButton } from "@/components/ui/copy-button";
 import { StatusPanel } from "@/components/status/status-panel";
 import { getCourseById, getDefaultCourse } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
@@ -155,6 +156,7 @@ function StatusContent() {
             onChange={setIdValue}
             tone="highlight"
             separator={false}
+            showActions={true}
             className="justify-center"
           />
           {error && (

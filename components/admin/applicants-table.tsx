@@ -17,6 +17,7 @@ import { StatusBadge } from "@/components/admin/status-badge";
 import { Pagination } from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
 import { Select } from "@/components/ui/select";
+import { CopyButton } from "@/components/ui/copy-button";
 
 const DEFAULT_PAGE_SIZE = 5;
 
@@ -415,6 +416,17 @@ export function ApplicantsTable({
                   >
                     {row.name}
                   </Link>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                    <span className="font-mono text-[8.5px] text-[#475569]">
+                      {row.idCard.replace(/(\d{1})(\d{4})(\d{5})(\d{2})(\d{1})/, "$1-$2-$3-$4-$5")}
+                    </span>
+                    <CopyButton
+                      text={row.idCard}
+                      size="xs"
+                      variant="ghost"
+                      title={`คัดลอกเลขบัตรประชาชนของ ${row.name}`}
+                    />
+                  </div>
                   <p className="mt-0.5 text-[8px] text-[#6b7280]">
                     {formatThaiDate(row.submittedAt)}
                   </p>

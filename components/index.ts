@@ -3,6 +3,7 @@ export { Badge } from "@/components/ui/badge";
 export { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 export { Input } from "@/components/ui/input";
 export { IdCardInput } from "@/components/ui/id-card-input";
+export { CopyButton } from "@/components/ui/copy-button";
 export { Checkbox } from "@/components/ui/checkbox";
 export { FileUpload } from "@/components/ui/file-upload";
 export { FormField } from "@/components/ui/form-field";

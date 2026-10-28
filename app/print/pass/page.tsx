@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { CopyButton } from "@/components/ui/copy-button";
 import { useApplications, formatThaiDate } from "@/lib/applications-store";
 import { useCourses } from "@/lib/courses-store";
 
@@ -113,10 +114,13 @@ function PassPrintView() {
               {record.name}
             </h2>
             <div className="grid grid-cols-2 gap-2 text-[11px] text-[#374151]">
-              <p>
+              <p className="flex items-center gap-1">
                 <span className="text-[#6b7280]">เลขประจำตัวประชาชน:</span>{" "}
                 <span className="font-mono font-medium">
                   {record.idCard.replace(/(\d{1})(\d{4})(\d{5})(\d{2})(\d{1})/, "$1-$2-$3-$4-$5")}
+                </span>
+                <span className="print:hidden">
+                  <CopyButton text={record.idCard} size="xs" variant="ghost" />
                 </span>
               </p>
               <p>

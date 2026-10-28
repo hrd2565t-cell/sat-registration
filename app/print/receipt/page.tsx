@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { CopyButton } from "@/components/ui/copy-button";
 import { useApplications, formatThaiDate, getDocumentLabel } from "@/lib/applications-store";
 import { useCourses } from "@/lib/courses-store";
 
@@ -132,6 +133,9 @@ function ReceiptPrintView() {
               <span className="text-[#6b7280]">หมายเลขบัตรประชาชน:</span>{" "}
               <span className="font-mono font-medium text-[#111827]">
                 {record.idCard.replace(/(\d{1})(\d{4})(\d{5})(\d{2})(\d{1})/, "$1-$2-$3-$4-$5")}
+              </span>
+              <span className="ml-1 inline-block align-middle print:hidden">
+                <CopyButton text={record.idCard} size="xs" variant="ghost" />
               </span>
             </div>
             <div>

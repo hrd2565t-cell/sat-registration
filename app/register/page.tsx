@@ -285,7 +285,9 @@ function RegistrationContent() {
                 <label className={labelClass}>
                   2. หมายเลขบัตรประจำตัวประชาชน (13 หลัก)
                 </label>
-                <IdCardInput value={idCard} onChange={setIdCard} />
+                <div className="w-fit">
+                  <IdCardInput value={idCard} onChange={setIdCard} showActions={true} />
+                </div>
 
                 {!eligibility.allowed && eligibility.existingRecord && (
                   <div

@@ -8,6 +8,7 @@ import { Header } from "@/components/layout/header";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Card } from "@/components/ui/card";
 import { DownloadIcon } from "@/components/ui/icons";
+import { CopyButton } from "@/components/ui/copy-button";
 import { StatusTracker } from "@/components/status/status-tracker";
 import { getCourseById, getDefaultCourse } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
@@ -204,12 +205,34 @@ function ReceiptContent() {
         >
           <div className="flex flex-col sm:flex-row">
             <div className="min-w-0 flex-1 p-3">
-              <div className="rounded-[4px] bg-[#1a3f83] px-2.5 py-[5px] text-[12px] font-semibold leading-snug text-white">
-                รหัสอ้างอิงการสมัคร: {record.receiptNo}
+              <div className="flex items-center justify-between gap-2 rounded-[4px] bg-[#1a3f83] px-2.5 py-[5px] text-[12px] font-semibold leading-snug text-white">
+                <span>รหัสอ้างอิงการสมัคร: {record.receiptNo}</span>
+                <CopyButton
+                  text={record.receiptNo}
+                  label="คัดลอก"
+                  size="xs"
+                  variant="ghost"
+                  className="bg-white/10 text-white hover:bg-white/25 hover:text-white"
+                />
               </div>
 
               <dl className="mt-2 space-y-[3px] text-[12.5px] leading-[1.6]">
                 <ReceiptRow label="ชื่อ - นามสกุล" value={record.name} />
+                <div className="flex items-center justify-between gap-1 py-0.5">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <dt className="w-[82px] shrink-0 font-medium text-[#4b5563]">เลขบัตร ปชช.</dt>
+                    <dd className="min-w-0 truncate font-mono text-[12px] font-semibold text-[#1e3a8a]">
+                      {record.idCard.replace(/(\d{1})(\d{4})(\d{5})(\d{2})(\d{1})/, "$1-$2-$3-$4-$5")}
+                    </dd>
+                  </div>
+                  <CopyButton
+                    text={record.idCard}
+                    label="คัดลอก"
+                    size="xs"
+                    variant="badge"
+                    title="คัดลอกเลขบัตรประชาชน 13 หลักเพื่อใช้ตรวจสอบสถานะ"
+                  />
+                </div>
                 <ReceiptRow label="หลักสูตร" value={record.courseTitle} />
                 <ReceiptRow
                   label="วันที่อบรม"
