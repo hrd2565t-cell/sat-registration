@@ -94,9 +94,7 @@ export function SyncDefaultsButton({
             ? "กำลังบันทึก..."
             : status === "saved"
               ? statusText
-              : compact
-                ? "บันทึกเป็นข้อมูลหลักถาวร"
-                : "บันทึกเป็นข้อมูลหลักถาวร (Sync to Project)"}
+              : "บันทึกเป็นข้อมูลหลักถาวร"}
         </span>
       </button>
     </div>
