@@ -1,13 +1,30 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   ApplicantDocument,
   ApplicantRecord,
 } from "@/lib/applications-store";
 import { getDocumentLabel } from "@/lib/applications-store";
 import { getDocumentFromStorage } from "@/lib/document-storage";
+
+function dataUrlToBlob(dataUrl: string): Blob | null {
+  try {
+    const parts = dataUrl.split(",");
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : "application/pdf";
+    const bstr = atob(parts[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  } catch {
+    return null;
+  }
+}
 
 export function DocumentPreviewDialog({
   file,
@@ -33,12 +50,23 @@ export function DocumentPreviewDialog({
 
     let isMounted = true;
     if (!file.dataUrl) {
+      if (typeof window !== "undefined") {
+        const cached = sessionStorage.getItem(`sat-doc-${file.id}`);
+        if (cached && isMounted) {
+          setActualDataUrl(cached);
+          setLoading(false);
+          return;
+        }
+      }
       getDocumentFromStorage(file.id).then((rec) => {
         if (isMounted) {
           setActualDataUrl(rec?.dataUrl ?? null);
           setLoading(false);
         }
       });
+    } else {
+      setActualDataUrl(file.dataUrl);
+      setLoading(false);
     }
 
     const previousOverflow = document.body.style.overflow;
@@ -55,12 +83,36 @@ export function DocumentPreviewDialog({
     };
   }, [file, onClose]);
 
+  // Convert Base64 Data URL to Blob URL for clean browser PDF rendering without security block
+  const blobUrl = useMemo(() => {
+    if (!actualDataUrl) return null;
+    if (actualDataUrl.startsWith("http://") || actualDataUrl.startsWith("https://")) {
+      return actualDataUrl;
+    }
+    if (actualDataUrl.startsWith("data:")) {
+      const blob = dataUrlToBlob(actualDataUrl);
+      if (blob) {
+        return URL.createObjectURL(blob);
+      }
+    }
+    return null;
+  }, [actualDataUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (blobUrl && blobUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(blobUrl);
+      }
+    };
+  }, [blobUrl]);
+
   if (!file) return null;
 
   const label = getDocumentLabel(file.kind);
   const isPdf =
     file.name.toLowerCase().endsWith(".pdf") ||
-    actualDataUrl?.startsWith("data:application/pdf");
+    actualDataUrl?.startsWith("data:application/pdf") ||
+    actualDataUrl?.toLowerCase().includes(".pdf");
   const isImage =
     !isPdf &&
     (file.kind === "photo" ||
@@ -70,16 +122,25 @@ export function DocumentPreviewDialog({
   const hasRealFile = Boolean(actualDataUrl);
 
   const handleOpenNewTab = () => {
-    if (!actualDataUrl) return;
+    const targetUrl = blobUrl || actualDataUrl;
+    if (!targetUrl) return;
+    if (
+      targetUrl.startsWith("http://") ||
+      targetUrl.startsWith("https://") ||
+      targetUrl.startsWith("blob:")
+    ) {
+      window.open(targetUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
     const win = window.open();
     if (win) {
       if (isPdf) {
         win.document.write(
-          `<iframe src="${actualDataUrl}" frameborder="0" style="border:0; top:0; left:0; bottom:0; right:0; width:100%; height:100%;" allowfullscreen></iframe>`
+          `<iframe src="${targetUrl}" frameborder="0" style="border:0; top:0; left:0; bottom:0; right:0; width:100%; height:100%;" allowfullscreen></iframe>`
         );
       } else {
         win.document.write(
-          `<body style="margin:0; background:#0f172a; display:flex; align-items:center; justify-content:center;"><img src="${actualDataUrl}" style="max-width:100%; max-height:100vh; object-contain:contain;" /></body>`
+          `<body style="margin:0; background:#0f172a; display:flex; align-items:center; justify-content:center;"><img src="${targetUrl}" style="max-width:100%; max-height:100vh; object-contain:contain;" /></body>`
         );
       }
     }
@@ -138,7 +199,7 @@ export function DocumentPreviewDialog({
                   <span>เปิดแท็บใหม่</span>
                 </button>
                 <a
-                  href={actualDataUrl!}
+                  href={blobUrl || actualDataUrl!}
                   download={file.name}
                   title="ดาวน์โหลดไฟล์"
                   className="inline-flex h-8 items-center gap-1 rounded-[5px] bg-[#1e3a8a] px-3 text-[11px] font-semibold text-white transition hover:bg-[#1e40af]"
@@ -179,13 +240,46 @@ export function DocumentPreviewDialog({
               </div>
             </div>
           ) : hasRealFile ? (
-            <div className="flex min-h-[440px] items-center justify-center">
+            <div className="flex min-h-[440px] w-full items-center justify-center">
               {isPdf ? (
-                <iframe
-                  src={actualDataUrl!}
-                  title={file.name}
-                  className="h-[580px] w-full rounded-lg border border-[#cbd5e1] bg-white shadow-sm"
-                />
+                <div className="flex h-[620px] w-full flex-col overflow-hidden rounded-lg border border-[#cbd5e1] bg-white shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-[11px] text-[#475569]">
+                    <div className="flex items-center gap-2 truncate">
+                      <svg className="h-4 w-4 shrink-0 text-[#dc2626]" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                      </svg>
+                      <span className="truncate font-semibold text-[#1e293b]">{file.name}</span>
+                      <span className="text-[#64748b]">({file.size})</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleOpenNewTab}
+                        className="inline-flex items-center gap-1 rounded border border-[#cbd5e1] bg-white px-2.5 py-1 text-[11px] font-medium text-[#1e3a8a] shadow-xs hover:bg-[#f1f5f9]"
+                      >
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" d="M11 3h6m0 0v6m0-6L9 11m-1-7H5a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-3" />
+                        </svg>
+                        <span>เปิดแท็บใหม่เต็มจอ</span>
+                      </button>
+                      <a
+                        href={blobUrl || actualDataUrl!}
+                        download={file.name}
+                        className="inline-flex items-center gap-1 rounded bg-[#1e3a8a] px-2.5 py-1 text-[11px] font-medium text-white shadow-xs hover:bg-[#1e40af]"
+                      >
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M4 16v1a2 2 0 002 2h8a2 2 0 002-2v-1M10 3v10m0 0l-3-3m3 3l3-3" />
+                        </svg>
+                        <span>ดาวน์โหลด PDF</span>
+                      </a>
+                    </div>
+                  </div>
+                  <iframe
+                    src={blobUrl || actualDataUrl!}
+                    title={file.name}
+                    className="h-full w-full border-0"
+                  />
+                </div>
               ) : isImage ? (
                 <div className="flex flex-col items-center gap-3">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -211,7 +305,13 @@ export function DocumentPreviewDialog({
             </div>
           ) : (
             /* Fallback: Template sample for demo seed records */
-            <div className="mx-auto min-h-[440px] w-full max-w-[540px] bg-white p-5 shadow-[0_2px_12px_rgba(15,23,42,0.12)] sm:p-8">
+            <div className="mx-auto min-h-[440px] w-full max-w-[560px] rounded-lg border border-[#e2e8f0] bg-white p-5 shadow-[0_2px_12px_rgba(15,23,42,0.12)] sm:p-8">
+              <div className="mb-4 rounded-md border border-[#fed7aa] bg-[#fff7ed] p-3 text-[11.5px] text-[#9a3412]">
+                <p className="font-semibold">⚠️ รายการนี้เป็นข้อมูลตั้งต้นจำลอง (ไม่มีไฟล์จริงแนบมา)</p>
+                <p className="mt-0.5 text-[10.5px] text-[#c2410c]">
+                  สำหรับใบสมัครจริงที่ผู้สมัครอัปโหลดไฟล์ผ่านหน้าเว็บไซต์ ระบบจะแสดงไฟล์ PDF หรือรูปภาพจริงให้ตรวจสอบและดาวน์โหลดได้ทันที
+                </p>
+              </div>
               <div className="flex items-start justify-between gap-4 border-b border-[#d1d5db] pb-4">
                 <div>
                   <p className="text-[10px] font-semibold tracking-wide text-[#1e3a8a]">

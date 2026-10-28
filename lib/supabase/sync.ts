@@ -218,7 +218,7 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
           name: doc.name,
           size: doc.size,
           type: doc.file_type ?? undefined,
-          dataUrl: doc.data_url ?? undefined,
+          dataUrl: (doc.storage_path || doc.data_url) ?? undefined,
         }));
 
       const notes = (allNotes || [])

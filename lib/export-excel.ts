@@ -37,6 +37,7 @@ export function exportApplicantsToExcel(
     "ตำแหน่ง",
     "หลักสูตรที่สมัคร",
     "สถานะการพิจารณา",
+    "ลำดับสำรอง (ถ้ามี)",
     "วันที่ยื่นสมัคร",
     "วันที่พิจารณา",
     "ผู้พิจารณา",
@@ -54,6 +55,7 @@ export function exportApplicantsToExcel(
     const reviewedText = app.reviewedAt
       ? formatThaiDateTime(app.reviewedAt)
       : "-";
+    const reserveText = app.reserveOrder ? `ลำดับที่ ${app.reserveOrder}` : "-";
 
     return [
       index + 1,
@@ -68,6 +70,7 @@ export function exportApplicantsToExcel(
       app.position || "-",
       courseName,
       statusText,
+      reserveText,
       submittedText,
       reviewedText,
       app.reviewedBy || "-",
@@ -107,6 +110,7 @@ export function exportApplicantsToExcel(
     { wch: 22 }, // ตำแหน่ง
     { wch: 42 }, // หลักสูตรที่สมัคร
     { wch: 22 }, // สถานะการพิจารณา
+    { wch: 16 }, // ลำดับสำรอง
     { wch: 22 }, // วันที่ยื่นสมัคร
     { wch: 22 }, // วันที่พิจารณา
     { wch: 18 }, // ผู้พิจารณา

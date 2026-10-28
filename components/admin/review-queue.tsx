@@ -12,6 +12,7 @@ import {
   formatThaiDateTime,
   useApplications,
 } from "@/lib/applications-store";
+import { exportApplicantsToExcel } from "@/lib/export-excel";
 
 const PAGE_SIZE = 8;
 
@@ -162,6 +163,16 @@ export function ReviewQueue() {
     safePage * PAGE_SIZE
   );
 
+  const handleExportExcel = () => {
+    const selectedCourseObj = courses.find((c) => c.id === Number(course));
+    exportApplicantsToExcel(filtered, {
+      courseTitle: selectedCourseObj?.title,
+      sheetName: "คิวรอตรวจสอบ",
+      filename: `คิวรอตรวจสอบคุณสมบัติ_${filtered.length}_คน.xlsx`,
+      courses,
+    });
+  };
+
   return (
     <div className="mx-auto w-full max-w-[1220px]">
       <section className="overflow-hidden rounded-lg border border-[#dbe4ef] bg-white shadow-[0_1px_3px_rgba(16,24,40,0.05)]">
@@ -181,9 +192,26 @@ export function ReviewQueue() {
                 รายการที่ AI พบประเด็นจะถูกจัดไว้ด้านบน
               </p>
             </div>
-            <span className="inline-flex h-8 items-center rounded-full border border-[#bfd3eb] bg-white px-3 text-[11px] font-semibold text-[#1e3a8a]">
-              เหลือ {pending.length} รายการ
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleExportExcel}
+                className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-[5px] bg-[#107c41] px-3 text-[11px] font-semibold text-white shadow-xs transition hover:bg-[#0d6937] active:scale-[0.98]"
+                title="ส่งออกรายการรอตรวจสอบเป็นไฟล์ Excel (.xlsx)"
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="8" y1="13" x2="16" y2="13" />
+                  <line x1="8" y1="17" x2="16" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
+                <span>Export Excel ({filtered.length})</span>
+              </button>
+              <span className="inline-flex h-8 items-center rounded-full border border-[#bfd3eb] bg-white px-3 text-[11px] font-semibold text-[#1e3a8a]">
+                เหลือ {pending.length} รายการ
+              </span>
+            </div>
           </div>
         </div>
 

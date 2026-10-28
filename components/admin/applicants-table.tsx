@@ -315,7 +315,7 @@ export function ApplicantsTable({
               <button
                 type="button"
                 onClick={handleExportExcel}
-                className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[5px] bg-[#107c41] px-3 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-[#0d6937] active:scale-[0.98] sm:h-[26px] sm:px-[12px] sm:text-[10px]"
+                className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[5px] bg-[#107c41] px-3.5 text-[12px] font-semibold text-white shadow-xs transition hover:bg-[#0d6937] active:scale-[0.98] sm:h-[30px] sm:px-3 sm:text-[11px]"
                 title="ส่งออกรายชื่อผู้สมัครเป็นไฟล์ Microsoft Excel (.xlsx)"
               >
                 <svg
@@ -333,12 +333,12 @@ export function ApplicantsTable({
                   <line x1="8" y1="17" x2="16" y2="17" />
                   <polyline points="10 9 9 9 8 9" />
                 </svg>
-                <span>Export Excel (.xlsx)</span>
+                <span>Export Excel ({filteredRows.length})</span>
               </button>
               <button
                 type="button"
                 onClick={handleExport}
-                className="inline-flex h-9 items-center gap-1 whitespace-nowrap rounded-[5px] border border-[#d1d5db] bg-white px-2.5 text-[12px] font-medium text-[#374151] transition-colors hover:bg-[#f9fafb] sm:h-[26px] sm:text-[10px]"
+                className="inline-flex h-9 items-center gap-1 whitespace-nowrap rounded-[5px] border border-[#d1d5db] bg-white px-2.5 text-[12px] font-medium text-[#374151] transition-colors hover:bg-[#f9fafb] sm:h-[30px] sm:text-[11px]"
                 title="ดาวน์โหลดไฟล์ CSV (สำหรับเปิดในโปรแกรมทั่วไป)"
               >
                 <span>CSV</span>
@@ -346,7 +346,7 @@ export function ApplicantsTable({
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="inline-flex h-9 items-center gap-1 whitespace-nowrap rounded-[5px] bg-[#e5e7eb] px-3 text-[12px] font-medium text-[#1f2937] transition-colors hover:bg-[#d1d5db] sm:h-[26px] sm:text-[10px]"
+                className="inline-flex h-9 items-center gap-1 whitespace-nowrap rounded-[5px] bg-[#e5e7eb] px-3 text-[12px] font-medium text-[#1f2937] transition-colors hover:bg-[#d1d5db] sm:h-[30px] sm:text-[11px]"
               >
                 พิมพ์รายงาน (PDF)
               </button>
