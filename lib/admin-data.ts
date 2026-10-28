@@ -21,7 +21,7 @@ export interface AdminApplicant {
 }
 
 export const adminUser = {
-  name: "นนธิษณ สมชาย",
+  name: "กองพัฒนาบุคลากรกีฬา",
 };
 
 export const adminStats: {

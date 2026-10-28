@@ -94,7 +94,7 @@ function PassPrintView() {
             การกีฬาแห่งประเทศไทย
           </p>
           <p className="text-[11px] font-medium text-[#4b5563]">
-            ฝ่ายพัฒนาบุคลากรกีฬา สถาบันวิทยาการกีฬาแห่งประเทศไทย
+            กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ
           </p>
           <div className="my-3 inline-block rounded-md bg-[#16265E] px-4 py-1 text-white">
             <h1 className="text-[15px] font-bold tracking-wide">
@@ -200,10 +200,10 @@ function PassPrintView() {
           <div className="text-center">
             <div className="h-12 w-48 border-b border-dashed border-[#94a3b8]" />
             <p className="mt-1.5 text-[10.5px] font-bold text-[#111827]">
-              (ผู้อำนวยการฝ่ายพัฒนาบุคลากรกีฬา)
+              (ผู้อำนวยการกองพัฒนาบุคลากรกีฬา)
             </p>
             <p className="text-[9px] text-[#6b7280]">
-              สถาบันวิทยาการกีฬาแห่งประเทศไทย
+              ฝ่ายพัฒนากีฬาเป็นเลิศ
             </p>
           </div>
         </div>

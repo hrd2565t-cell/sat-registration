@@ -82,7 +82,7 @@ export default function TimelinePage() {
             <div className="mt-1.5 border-t border-[#e5e7eb] pt-1.5 text-[#374151] xl:mt-2 xl:pt-2">
               <p className="text-[9px] leading-snug xl:text-[clamp(10px,0.75vw,12px)]">สอบถามข้อมูลเพิ่มเติม</p>
               <p className="mt-0.5 text-[8px] leading-snug xl:text-[clamp(9px,0.65vw,11px)]">
-                ฝ่ายพัฒนาบุคลากรกีฬา โทร. 02-123-4567
+                กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ โทร. 02-123-4567
               </p>
             </div>
           </section>
