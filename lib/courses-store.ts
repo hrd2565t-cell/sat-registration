@@ -146,24 +146,28 @@ function hydrate() {
           .order("id")
           .then(({ data }) => {
             if (data && data.length > 0) {
-              const cloudCourses: Course[] = data.map((c) => ({
-                id: c.id,
-                title: c.title,
-                shortTitle:
-                  (c as { short_title?: string }).short_title || undefined,
-                date: c.date,
-                location: c.location,
-                seats: c.seats,
-                capacity: 50,
-                seatsLeft: c.status === "full" ? undefined : c.seats_left,
-                status: c.status === "full" ? "full" : "open",
-                image: c.image,
-                imageAlt: c.image_alt || `${c.title} - รูปประกอบ`,
-                warningMessage: c.warning_message || undefined,
-                targetQuotas:
-                  (c as { target_quotas?: import("@/lib/courses").TargetGroupQuotas })
-                    .target_quotas || undefined,
-              }));
+              const cloudCourses: Course[] = data.map((c) => {
+                const parsedCap = Number(c.seats?.match(/\d+/)?.[0]);
+                const cap = Number.isFinite(parsedCap) && parsedCap > 0 ? parsedCap : 40;
+                return {
+                  id: c.id,
+                  title: c.title,
+                  shortTitle:
+                    (c as { short_title?: string }).short_title || undefined,
+                  date: c.date,
+                  location: c.location,
+                  seats: c.seats,
+                  capacity: cap,
+                  seatsLeft: c.status === "full" ? undefined : Math.min(cap, c.seats_left ?? cap),
+                  status: c.status === "full" ? "full" : "open",
+                  image: c.image,
+                  imageAlt: c.image_alt || `${c.title} - รูปประกอบ`,
+                  warningMessage: c.warning_message || undefined,
+                  targetQuotas:
+                    (c as { target_quotas?: import("@/lib/courses").TargetGroupQuotas })
+                      .target_quotas || undefined,
+                };
+              });
               state = {
                 courses: cloudCourses,
                 revision: state.revision + 1,
@@ -208,24 +212,28 @@ function hydrate() {
       .order("id")
       .then(({ data }) => {
         if (data && data.length > 0) {
-          const cloudCourses: Course[] = data.map((c) => ({
-            id: c.id,
-            title: c.title,
-            shortTitle:
-              (c as { short_title?: string }).short_title || undefined,
-            date: c.date,
-            location: c.location,
-            seats: c.seats,
-            capacity: 50,
-            seatsLeft: c.status === "full" ? undefined : c.seats_left,
-            status: c.status === "full" ? "full" : "open",
-            image: c.image,
-            imageAlt: c.image_alt || `${c.title} - รูปประกอบ`,
-            warningMessage: c.warning_message || undefined,
-            targetQuotas:
-              (c as { target_quotas?: import("@/lib/courses").TargetGroupQuotas })
-                .target_quotas || undefined,
-          }));
+          const cloudCourses: Course[] = data.map((c) => {
+            const parsedCap = Number(c.seats?.match(/\d+/)?.[0]);
+            const cap = Number.isFinite(parsedCap) && parsedCap > 0 ? parsedCap : 40;
+            return {
+              id: c.id,
+              title: c.title,
+              shortTitle:
+                (c as { short_title?: string }).short_title || undefined,
+              date: c.date,
+              location: c.location,
+              seats: c.seats,
+              capacity: cap,
+              seatsLeft: c.status === "full" ? undefined : Math.min(cap, c.seats_left ?? cap),
+              status: c.status === "full" ? "full" : "open",
+              image: c.image,
+              imageAlt: c.image_alt || `${c.title} - รูปประกอบ`,
+              warningMessage: c.warning_message || undefined,
+              targetQuotas:
+                (c as { target_quotas?: import("@/lib/courses").TargetGroupQuotas })
+                  .target_quotas || undefined,
+            };
+          });
           state = {
             courses: cloudCourses,
             revision: state.revision + 1,
@@ -270,6 +278,7 @@ export type CourseUpdate = Partial<
   Pick<
     Course,
     | "status"
+    | "capacity"
     | "seatsLeft"
     | "title"
     | "shortTitle"
@@ -330,10 +339,26 @@ export function updateCourse(
           ? patch.image
           : (getSeedCourse(course.id)?.image ?? course.image);
 
+    const parsedCap = Number((patch.seats ?? course.seats)?.match(/\d+/)?.[0]);
+    const updatedCapacity = Number.isFinite(parsedCap) && parsedCap > 0
+      ? parsedCap
+      : patch.capacity !== undefined
+        ? patch.capacity
+        : course.capacity;
+
+    const remaining =
+      patch.status === "full"
+        ? undefined
+        : patch.seatsLeft !== undefined
+          ? Math.min(updatedCapacity, patch.seatsLeft)
+          : Math.min(updatedCapacity, course.seatsLeft ?? updatedCapacity);
+
     updated = {
       ...course,
       ...patch,
       id: course.id,
+      capacity: updatedCapacity,
+      seatsLeft: remaining,
       image: nextImage,
       imageAlt: course.imageAlt,
       shortTitle:
@@ -356,12 +381,6 @@ export function updateCourse(
         patch.targetQuotas !== undefined
           ? patch.targetQuotas
           : course.targetQuotas,
-      seatsLeft:
-        patch.status === "full"
-          ? undefined
-          : patch.seatsLeft !== undefined
-            ? patch.seatsLeft
-            : course.seatsLeft,
     };
 
     return updated;
@@ -415,8 +434,9 @@ export function addCourse(
     0
   );
   const newId = maxId + 1;
-  const capacity = 50;
-  const seatsLeft = data.status === "full" ? undefined : (data.seatsLeft ?? capacity);
+  const parsedCap = Number(data.seats?.match(/\d+/)?.[0]);
+  const capacity = Number.isFinite(parsedCap) && parsedCap > 0 ? parsedCap : (data.capacity ?? 40);
+  const seatsLeft = data.status === "full" ? undefined : Math.min(capacity, data.seatsLeft ?? capacity);
 
   const globalSched = getGlobalCourseSchedule(state.courses);
   const useCustom = Boolean(data.useCustomSchedule);
@@ -559,18 +579,21 @@ export function syncCourseSeatsWithApprovedCounts(
   let changed = false;
   const nextCourses = state.courses.map((course) => {
     const approvedCount = countsByCourseId[course.id] ?? 0;
-    const capacity = course.capacity || 50;
+    const parsedCap = Number(course.seats?.match(/\d+/)?.[0]);
+    const capacity = Number.isFinite(parsedCap) && parsedCap > 0 ? parsedCap : (course.capacity || 40);
     const computedSeatsLeft = Math.max(0, capacity - approvedCount);
     const computedStatus: "open" | "full" =
       computedSeatsLeft === 0 ? "full" : "open";
 
     if (
+      course.capacity !== capacity ||
       course.seatsLeft !== computedSeatsLeft ||
       course.status !== computedStatus
     ) {
       changed = true;
       return {
         ...course,
+        capacity,
         seatsLeft: computedSeatsLeft,
         status: computedStatus,
       };

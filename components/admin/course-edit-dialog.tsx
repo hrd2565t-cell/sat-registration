@@ -111,9 +111,11 @@ export function CourseEditDialog({
   const [location, setLocation] = useState(course.location);
   const [seats, setSeats] = useState(course.seats);
   const [status, setStatus] = useState<Course["status"]>(course.status);
-  const [seatsLeft, setSeatsLeft] = useState(
-    String(course.seatsLeft ?? (course.status === "open" ? 0 : ""))
-  );
+  const [seatsLeft, setSeatsLeft] = useState(() => {
+    const parsedCap = Number(course.seats?.match(/\d+/)?.[0]) || course.capacity || 40;
+    const initial = course.seatsLeft ?? (course.status === "open" ? parsedCap : 0);
+    return String(Math.min(parsedCap, initial));
+  });
   const [warningMessage, setWarningMessage] = useState(
     course.warningMessage ?? ""
   );
@@ -376,6 +378,7 @@ export function CourseEditDialog({
       date: trimmedDate,
       location: trimmedLocation,
       seats: trimmedSeats,
+      capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : 40,
       status,
       seatsLeft: status === "full" ? undefined : remaining,
       warningMessage: trimmedWarning || undefined,
@@ -871,10 +874,21 @@ export function CourseEditDialog({
                   id="course-seats"
                   value={seats}
                   onChange={(event) => {
-                    setSeats(event.target.value);
+                    const newSeats = event.target.value;
+                    setSeats(newSeats);
                     if (error) setError("");
+
+                    // คำนวณที่นั่งคงเหลือให้อัตโนมัติเมื่อมีการเปลี่ยนจำนวนที่นั่งทั้งหมด
+                    const match = newSeats.match(/\d+/);
+                    if (match) {
+                      const newCap = parseInt(match[0], 10);
+                      const prevCap = Number(course.seats?.match(/\d+/)?.[0]) || course.capacity || newCap;
+                      const currentApproved = Math.max(0, prevCap - (course.seatsLeft ?? prevCap));
+                      const autoSeatsLeft = Math.max(0, newCap - currentApproved);
+                      setSeatsLeft(String(autoSeatsLeft));
+                    }
                   }}
-                  placeholder="เช่น จำนวนที่นั่ง 50 คน"
+                  placeholder="เช่น จำนวนที่นั่ง 40 คน"
                   className={fieldClass}
                 />
               </div>
