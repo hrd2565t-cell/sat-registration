@@ -27,6 +27,7 @@ import {
   type RegistrationEligibility,
 } from "@/lib/applications-store";
 import { ConflictDialog } from "@/components/register/conflict-dialog";
+import { isValidThaiIdCard } from "@/lib/validation";
 
 const labelClass = "text-[12.5px] font-medium text-[#1f2937]";
 
@@ -80,19 +81,17 @@ function RegistrationContent() {
     { label: "2. กรอกข้อมูลและส่งเอกสาร" },
     { label: "3. ส่งข้อมูลสมัคร" },
   ];
-  const [name, setName] = useState("นาย สมชาย สิงห์");
-  const [idCard, setIdCard] = useState("1100912345678");
+  const [name, setName] = useState("");
+  const [idCard, setIdCard] = useState("");
   const [affiliation, setAffiliation] = useState<string>(
-    TARGET_GROUPS[1].label // "สมาคมกีฬาแห่งประเทศไทย"
+    TARGET_GROUPS[0].label
   );
-  const [subAffiliation, setSubAffiliation] = useState(
-    "สมาคมกีฬาว่ายน้ำแห่งประเทศไทย"
-  );
-  const [position, setPosition] = useState("ผู้ฝึกสอนชำนาญการ");
-  const [phone, setPhone] = useState("080-267-5323");
-  const [email, setEmail] = useState("emsak.info@sat.com");
-  const [consent, setConsent] = useState(true);
-  const [confirmed, setConfirmed] = useState(true);
+  const [subAffiliation, setSubAffiliation] = useState("");
+  const [position, setPosition] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [consent, setConsent] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [conflictModal, setConflictModal] =
@@ -176,8 +175,15 @@ function RegistrationContent() {
       setFormError("กรุณากรอกชื่อ-นามสกุลให้ครบถ้วน");
       return;
     }
-    if (idCard.replace(/\D/g, "").length !== 13) {
+    const cleanId = idCard.replace(/\D/g, "");
+    if (cleanId.length !== 13) {
       setFormError("กรุณากรอกหมายเลขบัตรประจำตัวประชาชนให้ครบ 13 หลัก");
+      return;
+    }
+    if (!isValidThaiIdCard(cleanId)) {
+      setFormError(
+        "หมายเลขบัตรประจำตัวประชาชนไม่ถูกต้องตามสูตรคำนวณของกรมการปกครอง (กรุณาตรวจสอบเลข 13 หลักอีกครั้ง)"
+      );
       return;
     }
     if (position.trim() === "") {
@@ -280,6 +286,7 @@ function RegistrationContent() {
               <Input
                 fullWidth
                 label="1. ชื่อ - นามสกุล"
+                placeholder="ระบุคำนำหน้าและชื่อ-นามสกุล เช่น นายสมศักดิ์ รักกีฬา"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
               />
@@ -291,6 +298,12 @@ function RegistrationContent() {
                 <div className="w-fit">
                   <IdCardInput value={idCard} onChange={setIdCard} showActions={true} />
                 </div>
+
+                {idCard.replace(/\D/g, "").length === 13 && !isValidThaiIdCard(idCard) && (
+                  <p className="mt-1 text-[11px] font-medium text-[#dc2626]">
+                    ⚠️ หมายเลขบัตรประชาชนไม่ถูกต้องตามสูตรคำนวณของกรมการปกครอง (กรุณาตรวจสอบตัวเลขอีกครั้ง)
+                  </p>
+                )}
 
                 {!eligibility.allowed && eligibility.existingRecord && (
                   <div
@@ -372,6 +385,7 @@ function RegistrationContent() {
               <Input
                 fullWidth
                 label="4. ตำแหน่ง (หน่วยงาน / สมาคมกีฬา)"
+                placeholder="เช่น ผู้ฝึกสอนกีฬา, ผู้บริหารสมาคมกีฬา, เจ้าหน้าที่ปฏิบัติงาน"
                 value={position}
                 onChange={(event) => setPosition(event.target.value)}
               />
@@ -380,6 +394,7 @@ function RegistrationContent() {
                 <Input
                   fullWidth
                   label="เบอร์โทรศัพท์"
+                  placeholder="เช่น 0812345678"
                   value={phone}
                   onChange={(event) => setPhone(event.target.value)}
                   inputMode="tel"
@@ -388,6 +403,7 @@ function RegistrationContent() {
                   fullWidth
                   label="E-mail"
                   type="email"
+                  placeholder="เช่น somsak@email.com"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                 />

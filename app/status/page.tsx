@@ -18,7 +18,7 @@ import {
   getApplicationsByIdCard,
   useApplications,
 } from "@/lib/applications-store";
-import { MOCK_ID_CARD } from "@/lib/registration";
+import { isValidThaiIdCard } from "@/lib/validation";
 
 function ArrowRightIcon({ className }: { className?: string }) {
   return (
@@ -106,9 +106,7 @@ function StatusContent() {
   const mounted = useMounted();
   const initialId = (searchParams.get("id") ?? "").replace(/\D/g, "");
   const initialValid = initialId.length === 13;
-  const [idValue, setIdValue] = useState(
-    initialValid ? initialId : MOCK_ID_CARD
-  );
+  const [idValue, setIdValue] = useState(initialValid ? initialId : "");
   const [searchedId, setSearchedId] = useState(initialValid ? initialId : "");
   const [error, setError] = useState("");
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -121,6 +119,10 @@ function StatusContent() {
     const digits = idValue.replace(/\D/g, "");
     if (digits.length !== 13) {
       setError("กรุณากรอกหมายเลขบัตรประจำตัวประชาชนให้ครบ 13 หลัก");
+      return;
+    }
+    if (!isValidThaiIdCard(digits)) {
+      setError("หมายเลขบัตรประชาชนไม่ถูกต้องตามสูตรคำนวณของกรมการปกครอง กรุณาตรวจสอบอีกครั้ง");
       return;
     }
     setError("");
