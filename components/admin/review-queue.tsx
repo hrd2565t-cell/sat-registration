@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AiVerdictBadge } from "@/components/admin/ai-verdict-badge";
@@ -274,11 +273,13 @@ export function ReviewQueue() {
               className="group flex flex-col gap-3 rounded-[7px] border border-[#e5e7eb] bg-white p-3 transition-colors hover:border-[#9db9de] hover:bg-[#f9fbff] sm:flex-row sm:items-center"
             >
               <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                <Image
-                  src="/assets/applicant-photo.png"
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={
+                    item.documents?.find((d) => d.kind === "photo")?.dataUrl ||
+                    "/assets/applicant-photo.png"
+                  }
                   alt=""
-                  width={40}
-                  height={48}
                   className="h-12 w-10 shrink-0 rounded-[4px] border border-[#e5e7eb] object-cover"
                 />
                 <div className="min-w-0 flex-1">

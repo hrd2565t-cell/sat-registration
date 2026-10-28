@@ -20,6 +20,8 @@ function PassPrintView() {
   ) || applications[0];
 
   const course = courses.find((c) => c.id === record?.courseId);
+  const photoDoc = record?.documents?.find((d) => d.kind === "photo");
+  const photoSrc = photoDoc?.dataUrl || "/assets/applicant-photo.png";
 
   useEffect(() => {
     if (record && !autoPrintTriggeredRef.current) {
@@ -138,11 +140,11 @@ function PassPrintView() {
             </div>
           </div>
           <div className="relative h-28 w-24 shrink-0 overflow-hidden rounded-md border border-[#94a3b8] bg-[#e2e8f0] shadow-sm">
-            <Image
-              src="/assets/applicant-photo.png"
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photoSrc}
               alt={record.name}
-              fill
-              className="object-cover"
+              className="h-full w-full object-cover"
             />
           </div>
         </div>

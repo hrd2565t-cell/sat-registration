@@ -20,6 +20,8 @@ function ReceiptPrintView() {
   ) || applications[0]; // fallback to first record if not found
 
   const course = courses.find((c) => c.id === record?.courseId);
+  const photoDoc = record?.documents?.find((d) => d.kind === "photo");
+  const photoSrc = photoDoc?.dataUrl || "/assets/applicant-photo.png";
 
   useEffect(() => {
     if (record && !autoPrintTriggeredRef.current) {
@@ -124,35 +126,52 @@ function ReceiptPrintView() {
           <h2 className="border-l-4 border-[#16265E] pl-2 text-[12.5px] font-bold text-[#16265E]">
             1. ข้อมูลผู้สมัครเข้ารับการอบรม
           </h2>
-          <div className="mt-2.5 grid grid-cols-2 gap-x-6 gap-y-2 rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-4 text-[11.5px]">
-            <div>
-              <span className="text-[#6b7280]">ชื่อ-นามสกุล:</span>{" "}
-              <span className="font-semibold text-[#111827]">{record.name}</span>
+          <div className="mt-2.5 flex items-stretch gap-4 rounded-lg border border-[#e5e7eb] bg-[#f8fafc] p-4 text-[11.5px]">
+            <div className="grid flex-1 grid-cols-2 gap-x-6 gap-y-2.5">
+              <div>
+                <span className="text-[#6b7280]">ชื่อ-นามสกุล:</span>{" "}
+                <span className="font-semibold text-[#111827]">{record.name}</span>
+              </div>
+              <div>
+                <span className="text-[#6b7280]">หมายเลขบัตรประชาชน:</span>{" "}
+                <span className="font-mono font-medium text-[#111827]">
+                  {record.idCard.replace(/(\d{1})(\d{4})(\d{5})(\d{2})(\d{1})/, "$1-$2-$3-$4-$5")}
+                </span>
+                <span className="ml-1 inline-block align-middle print:hidden">
+                  <CopyButton text={record.idCard} size="xs" variant="ghost" />
+                </span>
+              </div>
+              <div>
+                <span className="text-[#6b7280]">สังกัด / หน่วยงาน:</span>{" "}
+                <span className="font-medium text-[#111827]">{record.affiliation}</span>
+              </div>
+              <div>
+                <span className="text-[#6b7280]">ตำแหน่งหน้าที่:</span>{" "}
+                <span className="font-medium text-[#111827]">{record.position}</span>
+              </div>
+              <div>
+                <span className="text-[#6b7280]">เบอร์โทรศัพท์:</span>{" "}
+                <span className="font-medium text-[#111827]">{record.phone}</span>
+              </div>
+              <div>
+                <span className="text-[#6b7280]">อีเมล:</span>{" "}
+                <span className="font-medium text-[#111827]">{record.email}</span>
+              </div>
             </div>
-            <div>
-              <span className="text-[#6b7280]">หมายเลขบัตรประชาชน:</span>{" "}
-              <span className="font-mono font-medium text-[#111827]">
-                {record.idCard.replace(/(\d{1})(\d{4})(\d{5})(\d{2})(\d{1})/, "$1-$2-$3-$4-$5")}
+
+            {/* กรอบรูปถ่ายผู้สมัครขนาดมาตรฐาน */}
+            <div className="flex w-[86px] shrink-0 flex-col items-center justify-center rounded-md border border-[#cbd5e1] bg-white p-1 shadow-2xs">
+              <div className="relative h-[96px] w-[74px] overflow-hidden rounded-[3px] bg-[#f1f5f9]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={photoSrc}
+                  alt={record.name}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <span className="mt-1 text-[8.5px] font-medium text-[#64748b] print:text-[8px]">
+                รูปถ่ายผู้สมัคร
               </span>
-              <span className="ml-1 inline-block align-middle print:hidden">
-                <CopyButton text={record.idCard} size="xs" variant="ghost" />
-              </span>
-            </div>
-            <div>
-              <span className="text-[#6b7280]">สังกัด / หน่วยงาน:</span>{" "}
-              <span className="font-medium text-[#111827]">{record.affiliation}</span>
-            </div>
-            <div>
-              <span className="text-[#6b7280]">ตำแหน่งหน้าที่:</span>{" "}
-              <span className="font-medium text-[#111827]">{record.position}</span>
-            </div>
-            <div>
-              <span className="text-[#6b7280]">เบอร์โทรศัพท์:</span>{" "}
-              <span className="font-medium text-[#111827]">{record.phone}</span>
-            </div>
-            <div>
-              <span className="text-[#6b7280]">อีเมล:</span>{" "}
-              <span className="font-medium text-[#111827]">{record.email}</span>
             </div>
           </div>
         </div>

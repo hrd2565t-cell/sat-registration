@@ -233,11 +233,10 @@ export function DocumentPreviewDialog({
 
               {file.kind === "photo" ? (
                 <div className="mt-7 flex flex-col items-center">
-                  <Image
-                    src="/assets/applicant-photo.png"
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={actualDataUrl || file.dataUrl || "/assets/applicant-photo.png"}
                     alt={`รูปถ่าย ${applicant.name}`}
-                    width={144}
-                    height={176}
                     className="h-[176px] w-[144px] rounded-[3px] border border-[#d1d5db] object-cover"
                   />
                   <p className="mt-3 text-[11px] font-medium text-[#111827]">

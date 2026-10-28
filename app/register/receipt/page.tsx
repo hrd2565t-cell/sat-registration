@@ -152,6 +152,9 @@ function ReceiptContent() {
         ? "เอกสารหรือคุณสมบัติยังไม่ผ่านเกณฑ์ กรุณาตรวจสอบเหตุผลและยื่นสมัครใหม่"
         : "อยู่ระหว่างการตรวจสอบคุณสมบัติและเอกสารโดยเจ้าหน้าที่ (3-5 วันทำการ)";
 
+  const photoDoc = record.documents?.find((d) => d.kind === "photo");
+  const photoSrc = photoDoc?.dataUrl || "/assets/applicant-photo.png";
+
   return (
     <div className="min-h-screen bg-[#F3F7FA]">
       <Header variant="dark" rightSlot={headerActions} />
@@ -251,13 +254,14 @@ function ReceiptContent() {
               <span className="absolute -left-[7px] -top-[7px] hidden h-3.5 w-3.5 rounded-full bg-[#F3F7FA] sm:block" />
               <span className="absolute -bottom-[7px] -left-[7px] hidden h-3.5 w-3.5 rounded-full bg-[#F3F7FA] sm:block" />
 
-              <Image
-                src="/assets/applicant-photo.png"
-                alt="รูปถ่ายผู้สมัคร"
-                width={72}
-                height={68}
-                className="h-[68px] w-[72px] rounded-[4px] object-cover"
-              />
+              <div className="relative h-[68px] w-[72px] overflow-hidden rounded-[4px] border border-[#cbd5e1] bg-[#e2e8f0]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={photoSrc}
+                  alt="รูปถ่ายผู้สมัคร"
+                  className="h-full w-full object-cover"
+                />
+              </div>
               <Image
                 src="/assets/qr-receipt.png"
                 alt="QR Code สำหรับใช้ติดต่อกลับ"

@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { AiVerdictBadge } from "@/components/admin/ai-verdict-badge";
@@ -333,11 +332,13 @@ export function ApplicantDetail({
 
       <section className="rounded-lg border border-[#e3e6ea] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.05)]">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <Image
-            src="/assets/applicant-photo.png"
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={
+              applicant.documents?.find((d) => d.kind === "photo")?.dataUrl ||
+              "/assets/applicant-photo.png"
+            }
             alt={`รูปถ่าย ${applicant.name}`}
-            width={64}
-            height={76}
             className="h-[76px] w-16 shrink-0 rounded-[5px] border border-[#d1d5db] object-cover"
           />
           <div className="min-w-0 flex-1">
