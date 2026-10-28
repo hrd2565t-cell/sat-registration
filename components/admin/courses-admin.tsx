@@ -101,7 +101,7 @@ function UsersIcon() {
 
 const NEW_COURSE_TEMPLATE: Course = {
   id: 0,
-  image: "/assets/course-national-coach.png",
+  image: "/assets/course-executive-management.jpg",
   imageAlt: "หลักสูตรใหม่ - รูปประกอบ",
   status: "open",
   capacity: 50,

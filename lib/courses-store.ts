@@ -74,8 +74,15 @@ function mergeStoredCourses(stored: Course[]): Course[] {
 
   return stored.map((saved): Course => {
     const seed = getSeedCourse(saved.id);
+    const isLegacySeedPath =
+      saved.image === "/assets/course-national-coach.png" ||
+      saved.image === "/assets/course-professional-referee.png" ||
+      saved.image === "/assets/course-basic-sports-science.png" ||
+      saved.image === "/assets/course-sports-management.png" ||
+      saved.image === "/assets/course-sports-psychology.png";
+
     const customImage =
-      isAllowedCourseImage(saved.image)
+      isAllowedCourseImage(saved.image) && !isLegacySeedPath
         ? saved.image
         : undefined;
     const isCustom = Boolean(saved.useCustomSchedule ?? seed?.useCustomSchedule);
@@ -84,7 +91,7 @@ function mergeStoredCourses(stored: Course[]): Course[] {
       ...(seed ?? {}),
       ...saved,
       id: saved.id,
-      image: customImage ?? seed?.image ?? "/assets/course-national-coach.png",
+      image: customImage ?? seed?.image ?? "/assets/course-executive-management.jpg",
       imageAlt: saved.imageAlt || seed?.imageAlt || `${saved.title} - รูปประกอบ`,
       shortTitle:
         saved.shortTitle === "วิทยาศาสตร์การกีฬา" &&
@@ -434,7 +441,7 @@ export function addCourse(
     image:
       data.image && isAllowedCourseImage(data.image)
         ? data.image
-        : "/assets/course-national-coach.png",
+        : "/assets/course-executive-management.jpg",
     imageAlt: `${data.title.trim()} - รูปประกอบหลักสูตร`,
     warningMessage: data.warningMessage?.trim() || undefined,
     targetQuotas: data.targetQuotas ?? { ...DEFAULT_TARGET_QUOTAS },
