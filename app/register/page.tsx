@@ -40,6 +40,13 @@ function toDocument(
 ): ApplicantDocument {
   const docId = `${kind}-${Date.now()}-${index}`;
   if (file.dataUrl) {
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.setItem(`sat-doc-${docId}`, file.dataUrl);
+      } catch {
+        // ignore session storage quota
+      }
+    }
     saveDocumentToStorage({
       id: docId,
       name: file.name,
@@ -139,15 +146,9 @@ function RegistrationContent() {
     }
   }, [idCard, applications]);
 
-  const [photoFiles, setPhotoFiles] = useState<FileItem[]>([
-    { name: "แนบรูปถ่ายสำเร็จ.jpg", size: "1.1 MB" },
-  ]);
-  const [coverFiles, setCoverFiles] = useState<FileItem[]>([
-    { name: "หนังสือนำส่งจากต้นสังกัด.pdf", size: "2.4 MB" },
-  ]);
-  const [certFiles, setCertFiles] = useState<FileItem[]>([
-    { name: "หนังสือรับรอง.pdf", size: "1.8 MB" },
-  ]);
+  const [photoFiles, setPhotoFiles] = useState<FileItem[]>([]);
+  const [coverFiles, setCoverFiles] = useState<FileItem[]>([]);
+  const [certFiles, setCertFiles] = useState<FileItem[]>([]);
   const [sakaFiles, setSakaFiles] = useState<FileItem[]>([]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -424,7 +425,7 @@ function RegistrationContent() {
                 </p>
                 <div className="flex items-start gap-2.5">
                   <Avatar
-                    src="/assets/avatar-placeholder.svg"
+                    src={photoFiles[0]?.dataUrl || "/assets/avatar-placeholder.svg"}
                     alt="รูปถ่ายผู้สมัคร"
                     size="portrait"
                   />
@@ -433,6 +434,8 @@ function RegistrationContent() {
                       files={photoFiles}
                       onAdd={(file) => setPhotoFiles([file])}
                       onRemove={() => setPhotoFiles([])}
+                      emptyText="ยังไม่ได้แนบรูปถ่าย (คลิกเพื่อแนบรูปถ่ายหน้าตรง)"
+                      accept=".jpg,.jpeg,.png,.webp"
                     />
                   </div>
                 </div>

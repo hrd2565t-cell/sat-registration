@@ -3,10 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { CopyButton } from "@/components/ui/copy-button";
-import { useApplications, formatThaiDate } from "@/lib/applications-store";
+import { useApplications, formatThaiDate, getLatestApplication } from "@/lib/applications-store";
 import { useCourses } from "@/lib/courses-store";
+import { getDocumentFromStorage } from "@/lib/document-storage";
 
 function PassPrintView() {
   const searchParams = useSearchParams();
@@ -15,13 +16,40 @@ function PassPrintView() {
   const { courses } = useCourses();
   const autoPrintTriggeredRef = useRef(false);
 
-  const record = applications.find(
-    (app) => app.ref === ref || app.receiptNo === ref
-  ) || applications[0];
+  const record = (ref
+    ? applications.find((app) => app.ref === ref || app.receiptNo === ref)
+    : undefined) || getLatestApplication(applications) || applications[0];
 
   const course = courses.find((c) => c.id === record?.courseId);
   const photoDoc = record?.documents?.find((d) => d.kind === "photo");
-  const photoSrc = photoDoc?.dataUrl || "/assets/applicant-photo.png";
+  const [loadedPhotoUrl, setLoadedPhotoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!photoDoc) {
+      setLoadedPhotoUrl(null);
+      return;
+    }
+    if (photoDoc.dataUrl) {
+      setLoadedPhotoUrl(photoDoc.dataUrl);
+      return;
+    }
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem(`sat-doc-${photoDoc.id}`);
+      if (cached) {
+        setLoadedPhotoUrl(cached);
+        return;
+      }
+    }
+    if (photoDoc.id) {
+      getDocumentFromStorage(photoDoc.id).then((doc) => {
+        if (doc?.dataUrl) {
+          setLoadedPhotoUrl(doc.dataUrl);
+        }
+      });
+    }
+  }, [photoDoc?.id, photoDoc?.dataUrl]);
+
+  const photoSrc = loadedPhotoUrl || photoDoc?.dataUrl || "/assets/avatar-placeholder.svg";
 
   useEffect(() => {
     if (record && !autoPrintTriggeredRef.current) {

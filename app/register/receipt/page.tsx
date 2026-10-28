@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Suspense, useSyncExternalStore } from "react";
+import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -13,11 +13,10 @@ import { StatusTracker } from "@/components/status/status-tracker";
 import { getCourseById, getDefaultCourse } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
 import {
-  getApplicationByIdCard,
   getLatestApplication,
   useApplications,
 } from "@/lib/applications-store";
-import { MOCK_ID_CARD } from "@/lib/registration";
+import { getDocumentFromStorage } from "@/lib/document-storage";
 
 const emptySubscribe = () => () => {};
 
@@ -95,14 +94,43 @@ function ReceiptContent() {
   const mounted = useMounted();
   const ref = searchParams.get("ref");
   const courseParam = searchParams.get("course");
-  const record = ref
-    ? applications.find((item) => item.ref === ref)
-    : getApplicationByIdCard(applications, MOCK_ID_CARD) ??
-      getLatestApplication(applications);
+  const record = (ref
+    ? applications.find((item) => item.ref === ref || item.receiptNo === ref)
+    : undefined) ??
+    getLatestApplication(applications) ??
+    applications[0];
   const course =
     (record ? getCourseById(record.courseId, courses) : undefined) ??
     getCourseById(courseParam, courses) ??
     getDefaultCourse(courses);
+
+  const photoDoc = record?.documents?.find((d) => d.kind === "photo");
+  const [loadedPhotoUrl, setLoadedPhotoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!photoDoc) {
+      setLoadedPhotoUrl(null);
+      return;
+    }
+    if (photoDoc.dataUrl) {
+      setLoadedPhotoUrl(photoDoc.dataUrl);
+      return;
+    }
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem(`sat-doc-${photoDoc.id}`);
+      if (cached) {
+        setLoadedPhotoUrl(cached);
+        return;
+      }
+    }
+    if (photoDoc.id) {
+      getDocumentFromStorage(photoDoc.id).then((doc) => {
+        if (doc?.dataUrl) {
+          setLoadedPhotoUrl(doc.dataUrl);
+        }
+      });
+    }
+  }, [photoDoc?.id, photoDoc?.dataUrl]);
 
   if (!record && !mounted) {
     return <ReceiptFallback />;
@@ -152,8 +180,10 @@ function ReceiptContent() {
         ? "เอกสารหรือคุณสมบัติยังไม่ผ่านเกณฑ์ กรุณาตรวจสอบเหตุผลและยื่นสมัครใหม่"
         : "อยู่ระหว่างการตรวจสอบคุณสมบัติและเอกสารโดยเจ้าหน้าที่ (3-5 วันทำการ)";
 
-  const photoDoc = record.documents?.find((d) => d.kind === "photo");
-  const photoSrc = photoDoc?.dataUrl || "/assets/applicant-photo.png";
+  const photoSrc =
+    loadedPhotoUrl ||
+    photoDoc?.dataUrl ||
+    "/assets/avatar-placeholder.svg";
 
   return (
     <div className="min-h-screen bg-[#F3F7FA]">

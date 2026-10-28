@@ -235,7 +235,7 @@ export function DocumentPreviewDialog({
                 <div className="mt-7 flex flex-col items-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={actualDataUrl || file.dataUrl || "/assets/applicant-photo.png"}
+                    src={actualDataUrl || file.dataUrl || "/assets/avatar-placeholder.svg"}
                     alt={`รูปถ่าย ${applicant.name}`}
                     className="h-[176px] w-[144px] rounded-[3px] border border-[#d1d5db] object-cover"
                   />

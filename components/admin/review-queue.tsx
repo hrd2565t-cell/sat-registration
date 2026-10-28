@@ -277,7 +277,7 @@ export function ReviewQueue() {
                 <img
                   src={
                     item.documents?.find((d) => d.kind === "photo")?.dataUrl ||
-                    "/assets/applicant-photo.png"
+                    "/assets/avatar-placeholder.svg"
                   }
                   alt=""
                   className="h-12 w-10 shrink-0 rounded-[4px] border border-[#e5e7eb] object-cover"

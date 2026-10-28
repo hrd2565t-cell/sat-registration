@@ -22,6 +22,7 @@ import {
   type ApplicantDocument,
 } from "@/lib/applications-store";
 import { adminUser } from "@/lib/admin-data";
+import { getDocumentFromStorage } from "@/lib/document-storage";
 
 const emptySubscribe = () => () => {};
 
@@ -201,6 +202,34 @@ export function ApplicantDetail({
   const [notice, setNotice] = useState("");
   const [copied, setCopied] = useState(false);
 
+  const photoDoc = applicant?.documents?.find((d) => d.kind === "photo");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!photoDoc) {
+      setPhotoUrl(null);
+      return;
+    }
+    if (photoDoc.dataUrl) {
+      setPhotoUrl(photoDoc.dataUrl);
+      return;
+    }
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem(`sat-doc-${photoDoc.id}`);
+      if (cached) {
+        setPhotoUrl(cached);
+        return;
+      }
+    }
+    if (photoDoc.id) {
+      getDocumentFromStorage(photoDoc.id).then((doc) => {
+        if (doc?.dataUrl) {
+          setPhotoUrl(doc.dataUrl);
+        }
+      });
+    }
+  }, [photoDoc?.id, photoDoc?.dataUrl]);
+
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(""), 4500);
@@ -335,8 +364,9 @@ export function ApplicantDetail({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={
-              applicant.documents?.find((d) => d.kind === "photo")?.dataUrl ||
-              "/assets/applicant-photo.png"
+              photoUrl ||
+              photoDoc?.dataUrl ||
+              "/assets/avatar-placeholder.svg"
             }
             alt={`รูปถ่าย ${applicant.name}`}
             className="h-[76px] w-16 shrink-0 rounded-[5px] border border-[#d1d5db] object-cover"
