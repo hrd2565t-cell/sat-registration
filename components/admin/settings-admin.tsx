@@ -8,6 +8,7 @@ import {
   useApplications,
 } from "@/lib/applications-store";
 import { resetCourses } from "@/lib/courses-store";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
 
 function Toggle({
   checked,
@@ -64,6 +65,7 @@ function SettingRow({
 
 export function SettingsAdmin() {
   const { applications } = useApplications();
+  const hasCloud = isSupabaseConfigured();
   const pending = applications.filter(
     (item) => item.status === "pending"
   ).length;
@@ -123,13 +125,13 @@ export function SettingsAdmin() {
               <div>
                 <p className="text-[9.5px] text-[#6b7280]">สถานะบัญชี</p>
                 <p className="mt-0.5 font-medium text-[#176c3a]">
-                  ใช้งานอยู่ (เดโม)
+                  {hasCloud ? "🟢 พร้อมใช้งาน (ระบบคลาวด์ กกท.)" : "🟡 พร้อมใช้งาน (โหมดออฟไลน์ / ทดสอบ)"}
                 </p>
               </div>
               <div>
                 <p className="text-[9.5px] text-[#6b7280]">การยืนยันตัวตน</p>
                 <p className="mt-0.5 font-medium text-[#111827]">
-                  ยังไม่ได้เชื่อมระบบล็อกอินจริง
+                  ความปลอดภัยด้วยรหัส PIN 6 หลัก
                 </p>
               </div>
             </div>
@@ -179,7 +181,7 @@ export function SettingsAdmin() {
         <div className="space-y-3">
           <section className="rounded-lg border border-[#e3e6ea] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.05)]">
             <h2 className="text-[13px] font-semibold text-[#111827]">
-              ข้อมูลเดโม
+              ฐานข้อมูลและพื้นที่จัดเก็บ
             </h2>
             <dl className="mt-2.5 space-y-2 text-[10.5px]">
               <div className="flex justify-between gap-3">
@@ -195,9 +197,9 @@ export function SettingsAdmin() {
                 </dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-[#6b7280]">พื้นที่จัดเก็บ</dt>
+                <dt className="text-[#6b7280]">พื้นที่จัดเก็บข้อมูล</dt>
                 <dd className="text-right font-medium text-[#111827]">
-                  localStorage
+                  {hasCloud ? "Supabase Cloud DB" : "เบราว์เซอร์ (LocalStorage)"}
                 </dd>
               </div>
             </dl>
@@ -275,7 +277,7 @@ export function SettingsAdmin() {
           </section>
 
           <p className="text-center text-[9.5px] text-[#6b7280]">
-            ระบบต้นแบบ · SAT Admission 2570
+            ระบบรับสมัครผู้เข้ารับการอบรมออนไลน์ · กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ (กกท.)
           </p>
         </div>
       </div>
