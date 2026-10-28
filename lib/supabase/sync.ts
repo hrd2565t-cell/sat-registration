@@ -1,4 +1,4 @@
-import { getSupabaseClient, isSupabaseConfigured } from "./client";
+import { getSupabaseClient } from "./client";
 import type { ApplicantRecord, ApplicantDocument } from "@/lib/applications-store";
 import type { Json } from "./types";
 

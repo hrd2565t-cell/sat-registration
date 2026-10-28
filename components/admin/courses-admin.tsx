@@ -317,9 +317,6 @@ export function CoursesAdmin() {
           const courseApplications = applications.filter(
             (item) => item.courseId === course.id
           );
-          const pending = courseApplications.filter(
-            (item) => item.status === "pending"
-          ).length;
           const approved = courseApplications.filter(
             (item) => item.status === "approved"
           ).length;

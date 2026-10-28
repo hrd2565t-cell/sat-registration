@@ -681,26 +681,29 @@ export function TimelineSchedule() {
   const globalSchedule = getGlobalCourseSchedule(courses);
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(TIMELINE_SETTINGS_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as {
-        showSportsEvents?: boolean;
-        showSubPhases?: boolean;
-        onlyActiveMonths?: boolean;
-      };
-      if (typeof parsed.showSportsEvents === "boolean") {
-        setShowSportsEvents(parsed.showSportsEvents);
+    const timer = setTimeout(() => {
+      try {
+        const raw = window.localStorage.getItem(TIMELINE_SETTINGS_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as {
+          showSportsEvents?: boolean;
+          showSubPhases?: boolean;
+          onlyActiveMonths?: boolean;
+        };
+        if (typeof parsed.showSportsEvents === "boolean") {
+          setShowSportsEvents(parsed.showSportsEvents);
+        }
+        if (typeof parsed.showSubPhases === "boolean") {
+          setShowSubPhases(parsed.showSubPhases);
+        }
+        if (typeof parsed.onlyActiveMonths === "boolean") {
+          setOnlyActiveMonths(parsed.onlyActiveMonths);
+        }
+      } catch {
+        // ignore storage errors
       }
-      if (typeof parsed.showSubPhases === "boolean") {
-        setShowSubPhases(parsed.showSubPhases);
-      }
-      if (typeof parsed.onlyActiveMonths === "boolean") {
-        setOnlyActiveMonths(parsed.onlyActiveMonths);
-      }
-    } catch {
-      // ignore storage errors
-    }
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const updateDisplaySetting = (

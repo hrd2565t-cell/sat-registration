@@ -6,17 +6,33 @@ import "./globals.css";
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 const kanit = Kanit({
   variable: "--font-kanit",
   subsets: ["thai", "latin"],
   weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "สถาบันพัฒนากีฬาแห่งประเทศไทย - ระบบสมัครเข้ารับการฝึกอบรม",
-  description: "ระบบสมัครเข้ารับการฝึกอบรมด้านกีฬาแห่งชาติ",
+  title: "ระบบรับสมัครผู้เข้ารับการอบรม - การกีฬาแห่งประเทศไทย (กกท.)",
+  description:
+    "ระบบรับสมัครบุคลากรกีฬาเพื่อเข้ารับการฝึกอบรม ปีงบประมาณ พ.ศ. 2570 สถาบันพัฒนากีฬาแห่งชาติ การกีฬาแห่งประเทศไทย",
+  keywords: [
+    "การกีฬาแห่งประเทศไทย",
+    "กกท",
+    "SAT",
+    "อบรมกีฬา",
+    "ผู้บริหารกีฬา",
+    "ผู้ฝึกสอนกีฬา",
+    "วิทยาศาสตร์การกีฬา",
+  ],
+  icons: {
+    icon: "/assets/logo-sat-header.png",
+    apple: "/assets/logo-sat-header.png",
+  },
 };
 
 export default function RootLayout({

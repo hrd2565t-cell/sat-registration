@@ -63,23 +63,23 @@ export function EditSportsEventDialog({
   const [colorTone, setColorTone] = useState<"purple" | "indigo" | "amber" | "teal">("purple");
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (event) {
-      const yr = getEventYear(event);
-      setTitle(event.title);
-      setEnglish(event.english ? event.english.replace(/^\(|\)$/g, "") : "");
-      setCategory(event.category);
-      setStartDay(event.startDay);
-      setStartMonth(event.startMonth);
-      setStartYear(yr);
-      setEndDay(event.endDay);
-      setEndMonth(event.endMonth);
-      setEndYear(event.endYear ?? yr);
-      setLocation(event.location);
-      setColorTone(event.colorTone);
-      setError("");
-    }
-  }, [event]);
+  const [prevEventId, setPrevEventId] = useState<string | null>(null);
+  if (event && event.id !== prevEventId) {
+    setPrevEventId(event.id);
+    const yr = getEventYear(event);
+    setTitle(event.title);
+    setEnglish(event.english ? event.english.replace(/^\(|\)$/g, "") : "");
+    setCategory(event.category);
+    setStartDay(event.startDay);
+    setStartMonth(event.startMonth);
+    setStartYear(yr);
+    setEndDay(event.endDay);
+    setEndMonth(event.endMonth);
+    setEndYear(event.endYear ?? yr);
+    setLocation(event.location);
+    setColorTone(event.colorTone);
+    setError("");
+  }
 
   useEffect(() => {
     if (!event) return;
@@ -391,7 +391,7 @@ export function EditSportsEventDialog({
                     name="colorToneEdit"
                     value={tone.key}
                     checked={colorTone === tone.key}
-                    onChange={() => setColorTone(tone.key as any)}
+                    onChange={() => setColorTone(tone.key as SportsEvent["colorTone"])}
                     className="sr-only"
                   />
                   <span className={`h-3 w-3 rounded-full ${tone.bg}`} />

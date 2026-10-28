@@ -19,7 +19,7 @@ export function AdminTopbar({
 
   const handleLogout = () => {
     logoutAdmin();
-    window.location.href = "/";
+    router.push("/");
   };
   return (
     <header className="sticky top-0 z-30 flex h-10 items-center justify-between gap-3 border-b border-[#e5e7eb] bg-white px-3 lg:pl-6 lg:pr-5 print:hidden">

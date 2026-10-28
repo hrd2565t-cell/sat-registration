@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
@@ -97,7 +97,7 @@ function RegistrationContent() {
   const [submitting, setSubmitting] = useState(false);
   const [conflictModal, setConflictModal] =
     useState<RegistrationEligibility | null>(null);
-  const [hasAutofilled, setHasAutofilled] = useState(false);
+  const hasAutofilledRef = useRef(false);
 
   const isCourseFull = course.status === "full";
 
@@ -114,28 +114,31 @@ function RegistrationContent() {
   // ดึงข้อมูลส่วนตัวจากการสมัครก่อนหน้ามาเติมให้อัตโนมัติ เพื่ออำนวยความสะดวก
   useEffect(() => {
     const digits = idCard.replace(/\D/g, "");
-    if (digits.length === 13 && !hasAutofilled) {
+    if (digits.length === 13 && !hasAutofilledRef.current) {
       const prior = applications.find(
         (a) => a.idCard === digits && a.status !== "rejected"
       );
       if (prior) {
-        if (prior.name) setName(prior.name);
-        if (prior.phone) setPhone(prior.phone);
-        if (prior.email) setEmail(prior.email);
-        if (prior.affiliation) {
-          const match = prior.affiliation.match(/^(.*?)\s*\((.*?)\)$/);
-          if (match) {
-            setAffiliation(match[1]);
-            setSubAffiliation(match[2]);
-          } else {
-            setAffiliation(prior.affiliation);
+        hasAutofilledRef.current = true;
+        const timer = setTimeout(() => {
+          if (prior.name) setName(prior.name);
+          if (prior.phone) setPhone(prior.phone);
+          if (prior.email) setEmail(prior.email);
+          if (prior.affiliation) {
+            const match = prior.affiliation.match(/^(.*?)\s*\((.*?)\)$/);
+            if (match) {
+              setAffiliation(match[1]);
+              setSubAffiliation(match[2]);
+            } else {
+              setAffiliation(prior.affiliation);
+            }
           }
-        }
-        if (prior.position) setPosition(prior.position);
-        setHasAutofilled(true);
+          if (prior.position) setPosition(prior.position);
+        }, 0);
+        return () => clearTimeout(timer);
       }
     }
-  }, [idCard, applications, hasAutofilled]);
+  }, [idCard, applications]);
 
   const [photoFiles, setPhotoFiles] = useState<FileItem[]>([
     { name: "แนบรูปถ่ายสำเร็จ.jpg", size: "1.1 MB" },

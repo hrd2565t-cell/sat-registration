@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   type EventCategory,
+  type SportsEvent,
   CATEGORY_LABELS,
   addSportsEvent,
 } from "@/lib/sports-events-store";
@@ -370,7 +371,7 @@ export function AddSportsEventDialog({
                     name="colorTone"
                     value={tone.key}
                     checked={colorTone === tone.key}
-                    onChange={() => setColorTone(tone.key as any)}
+                    onChange={() => setColorTone(tone.key as SportsEvent["colorTone"])}
                     className="sr-only"
                   />
                   <span className={`h-3 w-3 rounded-full ${tone.bg}`} />

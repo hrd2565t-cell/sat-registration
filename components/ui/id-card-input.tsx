@@ -37,15 +37,17 @@ export function IdCardInput({
   const [feedback, setFeedback] = React.useState<string>("");
   const refs = React.useRef<(HTMLInputElement | null)[]>([]);
 
-  // Synchronize internal digits when external value changes
-  React.useEffect(() => {
+  // Adjust internal digits during render when external value prop changes
+  const [prevValue, setPrevValue] = React.useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
     const clean = (value || "").replace(/\D/g, "").slice(0, 13);
     const arr = Array(13).fill("");
     clean.split("").forEach((d, i) => {
       arr[i] = d;
     });
     setDigits(arr);
-  }, [value]);
+  }
 
   const update = (next: string[]) => {
     setDigits(next);

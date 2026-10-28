@@ -15,7 +15,6 @@ import { getCourseById, getDefaultCourse } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
 import {
   formatThaiDateTime,
-  getApplicationByIdCard,
   getApplicationsByIdCard,
   useApplications,
 } from "@/lib/applications-store";
@@ -256,6 +255,7 @@ function StatusContent() {
                         <span className="font-semibold text-[#1e3a8a]">
                           รหัส: {result.ref}
                         </span>
+                        <CopyButton text={result.ref} size="xs" variant="ghost" title="คัดลอกรหัสอ้างอิง" />
                         <span
                           className="hidden text-[#d1d5db] sm:inline"
                           aria-hidden="true"

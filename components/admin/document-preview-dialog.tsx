@@ -21,15 +21,18 @@ export function DocumentPreviewDialog({
   const [actualDataUrl, setActualDataUrl] = useState<string | null>(file?.dataUrl ?? null);
   const [loading, setLoading] = useState<boolean>(!file?.dataUrl);
 
+  const [prevFileId, setPrevFileId] = useState(file?.id);
+  if (file?.id !== prevFileId) {
+    setPrevFileId(file?.id);
+    setActualDataUrl(file?.dataUrl ?? null);
+    setLoading(!file?.dataUrl);
+  }
+
   useEffect(() => {
     if (!file) return;
 
     let isMounted = true;
-    if (file.dataUrl) {
-      setActualDataUrl(file.dataUrl);
-      setLoading(false);
-    } else {
-      setLoading(true);
+    if (!file.dataUrl) {
       getDocumentFromStorage(file.id).then((rec) => {
         if (isMounted) {
           setActualDataUrl(rec?.dataUrl ?? null);

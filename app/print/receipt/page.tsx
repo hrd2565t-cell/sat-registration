@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { CopyButton } from "@/components/ui/copy-button";
 import { useApplications, formatThaiDate, getDocumentLabel } from "@/lib/applications-store";
 import { useCourses } from "@/lib/courses-store";
@@ -13,7 +13,7 @@ function ReceiptPrintView() {
   const ref = searchParams.get("ref");
   const { applications } = useApplications();
   const { courses } = useCourses();
-  const [autoPrintTriggered, setAutoPrintTriggered] = useState(false);
+  const autoPrintTriggeredRef = useRef(false);
 
   const record = applications.find(
     (app) => app.ref === ref || app.receiptNo === ref
@@ -22,14 +22,14 @@ function ReceiptPrintView() {
   const course = courses.find((c) => c.id === record?.courseId);
 
   useEffect(() => {
-    if (record && !autoPrintTriggered) {
-      setAutoPrintTriggered(true);
+    if (record && !autoPrintTriggeredRef.current) {
+      autoPrintTriggeredRef.current = true;
       const timer = setTimeout(() => {
         window.print();
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [record, autoPrintTriggered]);
+  }, [record]);
 
   if (!record) {
     return (
