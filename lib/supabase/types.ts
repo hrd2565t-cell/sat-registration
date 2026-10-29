@@ -133,7 +133,7 @@ export interface Database {
         Row: {
           id: string;
           application_ref: string;
-          kind: "photo" | "cover" | "certificate" | "saka";
+          kind: "photo" | "cover" | "certificate" | "idcard" | "saka" | string;
           name: string;
           size: string;
           file_type: string | null;
@@ -144,7 +144,7 @@ export interface Database {
         Insert: {
           id?: string;
           application_ref: string;
-          kind: "photo" | "cover" | "certificate" | "saka";
+          kind: "photo" | "cover" | "certificate" | "idcard" | "saka" | string;
           name: string;
           size: string;
           file_type?: string | null;

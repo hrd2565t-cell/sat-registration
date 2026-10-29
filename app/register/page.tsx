@@ -150,13 +150,57 @@ function RegistrationContent() {
   const [photoFiles, setPhotoFiles] = useState<FileItem[]>([]);
   const [coverFiles, setCoverFiles] = useState<FileItem[]>([]);
   const [certFiles, setCertFiles] = useState<FileItem[]>([]);
+  const [idCardFiles, setIdCardFiles] = useState<FileItem[]>([]);
   const [sakaFiles, setSakaFiles] = useState<FileItem[]>([]);
+
+  // ฟังก์ชันบีบอัดรูปถ่ายหน้าตรงอัตโนมัติให้ได้สัดส่วนรูปติดบัตร (~100-200KB)
+  const compressPhotoFile = async (file: FileItem): Promise<FileItem> => {
+    if (!file.dataUrl || !file.dataUrl.startsWith("data:image/")) {
+      return file;
+    }
+    return new Promise((resolve) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const maxWidth = 600;
+        const maxHeight = 800;
+        const scale = Math.min(1, maxWidth / img.naturalWidth, maxHeight / img.naturalHeight);
+        const targetW = Math.max(1, Math.round(img.naturalWidth * scale));
+        const targetH = Math.max(1, Math.round(img.naturalHeight * scale));
+
+        const canvas = document.createElement("canvas");
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, targetW, targetH);
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+        const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        const bytes = Math.round((compressedDataUrl.length * 3) / 4);
+        const sizeStr =
+          bytes >= 1024 * 1024
+            ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+            : `${Math.round(bytes / 1024)} KB`;
+        resolve({
+          ...file,
+          dataUrl: compressedDataUrl,
+          size: sizeStr,
+          type: "image/jpeg",
+        });
+      };
+      img.onerror = () => resolve(file);
+      img.src = file.dataUrl || "";
+    });
+  };
 
   const docConfig = useMemo(() => getCourseDocumentConfig(course), [course]);
 
   const docItems = useMemo(() => {
     const items: {
-      key: "photo" | "cover" | "certificate" | "saka";
+      key: "photo" | "cover" | "certificate" | "idcard" | "saka";
       num: number;
       label: string;
       required: boolean;
@@ -168,16 +212,16 @@ function RegistrationContent() {
       items.push({
         key: "photo",
         num: count++,
-        label: docConfig.photo.label || "รูปถ่ายหน้าตรง",
+        label: docConfig.photo.label || "รูปถ่ายหน้าตรง ถ่ายไม่เกิน 6 เดือน",
         required: docConfig.photo.required,
-        hint: docConfig.photo.hint || "สำหรับพิมพ์บัตรประจำตัว",
+        hint: docConfig.photo.hint || "สำหรับพิมพ์บัตรประจำตัว (ไฟล์ JPG/PNG ระบบบีบอัดอัตโนมัติ)",
       });
     }
     if (docConfig.cover.enabled) {
       items.push({
         key: "cover",
         num: count++,
-        label: docConfig.cover.label || "หนังสือนำส่งจากต้นสังกัด / สมาคมกีฬา",
+        label: docConfig.cover.label || "หนังสือนำส่งจากต้นสังกัดหรือสมาคมกีฬา",
         required: docConfig.cover.required,
         hint: docConfig.cover.hint,
       });
@@ -186,16 +230,25 @@ function RegistrationContent() {
       items.push({
         key: "certificate",
         num: count++,
-        label: docConfig.certificate.label || "หนังสือรับรอง / วุฒิบัตร",
+        label: docConfig.certificate.label || "หนังสือรับรองการปฏิบัติหน้าที่ให้กับสมาคม/หน่วยงาน",
         required: docConfig.certificate.required,
         hint: docConfig.certificate.hint,
+      });
+    }
+    if (docConfig.idcard?.enabled) {
+      items.push({
+        key: "idcard",
+        num: count++,
+        label: docConfig.idcard.label || "สำเนาบัตรประจำตัวประชาชน พร้อมลงนามรับรองสำเนาถูกต้อง",
+        required: docConfig.idcard.required,
+        hint: docConfig.idcard.hint,
       });
     }
     if (docConfig.saka.enabled) {
       items.push({
         key: "saka",
         num: count++,
-        label: docConfig.saka.label || "เอกสาร ส.ฬ.8",
+        label: docConfig.saka.label || "สำเนาใบ ส.ฬ. 8",
         required: docConfig.saka.required,
         hint: docConfig.saka.hint,
       });
@@ -260,11 +313,15 @@ function RegistrationContent() {
       return;
     }
     if (docConfig.certificate.enabled && docConfig.certificate.required && certFiles.length === 0) {
-      setFormError("กรุณาแนบหนังสือรับรอง");
+      setFormError("กรุณาแนบหนังสือรับรองการปฏิบัติหน้าที่ให้กับสมาคม/หน่วยงาน");
+      return;
+    }
+    if (docConfig.idcard?.enabled && docConfig.idcard?.required && idCardFiles.length === 0) {
+      setFormError("กรุณาแนบสำเนาบัตรประจำตัวประชาชน พร้อมลงนามรับรองสำเนาถูกต้อง");
       return;
     }
     if (docConfig.saka.enabled && docConfig.saka.required && sakaFiles.length === 0) {
-      setFormError("กรุณาแนบเอกสาร ส.ฬ.8 สำหรับหลักสูตรนี้");
+      setFormError("กรุณาแนบสำเนาใบ ส.ฬ. 8 สำหรับหลักสูตรนี้");
       return;
     }
 
@@ -278,6 +335,11 @@ function RegistrationContent() {
       ...(docConfig.certificate.enabled
         ? certFiles.map((file, index) =>
             toDocument("certificate", file, index)
+          )
+        : []),
+      ...(docConfig.idcard?.enabled
+        ? idCardFiles.map((file, index) =>
+            toDocument("idcard", file, index)
           )
         : []),
       ...(docConfig.saka.enabled
@@ -494,7 +556,7 @@ function RegistrationContent() {
               {docConfig.photo.enabled && (
                 <div>
                   <p className={`mb-1.5 ${labelClass}`}>
-                    {docItems.find((i) => i.key === "photo")?.num}. รูปถ่ายหน้าตรง (สำหรับพิมพ์บัตรประจำตัว){" "}
+                    {docItems.find((i) => i.key === "photo")?.num}. รูปถ่ายหน้าตรง ถ่ายไม่เกิน 6 เดือน (สำหรับพิมพ์บัตรประจำตัว){" "}
                     {docConfig.photo.required ? (
                       <span className="font-semibold text-[#b91c1c]">(บังคับ)</span>
                     ) : (
@@ -510,9 +572,12 @@ function RegistrationContent() {
                     <div className="min-w-0 flex-1">
                       <FileUpload
                         files={photoFiles}
-                        onAdd={(file) => setPhotoFiles([file])}
+                        onAdd={async (file) => {
+                          const compressed = await compressPhotoFile(file);
+                          setPhotoFiles([compressed]);
+                        }}
                         onRemove={() => setPhotoFiles([])}
-                        emptyText="ยังไม่ได้แนบรูปถ่าย (คลิกเพื่อแนบรูปถ่ายหน้าตรง)"
+                        emptyText="ยังไม่ได้แนบรูปถ่าย (คลิกเพื่อแนบรูปถ่ายหน้าตรง ระบบบีบอัดให้อัตโนมัติ)"
                         accept=".jpg,.jpeg,.png,.webp"
                       />
                     </div>
@@ -523,7 +588,7 @@ function RegistrationContent() {
               {docConfig.cover.enabled && (
                 <div>
                   <p className={`mb-1.5 ${labelClass}`}>
-                    {docItems.find((i) => i.key === "cover")?.num}. หนังสือนำส่งจากต้นสังกัด / สมาคมกีฬา{" "}
+                    {docItems.find((i) => i.key === "cover")?.num}. หนังสือนำส่งจากต้นสังกัดหรือสมาคมกีฬา{" "}
                     {docConfig.cover.required ? (
                       <span className="font-semibold text-[#b91c1c]">(บังคับ)</span>
                     ) : (
@@ -534,7 +599,8 @@ function RegistrationContent() {
                     files={coverFiles}
                     onAdd={(file) => setCoverFiles([file])}
                     onRemove={() => setCoverFiles([])}
-                    emptyText="ยังไม่ได้แนบไฟล์ (คลิกเพื่อแนบหนังสือนำส่ง)"
+                    emptyText="ยังไม่ได้แนบไฟล์ (คลิกเพื่อแนบหนังสือนำส่ง - ไฟล์ PDF หรือรูปภาพ)"
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
                   />
                 </div>
               )}
@@ -542,7 +608,7 @@ function RegistrationContent() {
               {docConfig.certificate.enabled && (
                 <div>
                   <p className={`mb-1.5 ${labelClass}`}>
-                    {docItems.find((i) => i.key === "certificate")?.num}. หนังสือรับรอง / วุฒิบัตร{" "}
+                    {docItems.find((i) => i.key === "certificate")?.num}. หนังสือรับรองการปฏิบัติหน้าที่ให้กับสมาคม/หน่วยงาน{" "}
                     {docConfig.certificate.required ? (
                       <span className="font-semibold text-[#b91c1c]">(บังคับ)</span>
                     ) : (
@@ -553,8 +619,34 @@ function RegistrationContent() {
                     files={certFiles}
                     onAdd={(file) => setCertFiles([file])}
                     onRemove={() => setCertFiles([])}
-                    emptyText="ยังไม่ได้แนบไฟล์ (คลิกเพื่อแนบหนังสือรับรอง)"
+                    emptyText="ยังไม่ได้แนบไฟล์ (คลิกเพื่อแนบหนังสือรับรอง - ไฟล์ PDF หรือรูปภาพ)"
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
                   />
+                </div>
+              )}
+
+              {docConfig.idcard?.enabled && (
+                <div>
+                  <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                    <p className={labelClass}>
+                      {docItems.find((i) => i.key === "idcard")?.num}. สำเนาบัตรประจำตัวประชาชน พร้อมลงนามรับรองสำเนาถูกต้อง{" "}
+                      {docConfig.idcard.required ? (
+                        <span className="font-semibold text-[#b91c1c]">(บังคับ)</span>
+                      ) : (
+                        <span className="font-normal text-[#6b7280]">(ไม่บังคับ)</span>
+                      )}
+                    </p>
+                  </div>
+                  <FileUpload
+                    files={idCardFiles}
+                    onAdd={(file) => setIdCardFiles([file])}
+                    onRemove={() => setIdCardFiles([])}
+                    emptyText="ยังไม่ได้แนบไฟล์ (คลิกเพื่อแนบสำเนาบัตรประชาชน - ไฟล์ PDF หรือรูปภาพ)"
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  />
+                  <p className="mt-1 text-[11px] text-[#6b7280]">
+                    * สามารถขีดคร่อมข้อความ &quot;ใช้สำหรับการสมัครเข้ารับการอบรม กกท. เท่านั้น&quot; และลงลายมือชื่อรับรองสำเนาถูกต้อง
+                  </p>
                 </div>
               )}
 
@@ -562,7 +654,7 @@ function RegistrationContent() {
                 <div>
                   <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
                     <p className={labelClass}>
-                      {docItems.find((i) => i.key === "saka")?.num}. เอกสาร ส.ฬ.8{" "}
+                      {docItems.find((i) => i.key === "saka")?.num}. สำเนาใบ ส.ฬ. 8{" "}
                       {docConfig.saka.required ? (
                         <span className="font-semibold text-[#b91c1c]">(บังคับ)</span>
                       ) : (
@@ -592,7 +684,8 @@ function RegistrationContent() {
                     files={sakaFiles}
                     onAdd={(file) => setSakaFiles([file])}
                     onRemove={() => setSakaFiles([])}
-                    emptyText="ยังไม่ได้แนบไฟล์ (คลิกเพื่อแนบไฟล์ ส.ฬ.8)"
+                    emptyText="ยังไม่ได้แนบไฟล์ (คลิกเพื่อแนบสำเนาใบ ส.ฬ. 8 - ไฟล์ PDF หรือรูปภาพ)"
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
                   />
                 </div>
               )}

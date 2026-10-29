@@ -1091,7 +1091,7 @@ export function CourseEditDialog({
                 {/* 3. หนังสือรับรอง */}
                 <div className="rounded-[5px] border border-[#e2e8f0] bg-white p-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-[12px] font-semibold text-[#1e293b]">📜 3. หนังสือรับรอง / วุฒิบัตร</span>
+                    <span className="text-[12px] font-semibold text-[#1e293b]">📜 3. หนังสือรับรองการปฏิบัติหน้าที่</span>
                     <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-medium text-[#1e40af]">
                       <input
                         type="checkbox"
@@ -1125,10 +1125,47 @@ export function CourseEditDialog({
                   )}
                 </div>
 
-                {/* 4. ส.ฬ.8 */}
+                {/* 4. สำเนาบัตรประชาชน */}
+                <div className="rounded-[5px] border border-[#e2e8f0] bg-white p-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] font-semibold text-[#1e293b]">🪪 4. สำเนาบัตรประชาชน</span>
+                    <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-medium text-[#1e40af]">
+                      <input
+                        type="checkbox"
+                        checked={docConfig.idcard.enabled}
+                        onChange={(e) =>
+                          setDocConfig({
+                            ...docConfig,
+                            idcard: { ...docConfig.idcard, enabled: e.target.checked },
+                          })
+                        }
+                        className="h-3.5 w-3.5 rounded border-[#cbd5e1] text-[#1e40af]"
+                      />
+                      แสดงในหน้าสมัคร
+                    </label>
+                  </div>
+                  {docConfig.idcard.enabled && (
+                    <label className="mt-2 flex items-center gap-1.5 cursor-pointer text-[11px] text-[#334155]">
+                      <input
+                        type="checkbox"
+                        checked={docConfig.idcard.required}
+                        onChange={(e) =>
+                          setDocConfig({
+                            ...docConfig,
+                            idcard: { ...docConfig.idcard, required: e.target.checked },
+                          })
+                        }
+                        className="h-3.5 w-3.5 rounded border-[#cbd5e1] text-[#dc2626]"
+                      />
+                      <span>บังคับต้องแนบ (ไม่แนบส่งไม่ได้)</span>
+                    </label>
+                  )}
+                </div>
+
+                {/* 5. ส.ฬ.8 */}
                 <div className={`rounded-[5px] border p-2.5 ${docConfig.saka.enabled ? "border-[#fde68a] bg-[#fffbeb]" : "border-[#e2e8f0] bg-white"}`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-[12px] font-semibold text-[#1e293b]">📋 4. เอกสาร ส.ฬ.8</span>
+                    <span className="text-[12px] font-semibold text-[#1e293b]">📋 5. สำเนาใบ ส.ฬ. 8</span>
                     <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-medium text-[#b45309]">
                       <input
                         type="checkbox"

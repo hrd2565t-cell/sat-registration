@@ -60,6 +60,10 @@
         "enabled": true,
         "required": false
       },
+      "idcard": {
+        "enabled": true,
+        "required": true
+      },
       "saka": {
         "enabled": false,
         "required": false
@@ -126,6 +130,10 @@
         "enabled": true,
         "required": false
       },
+      "idcard": {
+        "enabled": true,
+        "required": true
+      },
       "saka": {
         "enabled": true,
         "required": true
@@ -191,6 +199,10 @@
         "enabled": false,
         "required": false
       },
+      "idcard": {
+        "enabled": true,
+        "required": true
+      },
       "saka": {
         "enabled": false,
         "required": false
@@ -255,6 +267,10 @@
       "certificate": {
         "enabled": true,
         "required": false
+      },
+      "idcard": {
+        "enabled": true,
+        "required": true
       },
       "saka": {
         "enabled": false,

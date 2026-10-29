@@ -37,6 +37,7 @@ export interface CourseDocumentConfig {
   photo: DocumentItemSetting;
   cover: DocumentItemSetting;
   certificate: DocumentItemSetting;
+  idcard: DocumentItemSetting;
   saka: DocumentItemSetting;
 }
 
@@ -44,26 +45,32 @@ export const DEFAULT_DOCUMENT_CONFIG: CourseDocumentConfig = {
   photo: {
     enabled: true,
     required: true,
-    label: "รูปถ่ายหน้าตรง",
-    hint: "สำหรับพิมพ์บัตรประจำตัว",
+    label: "รูปถ่ายหน้าตรง ถ่ายไม่เกิน 6 เดือน",
+    hint: "สำหรับพิมพ์บัตรประจำตัว (ไฟล์ JPG/PNG ระบบบีบอัดอัตโนมัติ)",
   },
   cover: {
     enabled: true,
     required: true,
-    label: "หนังสือนำส่งจากต้นสังกัด / สมาคมกีฬา",
-    hint: "หนังสืออนุญาตหรือส่งตัวเข้ารับการอบรม",
+    label: "หนังสือนำส่งจากต้นสังกัดหรือสมาคมกีฬา",
+    hint: "ไฟล์ PDF หรือไฟล์รูปภาพ (JPG/PNG)",
   },
   certificate: {
     enabled: true,
     required: false,
-    label: "หนังสือรับรอง / วุฒิบัตร",
-    hint: "ใบรับรองการเป็นผู้ฝึกสอน หรือประกาศนียบัตรที่เกี่ยวข้อง",
+    label: "หนังสือรับรองการปฏิบัติหน้าที่ให้กับสมาคม/หน่วยงาน",
+    hint: "ไฟล์ PDF หรือไฟล์รูปภาพ (JPG/PNG)",
+  },
+  idcard: {
+    enabled: true,
+    required: true,
+    label: "สำเนาบัตรประจำตัวประชาชน พร้อมลงนามรับรองสำเนาถูกต้อง",
+    hint: "ไฟล์ PDF หรือไฟล์รูปภาพ (JPG/PNG)",
   },
   saka: {
     enabled: false,
     required: false,
-    label: "เอกสาร ส.ฬ.8",
-    hint: "แนบเฉพาะหลักสูตรที่กำหนด",
+    label: "สำเนาใบ ส.ฬ. 8",
+    hint: "แนบเฉพาะหลักสูตรที่กำหนด (ไฟล์ PDF หรือไฟล์รูปภาพ)",
   },
 };
 
@@ -85,6 +92,10 @@ export function getCourseDocumentConfig(
         ...DEFAULT_DOCUMENT_CONFIG.certificate,
         ...(course.documentConfig.certificate || {}),
       },
+      idcard: {
+        ...DEFAULT_DOCUMENT_CONFIG.idcard,
+        ...(course.documentConfig.idcard || {}),
+      },
       saka: {
         ...DEFAULT_DOCUMENT_CONFIG.saka,
         ...(course.documentConfig.saka || {}),
@@ -101,6 +112,11 @@ export function getCourseDocumentConfig(
       ...DEFAULT_DOCUMENT_CONFIG.certificate,
       enabled: course.id === 1 || course.id === 2 || course.id === 4,
       required: false,
+    },
+    idcard: {
+      ...DEFAULT_DOCUMENT_CONFIG.idcard,
+      enabled: true,
+      required: true,
     },
     saka: {
       ...DEFAULT_DOCUMENT_CONFIG.saka,

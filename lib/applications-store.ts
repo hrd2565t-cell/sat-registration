@@ -27,6 +27,7 @@ export type ApplicantDocumentKind =
   | "photo"
   | "cover"
   | "certificate"
+  | "idcard"
   | "saka";
 
 export interface ApplicantDocument {
@@ -624,7 +625,8 @@ export function formatThaiDateTime(value: string) {
 
 export function getDocumentLabel(kind: ApplicantDocumentKind) {
   if (kind === "photo") return "รูปถ่ายหน้าตรง";
-  if (kind === "cover") return "หนังสือนำส่งจากต้นสังกัด";
-  if (kind === "certificate") return "หนังสือรับรองคุณวุฒิ";
-  return "เอกสาร ส.ฬ.8";
+  if (kind === "cover") return "หนังสือนำส่งจากต้นสังกัด/สมาคมกีฬา";
+  if (kind === "certificate") return "หนังสือรับรองการปฏิบัติหน้าที่";
+  if (kind === "idcard") return "สำเนาบัตรประจำตัวประชาชน";
+  return "สำเนาใบ ส.ฬ. 8";
 }
