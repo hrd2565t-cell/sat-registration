@@ -11,6 +11,7 @@ import { ArrowLeftIcon, DownloadIcon } from "@/components/ui/icons";
 import { IdCardInput } from "@/components/ui/id-card-input";
 import { CopyButton } from "@/components/ui/copy-button";
 import { StatusPanel } from "@/components/status/status-panel";
+import { ResubmitDocumentsBox } from "@/components/status/resubmit-documents-box";
 import { getCourseById, getDefaultCourse } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
 import {
@@ -353,6 +354,20 @@ function StatusContent() {
                               </a>
                             }
                           />
+                        )}
+                        {result.status === "action_required" && (
+                          <div className="space-y-3">
+                            <StatusPanel
+                              tone="action_required"
+                              title="เจ้าหน้าที่ขอให้ส่งเอกสารเพิ่มเติม / แก้ไขเอกสาร"
+                              description={
+                                result.reviewReason
+                                  ? `ข้อความจากเจ้าหน้าที่: "${result.reviewReason}"`
+                                  : "เจ้าหน้าที่ตรวจสอบเอกสารแล้วพบว่ามีเอกสารบางรายการยังไม่ครบถ้วนหรือไม่ชัดเจน กรุณาแนบเอกสารใหม่ด้านล่างนี้"
+                              }
+                            />
+                            <ResubmitDocumentsBox application={result} />
+                          </div>
                         )}
                         {result.status === "rejected" && (
                           <StatusPanel

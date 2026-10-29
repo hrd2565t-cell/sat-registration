@@ -43,7 +43,7 @@ export interface ReviewNote {
   id: string;
   at: string;
   author: string;
-  kind: "created" | "note" | "approved" | "rejected" | "reserve";
+  kind: "created" | "note" | "approved" | "rejected" | "reserve" | "action_required";
   text: string;
 }
 
@@ -340,13 +340,18 @@ export function reviewApplication(
           ? reason.trim() || "อนุมัติคุณสมบัติและเอกสารครบถ้วน (ตัวจริง)"
           : status === "reserve"
             ? reason.trim() || `ผ่านการตรวจสอบคุณสมบัติ จัดให้อยู่ในบัญชีรายชื่อสำรอง ลำดับที่ ${reserveOrder}`
-            : reason.trim() || "ไม่ผ่านการตรวจสอบคุณสมบัติ";
+            : status === "action_required"
+              ? reason.trim() || "เจ้าหน้าที่ขอให้แนบเอกสารเพิ่มเติมประกอบการพิจารณา"
+              : reason.trim() || "ไม่ผ่านการตรวจสอบคุณสมบัติ";
 
       return {
         ...item,
         status,
         reserveOrder,
-        reviewReason: status === "rejected" ? noteText : undefined,
+        reviewReason:
+          status === "rejected" || status === "action_required"
+            ? noteText
+            : undefined,
         reviewedAt: now,
         reviewedBy: reviewer,
         updatedAt: now,
@@ -374,8 +379,62 @@ export function reviewApplication(
         ? reason.trim() || "อนุมัติคุณสมบัติและเอกสารครบถ้วน"
         : status === "reserve"
           ? reason.trim() || "ผ่านการตรวจสอบคุณสมบัติ (บัญชีสำรอง)"
-          : reason.trim() || "ไม่ผ่านการตรวจสอบคุณสมบัติ";
+          : status === "action_required"
+            ? reason.trim() || "ขอเอกสารเพิ่มเติมประกอบการพิจารณา"
+            : reason.trim() || "ไม่ผ่านการตรวจสอบคุณสมบัติ";
     syncReviewToSupabase(ref, status, noteText, reviewer, now);
+  }
+}
+
+/**
+ * ฟังก์ชันสำหรับผู้สมัครส่งเอกสารเพิ่มเติมกลับเข้ามาในระบบ
+ * จะเปลี่ยนสถานะกลับเป็น pending อัตโนมัติเพื่อให้เจ้าหน้าที่ตรวจสอบรอบใหม่
+ */
+export function resubmitApplicantDocuments(
+  ref: string,
+  updatedDocs: ApplicantDocument[],
+  applicantMessage?: string
+) {
+  const now = new Date().toISOString();
+  state = {
+    applications: state.applications.map((item) => {
+      if (item.ref !== ref) return item;
+      const noteMsg = applicantMessage?.trim() || "ผู้สมัครได้แนบเอกสารเพิ่มเติมและส่งเข้าสู่ระบบเรียบร้อยแล้ว";
+      return {
+        ...item,
+        status: "pending" as const,
+        documents: updatedDocs,
+        reviewReason: undefined,
+        updatedAt: now,
+        notes: [
+          ...item.notes,
+          {
+            id: `${ref}-resubmit-${Date.now()}`,
+            at: now,
+            author: "ผู้สมัคร",
+            kind: "note" as const,
+            text: noteMsg,
+          },
+        ],
+      };
+    }),
+    revision: state.revision + 1,
+  };
+  persist();
+  emit();
+
+  if (isSupabaseConfigured()) {
+    syncReviewToSupabase(
+      ref,
+      "pending",
+      "ผู้สมัครได้แนบเอกสารเพิ่มเติมและส่งเข้าสู่ระบบเรียบร้อยแล้ว",
+      "ผู้สมัคร",
+      now
+    );
+    const app = state.applications.find((a) => a.ref === ref);
+    if (app) {
+      syncApplicationToSupabase(app).then();
+    }
   }
 }
 

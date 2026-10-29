@@ -293,7 +293,9 @@ export function ApplicantDetail({
         ? "อนุมัติผู้สมัครเรียบร้อยแล้ว"
         : decision === "reserve"
           ? "จัดเข้าบัญชีรายชื่อสำรองเรียบร้อยแล้ว"
-          : "บันทึกผลไม่อนุมัติเรียบร้อยแล้ว"
+          : decision === "action_required"
+            ? "ส่งคำขอเอกสารเพิ่มเติมให้ผู้สมัครเรียบร้อยแล้ว"
+            : "บันทึกผลไม่อนุมัติเรียบร้อยแล้ว"
     );
     setDecision(null);
   };
@@ -429,6 +431,16 @@ export function ApplicantDetail({
                 <path strokeLinecap="round" strokeWidth="2" d="M12 7v5l3 3" />
               </svg>
               บัญชีสำรอง
+            </button>
+            <button
+              type="button"
+              onClick={() => setDecision("action_required")}
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[6px] border border-[#fed7aa] bg-[#fff7ed] px-3 text-[12px] font-semibold text-[#c2410c] transition-colors hover:bg-[#ffedd5] sm:h-9"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              ขอเอกสารเพิ่ม
             </button>
             <button
               type="button"
@@ -687,6 +699,20 @@ export function ApplicantDetail({
               </button>
               <button
                 type="button"
+                onClick={() => setDecision("reserve")}
+                className="inline-flex h-9 items-center justify-center gap-1 rounded-[6px] border border-[#93c5fd] bg-[#eff6ff] px-2 text-[11px] font-semibold text-[#1e40af] transition-colors hover:bg-[#dbeafe]"
+              >
+                สำรอง
+              </button>
+              <button
+                type="button"
+                onClick={() => setDecision("action_required")}
+                className="inline-flex h-9 items-center justify-center gap-1 rounded-[6px] border border-[#fed7aa] bg-[#fff7ed] px-2 text-[11px] font-semibold text-[#c2410c] transition-colors hover:bg-[#ffedd5]"
+              >
+                ขอเอกสารเพิ่ม
+              </button>
+              <button
+                type="button"
                 onClick={() => setDecision("rejected")}
                 className="inline-flex h-9 items-center justify-center gap-1 rounded-[6px] border border-[#d8a0a3] bg-[#fce8e9] px-2 text-[11px] font-semibold text-[#9e2a30] transition-colors hover:bg-[#f8d9da]"
               >
@@ -749,6 +775,13 @@ export function ApplicantDetail({
             className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[7px] border border-[#93c5fd] bg-[#eff6ff] text-[12px] font-semibold text-[#1e40af]"
           >
             สำรอง
+          </button>
+          <button
+            type="button"
+            onClick={() => setDecision("action_required")}
+            className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[7px] border border-[#fed7aa] bg-[#fff7ed] text-[12px] font-semibold text-[#c2410c]"
+          >
+            ขอเอกสารเพิ่ม
           </button>
           <button
             type="button"

@@ -24,6 +24,7 @@ const DEFAULT_PAGE_SIZE = 5;
 const statusOptions = [
   { value: "all", label: "แสดง: ทั้งหมด" },
   { value: "pending", label: "แสดง: รอตรวจสอบ" },
+  { value: "action_required", label: "แสดง: ขอเอกสารเพิ่ม" },
   { value: "approved", label: "แสดง: อนุมัติแล้ว (ตัวจริง)" },
   { value: "reserve", label: "แสดง: บัญชีสำรอง" },
   { value: "rejected", label: "แสดง: ไม่ผ่าน" },

@@ -73,7 +73,7 @@ export interface Database {
           phone: string;
           affiliation: string;
           position: string;
-          status: "pending" | "approved" | "rejected" | "reserve";
+          status: "pending" | "approved" | "rejected" | "reserve" | "action_required" | string;
           reserve_order: number | null;
           review_reason: string | null;
           reviewed_at: string | null;
@@ -96,7 +96,7 @@ export interface Database {
           phone: string;
           affiliation?: string;
           position?: string;
-          status?: "pending" | "approved" | "rejected" | "reserve";
+          status?: "pending" | "approved" | "rejected" | "reserve" | "action_required" | string;
           reserve_order?: number | null;
           review_reason?: string | null;
           reviewed_at?: string | null;
@@ -118,7 +118,13 @@ export interface Database {
           phone?: string;
           affiliation?: string;
           position?: string;
-          status?: "pending" | "approved" | "rejected" | "reserve";
+          status?:
+            | "pending"
+            | "approved"
+            | "rejected"
+            | "reserve"
+            | "action_required"
+            | string;
           reserve_order?: number | null;
           review_reason?: string | null;
           reviewed_at?: string | null;
@@ -166,7 +172,7 @@ export interface Database {
           id: string;
           application_ref: string;
           author: string;
-          kind: "created" | "note" | "approved" | "rejected" | "reserve";
+          kind: "created" | "note" | "approved" | "rejected" | "reserve" | "action_required" | string;
           text: string;
           created_at: string;
         };
@@ -174,7 +180,7 @@ export interface Database {
           id?: string;
           application_ref: string;
           author: string;
-          kind?: "created" | "note" | "approved" | "rejected" | "reserve";
+          kind?: "created" | "note" | "approved" | "rejected" | "reserve" | "action_required" | string;
           text: string;
           created_at?: string;
         };

@@ -1,4 +1,9 @@
-export type ApplicantStatus = "pending" | "approved" | "rejected" | "reserve";
+export type ApplicantStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "reserve"
+  | "action_required";
 
 export type AiTone = "pass" | "fail" | "review";
 

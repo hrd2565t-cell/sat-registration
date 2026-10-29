@@ -24,6 +24,11 @@ const styles: Record<
     dot: "bg-[#cf3d45]",
     label: "ไม่ผ่าน",
   },
+  action_required: {
+    wrapper: "border-[#fed7aa] bg-[#fff7ed] text-[#c2410c]",
+    dot: "bg-[#ea580c]",
+    label: "ขอเอกสารเพิ่ม",
+  },
 };
 
 export function StatusBadge({

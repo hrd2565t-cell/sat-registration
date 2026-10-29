@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import {
   courses as seedCourses,
   DEFAULT_TARGET_QUOTAS,
+  DEFAULT_DOCUMENT_CONFIG,
   DEFAULT_SAT_SUPPORT,
   DEFAULT_EXPENSES_POLICY,
   getGlobalCourseSchedule,
@@ -16,7 +17,7 @@ interface CoursesState {
   revision: number;
 }
 
-const STORAGE_KEY = "sat-courses-v3";
+const STORAGE_KEY = "sat-courses-v4";
 
 function cloneSeedCourses() {
   return seedCourses.map((course) => ({ ...course }));
@@ -126,7 +127,35 @@ function mergeStoredCourses(stored: Course[]): Course[] {
           ? saved.satSupport
           : (seed?.satSupport ?? [...DEFAULT_SAT_SUPPORT]),
       expensesPolicy: saved.expensesPolicy || seed?.expensesPolicy || DEFAULT_EXPENSES_POLICY,
-      documentConfig: saved.documentConfig || seed?.documentConfig,
+      documentConfig: saved.documentConfig
+        ? {
+            photo: {
+              ...DEFAULT_DOCUMENT_CONFIG.photo,
+              ...(seed?.documentConfig?.photo || {}),
+              ...saved.documentConfig.photo,
+            },
+            cover: {
+              ...DEFAULT_DOCUMENT_CONFIG.cover,
+              ...(seed?.documentConfig?.cover || {}),
+              ...saved.documentConfig.cover,
+            },
+            certificate: {
+              ...DEFAULT_DOCUMENT_CONFIG.certificate,
+              ...(seed?.documentConfig?.certificate || {}),
+              ...saved.documentConfig.certificate,
+            },
+            idcard: {
+              ...DEFAULT_DOCUMENT_CONFIG.idcard,
+              ...(seed?.documentConfig?.idcard || {}),
+              ...(saved.documentConfig.idcard || {}),
+            },
+            saka: {
+              ...DEFAULT_DOCUMENT_CONFIG.saka,
+              ...(seed?.documentConfig?.saka || {}),
+              ...saved.documentConfig.saka,
+            },
+          }
+        : seed?.documentConfig,
       status: saved.status === "full" ? "full" : "open",
     };
   });
@@ -169,9 +198,35 @@ function hydrate() {
                   targetQuotas:
                     (c as { target_quotas?: import("@/lib/courses").TargetGroupQuotas })
                       .target_quotas || seed?.targetQuotas,
-                  documentConfig:
-                    (c as { document_config?: import("@/lib/courses").CourseDocumentConfig })
-                      .document_config || seed?.documentConfig,
+                  documentConfig: (c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config
+                    ? {
+                        photo: {
+                          ...DEFAULT_DOCUMENT_CONFIG.photo,
+                          ...(seed?.documentConfig?.photo || {}),
+                          ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.photo || {}),
+                        },
+                        cover: {
+                          ...DEFAULT_DOCUMENT_CONFIG.cover,
+                          ...(seed?.documentConfig?.cover || {}),
+                          ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.cover || {}),
+                        },
+                        certificate: {
+                          ...DEFAULT_DOCUMENT_CONFIG.certificate,
+                          ...(seed?.documentConfig?.certificate || {}),
+                          ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.certificate || {}),
+                        },
+                        idcard: {
+                          ...DEFAULT_DOCUMENT_CONFIG.idcard,
+                          ...(seed?.documentConfig?.idcard || {}),
+                          ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.idcard || {}),
+                        },
+                        saka: {
+                          ...DEFAULT_DOCUMENT_CONFIG.saka,
+                          ...(seed?.documentConfig?.saka || {}),
+                          ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.saka || {}),
+                        },
+                      }
+                    : seed?.documentConfig,
                 };
               });
               state = {

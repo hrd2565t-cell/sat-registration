@@ -142,7 +142,7 @@ export async function syncApplicationToSupabase(
  */
 export async function syncReviewToSupabase(
   ref: string,
-  status: "approved" | "reserve" | "rejected",
+  status: "approved" | "reserve" | "rejected" | "action_required" | "pending",
   reason: string,
   reviewer: string,
   updatedAt: string
@@ -155,8 +155,9 @@ export async function syncReviewToSupabase(
       .from("applications")
       .update({
         status,
-        review_reason: status === "rejected" ? reason : null,
-        reviewed_at: updatedAt,
+        review_reason:
+          status === "rejected" || status === "action_required" ? reason : null,
+        reviewed_at: status === "pending" ? null : updatedAt,
         reviewed_by: reviewer,
         updated_at: updatedAt,
       })
@@ -170,7 +171,7 @@ export async function syncReviewToSupabase(
     await supabase.from("review_notes").insert({
       application_ref: ref,
       author: reviewer,
-      kind: status,
+      kind: status === "pending" ? "note" : status,
       text: reason,
       created_at: updatedAt,
     });
