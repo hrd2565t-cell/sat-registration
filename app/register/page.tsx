@@ -15,6 +15,7 @@ import { IdCardInput } from "@/components/ui/id-card-input";
 import {
   getCourseById,
   getDefaultCourse,
+  getCourseDocumentConfig,
   TARGET_GROUPS,
 } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
@@ -151,6 +152,57 @@ function RegistrationContent() {
   const [certFiles, setCertFiles] = useState<FileItem[]>([]);
   const [sakaFiles, setSakaFiles] = useState<FileItem[]>([]);
 
+  const docConfig = useMemo(() => getCourseDocumentConfig(course), [course]);
+
+  const docItems = useMemo(() => {
+    const items: {
+      key: "photo" | "cover" | "certificate" | "saka";
+      num: number;
+      label: string;
+      required: boolean;
+      hint?: string;
+    }[] = [];
+
+    let count = 1;
+    if (docConfig.photo.enabled) {
+      items.push({
+        key: "photo",
+        num: count++,
+        label: docConfig.photo.label || "รูปถ่ายหน้าตรง",
+        required: docConfig.photo.required,
+        hint: docConfig.photo.hint || "สำหรับพิมพ์บัตรประจำตัว",
+      });
+    }
+    if (docConfig.cover.enabled) {
+      items.push({
+        key: "cover",
+        num: count++,
+        label: docConfig.cover.label || "หนังสือนำส่งจากต้นสังกัด / สมาคมกีฬา",
+        required: docConfig.cover.required,
+        hint: docConfig.cover.hint,
+      });
+    }
+    if (docConfig.certificate.enabled) {
+      items.push({
+        key: "certificate",
+        num: count++,
+        label: docConfig.certificate.label || "หนังสือรับรอง / วุฒิบัตร",
+        required: docConfig.certificate.required,
+        hint: docConfig.certificate.hint,
+      });
+    }
+    if (docConfig.saka.enabled) {
+      items.push({
+        key: "saka",
+        num: count++,
+        label: docConfig.saka.label || "เอกสาร ส.ฬ.8",
+        required: docConfig.saka.required,
+        hint: docConfig.saka.hint,
+      });
+    }
+    return items;
+  }, [docConfig]);
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError("");
@@ -199,18 +251,38 @@ function RegistrationContent() {
       setFormError("กรุณายินยอมข้อตกลงและยืนยันความถูกต้องของข้อมูล");
       return;
     }
-    if (photoFiles.length === 0 || coverFiles.length === 0) {
-      setFormError("กรุณาแนบรูปถ่ายหน้าตรงและหนังสือนำส่งจากต้นสังกัด");
+    if (docConfig.photo.enabled && docConfig.photo.required && photoFiles.length === 0) {
+      setFormError("กรุณาแนบรูปถ่ายหน้าตรง");
+      return;
+    }
+    if (docConfig.cover.enabled && docConfig.cover.required && coverFiles.length === 0) {
+      setFormError("กรุณาแนบหนังสือนำส่งจากต้นสังกัด / สมาคมกีฬา");
+      return;
+    }
+    if (docConfig.certificate.enabled && docConfig.certificate.required && certFiles.length === 0) {
+      setFormError("กรุณาแนบหนังสือรับรอง");
+      return;
+    }
+    if (docConfig.saka.enabled && docConfig.saka.required && sakaFiles.length === 0) {
+      setFormError("กรุณาแนบเอกสาร ส.ฬ.8 สำหรับหลักสูตรนี้");
       return;
     }
 
     const documents: ApplicantDocument[] = [
-      ...photoFiles.map((file, index) => toDocument("photo", file, index)),
-      ...coverFiles.map((file, index) => toDocument("cover", file, index)),
-      ...certFiles.map((file, index) =>
-        toDocument("certificate", file, index)
-      ),
-      ...sakaFiles.map((file, index) => toDocument("saka", file, index)),
+      ...(docConfig.photo.enabled
+        ? photoFiles.map((file, index) => toDocument("photo", file, index))
+        : []),
+      ...(docConfig.cover.enabled
+        ? coverFiles.map((file, index) => toDocument("cover", file, index))
+        : []),
+      ...(docConfig.certificate.enabled
+        ? certFiles.map((file, index) =>
+            toDocument("certificate", file, index)
+          )
+        : []),
+      ...(docConfig.saka.enabled
+        ? sakaFiles.map((file, index) => toDocument("saka", file, index))
+        : []),
     ];
 
     const fullAffiliation = subAffiliation.trim()
@@ -419,81 +491,111 @@ function RegistrationContent() {
             </h2>
 
             <div className="space-y-4">
-              <div>
-                <p className={`mb-1.5 ${labelClass}`}>
-                  1. รูปถ่ายหน้าตรง (สำหรับพิมพ์บัตรประจำตัว)
-                </p>
-                <div className="flex items-start gap-2.5">
-                  <Avatar
-                    src={photoFiles[0]?.dataUrl || "/assets/avatar-placeholder.svg"}
-                    alt="รูปถ่ายผู้สมัคร"
-                    size="portrait"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <FileUpload
-                      files={photoFiles}
-                      onAdd={(file) => setPhotoFiles([file])}
-                      onRemove={() => setPhotoFiles([])}
-                      emptyText="ยังไม่ได้แนบรูปถ่าย (คลิกเพื่อแนบรูปถ่ายหน้าตรง)"
-                      accept=".jpg,.jpeg,.png,.webp"
+              {docConfig.photo.enabled && (
+                <div>
+                  <p className={`mb-1.5 ${labelClass}`}>
+                    {docItems.find((i) => i.key === "photo")?.num}. รูปถ่ายหน้าตรง (สำหรับพิมพ์บัตรประจำตัว){" "}
+                    {docConfig.photo.required ? (
+                      <span className="font-semibold text-[#b91c1c]">(บังคับ)</span>
+                    ) : (
+                      <span className="font-normal text-[#6b7280]">(ไม่บังคับ)</span>
+                    )}
+                  </p>
+                  <div className="flex items-start gap-2.5">
+                    <Avatar
+                      src={photoFiles[0]?.dataUrl || "/assets/avatar-placeholder.svg"}
+                      alt="รูปถ่ายผู้สมัคร"
+                      size="portrait"
                     />
+                    <div className="min-w-0 flex-1">
+                      <FileUpload
+                        files={photoFiles}
+                        onAdd={(file) => setPhotoFiles([file])}
+                        onRemove={() => setPhotoFiles([])}
+                        emptyText="ยังไม่ได้แนบรูปถ่าย (คลิกเพื่อแนบรูปถ่ายหน้าตรง)"
+                        accept=".jpg,.jpeg,.png,.webp"
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div>
-                <p className={`mb-1.5 ${labelClass}`}>
-                  2. หนังสือนำส่งจากต้นสังกัด / สมาคมกีฬา (บังคับ)
-                </p>
-                <FileUpload
-                  files={coverFiles}
-                  onAdd={(file) => setCoverFiles([file])}
-                  onRemove={() => setCoverFiles([])}
-                  emptyText="ยังไม่ได้แนบไฟล์ (คลิกเพื่อแนบหนังสือนำส่ง)"
-                />
-              </div>
-
-              <div>
-                <p className={`mb-1.5 ${labelClass}`}>
-                  3. หนังสือรับรอง (เฉพาะบางหลักสูตร)
-                </p>
-                <FileUpload
-                  files={certFiles}
-                  onAdd={(file) => setCertFiles([file])}
-                  onRemove={() => setCertFiles([])}
-                  emptyText="ยังไม่ได้แนบไฟล์ (คลิกเพื่อแนบหนังสือรับรอง)"
-                />
-              </div>
-
-              <div>
-                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                  <p className={labelClass}>
-                    4. เอกสาร ส.ฬ.8 (แนบเฉพาะหลักสูตรที่กำหนด)
+              {docConfig.cover.enabled && (
+                <div>
+                  <p className={`mb-1.5 ${labelClass}`}>
+                    {docItems.find((i) => i.key === "cover")?.num}. หนังสือนำส่งจากต้นสังกัด / สมาคมกีฬา{" "}
+                    {docConfig.cover.required ? (
+                      <span className="font-semibold text-[#b91c1c]">(บังคับ)</span>
+                    ) : (
+                      <span className="font-normal text-[#6b7280]">(ไม่บังคับ)</span>
+                    )}
                   </p>
-                  <span className="inline-flex items-center gap-1 rounded-[3px] bg-[#fef3c7] px-1.5 py-[2px] text-[10.5px] font-medium text-[#b45309]">
-                    <svg
-                      className="h-3 w-3"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
-                      />
-                    </svg>
-                    หลักสูตรนี้ต้องแนบเอกสารนี้เพื่อการสมัคร
-                  </span>
+                  <FileUpload
+                    files={coverFiles}
+                    onAdd={(file) => setCoverFiles([file])}
+                    onRemove={() => setCoverFiles([])}
+                    emptyText="ยังไม่ได้แนบไฟล์ (คลิกเพื่อแนบหนังสือนำส่ง)"
+                  />
                 </div>
-                <FileUpload
-                  files={sakaFiles}
-                  onAdd={(file) => setSakaFiles([file])}
-                  onRemove={() => setSakaFiles([])}
-                  emptyText="ยังไม่ได้แนบไฟล์ (คลิกเพื่อแนบไฟล์ ส.ฬ.8)"
-                />
-              </div>
+              )}
+
+              {docConfig.certificate.enabled && (
+                <div>
+                  <p className={`mb-1.5 ${labelClass}`}>
+                    {docItems.find((i) => i.key === "certificate")?.num}. หนังสือรับรอง / วุฒิบัตร{" "}
+                    {docConfig.certificate.required ? (
+                      <span className="font-semibold text-[#b91c1c]">(บังคับ)</span>
+                    ) : (
+                      <span className="font-normal text-[#6b7280]">(เฉพาะบางหลักสูตร/ไม่บังคับ)</span>
+                    )}
+                  </p>
+                  <FileUpload
+                    files={certFiles}
+                    onAdd={(file) => setCertFiles([file])}
+                    onRemove={() => setCertFiles([])}
+                    emptyText="ยังไม่ได้แนบไฟล์ (คลิกเพื่อแนบหนังสือรับรอง)"
+                  />
+                </div>
+              )}
+
+              {docConfig.saka.enabled && (
+                <div>
+                  <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                    <p className={labelClass}>
+                      {docItems.find((i) => i.key === "saka")?.num}. เอกสาร ส.ฬ.8{" "}
+                      {docConfig.saka.required ? (
+                        <span className="font-semibold text-[#b91c1c]">(บังคับ)</span>
+                      ) : (
+                        <span className="font-normal text-[#6b7280]">(ไม่บังคับ)</span>
+                      )}
+                    </p>
+                    {docConfig.saka.required && (
+                      <span className="inline-flex items-center gap-1 rounded-[3px] bg-[#fef3c7] px-1.5 py-[2px] text-[10.5px] font-medium text-[#b45309]">
+                        <svg
+                          className="h-3 w-3"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+                          />
+                        </svg>
+                        หลักสูตรนี้ต้องแนบเอกสารนี้เพื่อการสมัคร
+                      </span>
+                    )}
+                  </div>
+                  <FileUpload
+                    files={sakaFiles}
+                    onAdd={(file) => setSakaFiles([file])}
+                    onRemove={() => setSakaFiles([])}
+                    emptyText="ยังไม่ได้แนบไฟล์ (คลิกเพื่อแนบไฟล์ ส.ฬ.8)"
+                  />
+                </div>
+              )}
             </div>
           </section>
         </div>

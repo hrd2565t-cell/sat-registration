@@ -18,9 +18,11 @@ import {
   isCourseDateOverlapping,
   parseCourseDateFields,
   parseCourseDateSessions,
+  getCourseDocumentConfig,
   type Course,
   type CourseDateFields,
   type TargetGroupQuotas,
+  type CourseDocumentConfig,
 } from "@/lib/courses";
 import { getSeedCourse, useCourses, type CourseUpdate } from "@/lib/courses-store";
 import { useSportsEvents } from "@/lib/sports-events-store";
@@ -139,6 +141,9 @@ export function CourseEditDialog({
   );
   const [quotas, setQuotas] = useState<TargetGroupQuotas>(
     course.targetQuotas ?? { ...DEFAULT_TARGET_QUOTAS }
+  );
+  const [docConfig, setDocConfig] = useState<CourseDocumentConfig>(() =>
+    getCourseDocumentConfig(course)
   );
   const [error, setError] = useState("");
 
@@ -389,6 +394,7 @@ export function CourseEditDialog({
       evaluationCriteria: evalCrit.length > 0 ? evalCrit : undefined,
       satSupport: satSup.length > 0 ? satSup : undefined,
       expensesPolicy: expensesPolicy.trim() || undefined,
+      documentConfig: docConfig,
       ...(course.id === 0 || image !== course.image ? { image } : {}),
     });
     if (typeof result === "string") {
@@ -1018,6 +1024,144 @@ export function CourseEditDialog({
                 placeholder="1. มีสัญชาติไทย...&#10;2. มีประสบการณ์..."
                 className="mt-1 w-full resize-y rounded-[5px] border border-[#d1d5db] bg-white px-3 py-2 text-[12.5px] leading-relaxed text-[#1f2937] outline-none transition focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/20"
               />
+            </div>
+
+            {/* กล่องกำหนดการเปิดใช้งานเอกสารแนบในหน้าสมัคร */}
+            <div className="rounded-[6px] border border-[#cbd5e1] bg-[#f8fafc] p-3.5 space-y-3">
+              <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-2">
+                <div>
+                  <h4 className="text-[12.5px] font-bold text-[#0f172a] flex items-center gap-1.5">
+                    📁 กำหนดเอกสารแนบในหน้าสมัครเรียน
+                  </h4>
+                  <p className="text-[11px] text-[#64748b]">
+                    เลือกเปิด-ปิดเอกสารที่ต้องใช้ (เอกสารที่ไม่ได้เปิดใช้จะถูกซ่อนจากหน้าจอสมัครโดยอัตโนมัติ)
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                {/* 1. รูปถ่าย */}
+                <div className="rounded-[5px] border border-[#e2e8f0] bg-white p-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] font-semibold text-[#1e293b]">📷 1. รูปถ่ายหน้าตรง</span>
+                    <span className="rounded bg-[#dcfce7] px-1.5 py-0.5 text-[10px] font-semibold text-[#166534]">
+                      เปิดใช้งาน (บังคับ)
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-[#64748b]">สำหรับพิมพ์บัตรประจำตัวผู้เข้าอบรม</p>
+                </div>
+
+                {/* 2. หนังสือนำส่ง */}
+                <div className="rounded-[5px] border border-[#e2e8f0] bg-white p-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] font-semibold text-[#1e293b]">📄 2. หนังสือนำส่งต้นสังกัด</span>
+                    <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-medium text-[#1e40af]">
+                      <input
+                        type="checkbox"
+                        checked={docConfig.cover.enabled}
+                        onChange={(e) =>
+                          setDocConfig({
+                            ...docConfig,
+                            cover: { ...docConfig.cover, enabled: e.target.checked },
+                          })
+                        }
+                        className="h-3.5 w-3.5 rounded border-[#cbd5e1] text-[#1e40af]"
+                      />
+                      แสดงในหน้าสมัคร
+                    </label>
+                  </div>
+                  {docConfig.cover.enabled && (
+                    <label className="mt-2 flex items-center gap-1.5 cursor-pointer text-[11px] text-[#334155]">
+                      <input
+                        type="checkbox"
+                        checked={docConfig.cover.required}
+                        onChange={(e) =>
+                          setDocConfig({
+                            ...docConfig,
+                            cover: { ...docConfig.cover, required: e.target.checked },
+                          })
+                        }
+                        className="h-3.5 w-3.5 rounded border-[#cbd5e1] text-[#dc2626]"
+                      />
+                      <span>บังคับต้องแนบ (ไม่แนบส่งไม่ได้)</span>
+                    </label>
+                  )}
+                </div>
+
+                {/* 3. หนังสือรับรอง */}
+                <div className="rounded-[5px] border border-[#e2e8f0] bg-white p-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] font-semibold text-[#1e293b]">📜 3. หนังสือรับรอง / วุฒิบัตร</span>
+                    <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-medium text-[#1e40af]">
+                      <input
+                        type="checkbox"
+                        checked={docConfig.certificate.enabled}
+                        onChange={(e) =>
+                          setDocConfig({
+                            ...docConfig,
+                            certificate: { ...docConfig.certificate, enabled: e.target.checked },
+                          })
+                        }
+                        className="h-3.5 w-3.5 rounded border-[#cbd5e1] text-[#1e40af]"
+                      />
+                      แสดงในหน้าสมัคร
+                    </label>
+                  </div>
+                  {docConfig.certificate.enabled && (
+                    <label className="mt-2 flex items-center gap-1.5 cursor-pointer text-[11px] text-[#334155]">
+                      <input
+                        type="checkbox"
+                        checked={docConfig.certificate.required}
+                        onChange={(e) =>
+                          setDocConfig({
+                            ...docConfig,
+                            certificate: { ...docConfig.certificate, required: e.target.checked },
+                          })
+                        }
+                        className="h-3.5 w-3.5 rounded border-[#cbd5e1] text-[#dc2626]"
+                      />
+                      <span>บังคับต้องแนบ (ไม่แนบส่งไม่ได้)</span>
+                    </label>
+                  )}
+                </div>
+
+                {/* 4. ส.ฬ.8 */}
+                <div className={`rounded-[5px] border p-2.5 ${docConfig.saka.enabled ? "border-[#fde68a] bg-[#fffbeb]" : "border-[#e2e8f0] bg-white"}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] font-semibold text-[#1e293b]">📋 4. เอกสาร ส.ฬ.8</span>
+                    <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-medium text-[#b45309]">
+                      <input
+                        type="checkbox"
+                        checked={docConfig.saka.enabled}
+                        onChange={(e) =>
+                          setDocConfig({
+                            ...docConfig,
+                            saka: { ...docConfig.saka, enabled: e.target.checked },
+                          })
+                        }
+                        className="h-3.5 w-3.5 rounded border-[#cbd5e1] text-[#b45309]"
+                      />
+                      แสดงในหน้าสมัคร
+                    </label>
+                  </div>
+                  {docConfig.saka.enabled && (
+                    <label className="mt-2 flex items-center gap-1.5 cursor-pointer text-[11px] text-[#92400e]">
+                      <input
+                        type="checkbox"
+                        checked={docConfig.saka.required}
+                        onChange={(e) =>
+                          setDocConfig({
+                            ...docConfig,
+                            saka: { ...docConfig.saka, required: e.target.checked },
+                          })
+                        }
+                        className="h-3.5 w-3.5 rounded border-[#cbd5e1] text-[#dc2626]"
+                      />
+                      <span className="font-semibold text-[#b91c1c]">⚠️ บังคับต้องแนบเพื่อการสมัคร</span>
+                    </label>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div>

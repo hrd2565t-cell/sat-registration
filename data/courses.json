@@ -46,7 +46,25 @@
       "วุฒิบัตรรับรองจาก กกท. (เมื่อผ่านเกณฑ์การประเมินตามที่กำหนด)"
     ],
     "expensesPolicy": "ค่าเบี้ยเลี้ยง ค่าพาหนะเดินทางไป-กลับ และค่าใช้จ่ายส่วนตัวอื่นๆ นอกเหนือจากที่ กกท. ให้การสนับสนุน ให้เบิกจ่ายจากหน่วยงานต้นสังกัดตามระเบียบ หรือรับผิดชอบชำระด้วยตนเอง",
-    "useCustomSchedule": false
+    "useCustomSchedule": false,
+    "documentConfig": {
+      "photo": {
+        "enabled": true,
+        "required": true
+      },
+      "cover": {
+        "enabled": true,
+        "required": true
+      },
+      "certificate": {
+        "enabled": true,
+        "required": false
+      },
+      "saka": {
+        "enabled": false,
+        "required": false
+      }
+    }
   },
   {
     "id": 2,
@@ -94,7 +112,25 @@
       "วุฒิบัตรรับรองจาก กกท. (เมื่อผ่านเกณฑ์การประเมินตามที่กำหนด)"
     ],
     "expensesPolicy": "ค่าเบี้ยเลี้ยง ค่าพาหนะเดินทางไป-กลับ และค่าใช้จ่ายส่วนตัวอื่นๆ นอกเหนือจากที่ กกท. ให้การสนับสนุน ให้เบิกจ่ายจากหน่วยงานต้นสังกัดตามระเบียบ หรือรับผิดชอบชำระด้วยตนเอง",
-    "useCustomSchedule": false
+    "useCustomSchedule": false,
+    "documentConfig": {
+      "photo": {
+        "enabled": true,
+        "required": true
+      },
+      "cover": {
+        "enabled": true,
+        "required": true
+      },
+      "certificate": {
+        "enabled": true,
+        "required": false
+      },
+      "saka": {
+        "enabled": true,
+        "required": true
+      }
+    }
   },
   {
     "id": 3,
@@ -141,7 +177,25 @@
       "วุฒิบัตรรับรองจาก กกท. (เมื่อผ่านเกณฑ์การประเมินตามที่กำหนด)"
     ],
     "expensesPolicy": "ค่าเบี้ยเลี้ยง ค่าพาหนะเดินทางไป-กลับ และค่าใช้จ่ายส่วนตัวอื่นๆ นอกเหนือจากที่ กกท. ให้การสนับสนุน ให้เบิกจ่ายจากหน่วยงานต้นสังกัดตามระเบียบ หรือรับผิดชอบชำระด้วยตนเอง",
-    "useCustomSchedule": false
+    "useCustomSchedule": false,
+    "documentConfig": {
+      "photo": {
+        "enabled": true,
+        "required": true
+      },
+      "cover": {
+        "enabled": true,
+        "required": true
+      },
+      "certificate": {
+        "enabled": false,
+        "required": false
+      },
+      "saka": {
+        "enabled": false,
+        "required": false
+      }
+    }
   },
   {
     "id": 4,
@@ -188,6 +242,24 @@
       "วุฒิบัตรรับรองจาก กกท. (เมื่อผ่านเกณฑ์การประเมินตามที่กำหนด)"
     ],
     "expensesPolicy": "ค่าเบี้ยเลี้ยง ค่าพาหนะเดินทางไป-กลับ และค่าใช้จ่ายส่วนตัวอื่นๆ นอกเหนือจากที่ กกท. ให้การสนับสนุน ให้เบิกจ่ายจากหน่วยงานต้นสังกัดตามระเบียบ หรือรับผิดชอบชำระด้วยตนเอง",
-    "useCustomSchedule": false
+    "useCustomSchedule": false,
+    "documentConfig": {
+      "photo": {
+        "enabled": true,
+        "required": true
+      },
+      "cover": {
+        "enabled": true,
+        "required": true
+      },
+      "certificate": {
+        "enabled": true,
+        "required": false
+      },
+      "saka": {
+        "enabled": false,
+        "required": false
+      }
+    }
   }
 ]

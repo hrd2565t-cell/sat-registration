@@ -126,6 +126,7 @@ function mergeStoredCourses(stored: Course[]): Course[] {
           ? saved.satSupport
           : (seed?.satSupport ?? [...DEFAULT_SAT_SUPPORT]),
       expensesPolicy: saved.expensesPolicy || seed?.expensesPolicy || DEFAULT_EXPENSES_POLICY,
+      documentConfig: saved.documentConfig || seed?.documentConfig,
       status: saved.status === "full" ? "full" : "open",
     };
   });
@@ -149,23 +150,28 @@ function hydrate() {
               const cloudCourses: Course[] = data.map((c) => {
                 const parsedCap = Number(c.seats?.match(/\d+/)?.[0]);
                 const cap = Number.isFinite(parsedCap) && parsedCap > 0 ? parsedCap : 40;
+                const seed = getSeedCourse(c.id);
                 return {
+                  ...(seed ?? {}),
                   id: c.id,
                   title: c.title,
                   shortTitle:
-                    (c as { short_title?: string }).short_title || undefined,
+                    (c as { short_title?: string }).short_title || seed?.shortTitle,
                   date: c.date,
                   location: c.location,
                   seats: c.seats,
                   capacity: cap,
                   seatsLeft: c.status === "full" ? undefined : Math.min(cap, c.seats_left ?? cap),
                   status: c.status === "full" ? "full" : "open",
-                  image: c.image,
-                  imageAlt: c.image_alt || `${c.title} - รูปประกอบ`,
+                  image: c.image || seed?.image || "/assets/course-executive-management.jpg",
+                  imageAlt: c.image_alt || seed?.imageAlt || `${c.title} - รูปประกอบ`,
                   warningMessage: c.warning_message || undefined,
                   targetQuotas:
                     (c as { target_quotas?: import("@/lib/courses").TargetGroupQuotas })
-                      .target_quotas || undefined,
+                      .target_quotas || seed?.targetQuotas,
+                  documentConfig:
+                    (c as { document_config?: import("@/lib/courses").CourseDocumentConfig })
+                      .document_config || seed?.documentConfig,
                 };
               });
               state = {
@@ -215,23 +221,28 @@ function hydrate() {
           const cloudCourses: Course[] = data.map((c) => {
             const parsedCap = Number(c.seats?.match(/\d+/)?.[0]);
             const cap = Number.isFinite(parsedCap) && parsedCap > 0 ? parsedCap : 40;
+            const seed = getSeedCourse(c.id);
             return {
+              ...(seed ?? {}),
               id: c.id,
               title: c.title,
               shortTitle:
-                (c as { short_title?: string }).short_title || undefined,
+                (c as { short_title?: string }).short_title || seed?.shortTitle,
               date: c.date,
               location: c.location,
               seats: c.seats,
               capacity: cap,
               seatsLeft: c.status === "full" ? undefined : Math.min(cap, c.seats_left ?? cap),
               status: c.status === "full" ? "full" : "open",
-              image: c.image,
-              imageAlt: c.image_alt || `${c.title} - รูปประกอบ`,
+              image: c.image || seed?.image || "/assets/course-executive-management.jpg",
+              imageAlt: c.image_alt || seed?.imageAlt || `${c.title} - รูปประกอบ`,
               warningMessage: c.warning_message || undefined,
               targetQuotas:
                 (c as { target_quotas?: import("@/lib/courses").TargetGroupQuotas })
-                  .target_quotas || undefined,
+                  .target_quotas || seed?.targetQuotas,
+              documentConfig:
+                (c as { document_config?: import("@/lib/courses").CourseDocumentConfig })
+                  .document_config || seed?.documentConfig,
             };
           });
           state = {
@@ -297,6 +308,7 @@ export type CourseUpdate = Partial<
     | "evaluationCriteria"
     | "satSupport"
     | "expensesPolicy"
+    | "documentConfig"
   >
 >;
 
@@ -496,6 +508,7 @@ export function addCourse(
         ? data.satSupport
         : [...DEFAULT_SAT_SUPPORT],
     expensesPolicy: data.expensesPolicy || DEFAULT_EXPENSES_POLICY,
+    documentConfig: data.documentConfig,
   };
 
   state = {

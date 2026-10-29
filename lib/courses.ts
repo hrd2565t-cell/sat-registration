@@ -26,6 +26,90 @@ export const DEFAULT_TARGET_QUOTAS: TargetGroupQuotas = {
   external: 5,
 };
 
+export interface DocumentItemSetting {
+  enabled: boolean;
+  required: boolean;
+  label?: string;
+  hint?: string;
+}
+
+export interface CourseDocumentConfig {
+  photo: DocumentItemSetting;
+  cover: DocumentItemSetting;
+  certificate: DocumentItemSetting;
+  saka: DocumentItemSetting;
+}
+
+export const DEFAULT_DOCUMENT_CONFIG: CourseDocumentConfig = {
+  photo: {
+    enabled: true,
+    required: true,
+    label: "รูปถ่ายหน้าตรง",
+    hint: "สำหรับพิมพ์บัตรประจำตัว",
+  },
+  cover: {
+    enabled: true,
+    required: true,
+    label: "หนังสือนำส่งจากต้นสังกัด / สมาคมกีฬา",
+    hint: "หนังสืออนุญาตหรือส่งตัวเข้ารับการอบรม",
+  },
+  certificate: {
+    enabled: true,
+    required: false,
+    label: "หนังสือรับรอง / วุฒิบัตร",
+    hint: "ใบรับรองการเป็นผู้ฝึกสอน หรือประกาศนียบัตรที่เกี่ยวข้อง",
+  },
+  saka: {
+    enabled: false,
+    required: false,
+    label: "เอกสาร ส.ฬ.8",
+    hint: "แนบเฉพาะหลักสูตรที่กำหนด",
+  },
+};
+
+export function getCourseDocumentConfig(
+  course?: Course | null
+): CourseDocumentConfig {
+  if (!course) return DEFAULT_DOCUMENT_CONFIG;
+  if (course.documentConfig) {
+    return {
+      photo: {
+        ...DEFAULT_DOCUMENT_CONFIG.photo,
+        ...(course.documentConfig.photo || {}),
+      },
+      cover: {
+        ...DEFAULT_DOCUMENT_CONFIG.cover,
+        ...(course.documentConfig.cover || {}),
+      },
+      certificate: {
+        ...DEFAULT_DOCUMENT_CONFIG.certificate,
+        ...(course.documentConfig.certificate || {}),
+      },
+      saka: {
+        ...DEFAULT_DOCUMENT_CONFIG.saka,
+        ...(course.documentConfig.saka || {}),
+      },
+    };
+  }
+
+  // Smart defaults based on course ID / title if not set yet
+  const isCoachCourse =
+    course.id === 2 || (typeof course.title === "string" && course.title.includes("ผู้ฝึกสอน"));
+  return {
+    ...DEFAULT_DOCUMENT_CONFIG,
+    certificate: {
+      ...DEFAULT_DOCUMENT_CONFIG.certificate,
+      enabled: course.id === 1 || course.id === 2 || course.id === 4,
+      required: false,
+    },
+    saka: {
+      ...DEFAULT_DOCUMENT_CONFIG.saka,
+      enabled: isCoachCourse,
+      required: isCoachCourse,
+    },
+  };
+}
+
 export interface Course {
   id: number;
   image: string;
@@ -49,6 +133,7 @@ export interface Course {
   evaluationCriteria?: string[];
   satSupport?: string[];
   expensesPolicy?: string;
+  documentConfig?: CourseDocumentConfig;
 }
 
 export const DEFAULT_GLOBAL_REGISTRATION_DATE = "6-22 ม.ค. 2570";
