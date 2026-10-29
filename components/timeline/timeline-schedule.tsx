@@ -32,7 +32,6 @@ import { CourseEditDialog } from "@/components/admin/course-edit-dialog";
 import { GlobalScheduleCard } from "@/components/admin/global-schedule-card";
 import { AddSportsEventDialog } from "@/components/timeline/add-sports-event-dialog";
 import { EditSportsEventDialog } from "@/components/timeline/edit-sports-event-dialog";
-import { SyncDefaultsButton } from "@/components/admin/sync-defaults-button";
 
 type BarTone = "open" | "review" | "training" | "result";
 type ViewMode = "gantt" | "monthly";
@@ -968,7 +967,6 @@ export function TimelineSchedule() {
               >
                 <span>+ เพิ่มรายการแข่งขัน</span>
               </button>
-              <SyncDefaultsButton />
               <button
                 type="button"
                 onClick={() => {

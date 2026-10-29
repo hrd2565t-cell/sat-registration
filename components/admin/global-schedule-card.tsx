@@ -101,7 +101,7 @@ export function GlobalScheduleCard({
 
       {savedBanner && !isEditing && (
         <p className="mt-2 rounded-md border border-[#bbf7d0] bg-[#f0fdf4] px-3 py-1.5 text-[11px] font-semibold text-[#166534]">
-          ✅ {savedBanner} (อย่าลืมกดปุ่ม &quot;บันทึกเป็นข้อมูลหลักถาวร&quot; ด้านบนเพื่อบันทึกลงไฟล์ระบบ)
+          ✅ {savedBanner} (บันทึกลงฐานข้อมูลออนไลน์เรียบร้อยแล้ว)
         </p>
       )}
 

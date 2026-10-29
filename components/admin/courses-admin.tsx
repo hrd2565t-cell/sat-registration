@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useState } from "react";
 import { CourseEditDialog } from "@/components/admin/course-edit-dialog";
 import { GlobalScheduleCard } from "@/components/admin/global-schedule-card";
-import { SyncDefaultsButton } from "@/components/admin/sync-defaults-button";
 import {
   DEFAULT_EXPENSES_POLICY,
   DEFAULT_SAT_SUPPORT,
@@ -247,9 +246,9 @@ export function CoursesAdmin() {
               จัดการหลักสูตร
             </h1>
             <p className="mt-1 max-w-[680px] text-[11.5px] leading-relaxed text-[#4b5563]">
-              ภาพรวมหลักสูตรและจำนวนผู้สมัครจากข้อมูลกลาง
+              ภาพรวมหลักสูตรและจำนวนผู้สมัครจากฐานข้อมูลกลาง
               แก้ไขรายละเอียด สถานะ และจำนวนที่นั่งได้จากปุ่มบนการ์ด
-              เมื่อแก้ไขเสร็จแล้วกดปุ่มสีเขียวเพื่อบันทึกฝังลงไฟล์ระบบถาวร
+              ระบบจะบันทึกการเปลี่ยนแปลงลงฐานข้อมูลออนไลน์ (Supabase) อัตโนมัติทันที
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -260,7 +259,6 @@ export function CoursesAdmin() {
             >
               <span>+ เพิ่มหลักสูตรใหม่</span>
             </button>
-            <SyncDefaultsButton onSuccess={(msg) => showNotice(msg)} />
             <Link
               href="/"
               className="inline-flex h-8 items-center rounded-[5px] border border-[#c7d7ea] bg-white px-3 text-[11px] font-semibold text-[#1e3a8a] transition-colors hover:bg-[#eff6ff]"
