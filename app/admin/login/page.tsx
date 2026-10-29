@@ -2,12 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type ClipboardEvent } from "react";
 import { isAdminAuthenticated, loginAdmin } from "@/lib/admin-auth";
 
 function AdminLoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const nextUrl = searchParams.get("next") || "/admin";
 
@@ -22,7 +21,7 @@ function AdminLoginForm() {
   // If already authenticated, redirect immediately
   useEffect(() => {
     if (isAdminAuthenticated()) {
-      router.replace(nextUrl);
+      window.location.href = nextUrl;
     } else {
       // Focus first input box
       const timer = setTimeout(() => {
@@ -30,7 +29,7 @@ function AdminLoginForm() {
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [router, nextUrl]);
+  }, [nextUrl]);
 
   const verifyPin = (fullPin: string) => {
     if (fullPin.length !== 6) return;
@@ -39,7 +38,7 @@ function AdminLoginForm() {
       setIsSuccess(true);
       setError("");
       setTimeout(() => {
-        router.replace(nextUrl);
+        window.location.href = nextUrl;
       }, 250);
     } else {
       setError("รหัส PIN ไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง");

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 export const ADMIN_PIN = process.env.NEXT_PUBLIC_ADMIN_PIN || "336699";
 export const AUTH_STORAGE_KEY = "sat-admin-authenticated";
@@ -69,7 +69,6 @@ export function useIsAdmin(): boolean {
  * Automatically redirects to /admin/login?next=... if not authenticated.
  */
 export function useAdminGuard() {
-  const router = useRouter();
   const pathname = usePathname();
   const isAuthenticated = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
@@ -79,9 +78,9 @@ export function useAdminGuard() {
         pathname && pathname !== "/admin"
           ? `?next=${encodeURIComponent(pathname)}`
           : "";
-      router.replace(`/admin/login${nextQuery}`);
+      window.location.href = `/admin/login${nextQuery}`;
     }
-  }, [router, pathname, isAuthenticated]);
+  }, [pathname, isAuthenticated]);
 
   return { isAuthenticated };
 }

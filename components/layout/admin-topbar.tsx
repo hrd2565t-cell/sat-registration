@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { logoutAdmin } from "@/lib/admin-auth";
 
 interface AdminTopbarProps {
@@ -14,11 +13,9 @@ export function AdminTopbar({
   userName,
   onMenuClick,
 }: AdminTopbarProps) {
-  const router = useRouter();
-
   const handleLogout = () => {
     logoutAdmin();
-    router.push("/");
+    window.location.href = "/admin/login";
   };
   return (
     <header className="sticky top-0 z-30 flex h-10 items-center justify-between gap-3 border-b border-[#e5e7eb] bg-white px-3 lg:pl-6 lg:pr-5 print:hidden">

@@ -44,7 +44,10 @@ export function AdminNavButton({
       </Link>
       <button
         type="button"
-        onClick={() => logoutAdmin()}
+        onClick={() => {
+          logoutAdmin();
+          window.location.href = "/";
+        }}
         title="ออกจากระบบผู้ดูแลระบบ เพื่อดูในมุมมองผู้สมัครทั่วไป"
         className={
           compact
