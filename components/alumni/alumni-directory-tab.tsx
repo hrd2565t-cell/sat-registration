@@ -9,6 +9,7 @@ interface AlumniDirectoryTabProps {
   trainees: HistoricalTrainee[];
   onOpenPassport: (idCard: string) => void;
   onOpenDutyRecord: (trainee: HistoricalTrainee) => void;
+  onOpenDigitalPass?: (idCard: string) => void;
   onOpenImport: () => void;
   isAdmin?: boolean;
 }
@@ -17,6 +18,7 @@ export function AlumniDirectoryTab({
   trainees,
   onOpenPassport,
   onOpenDutyRecord,
+  onOpenDigitalPass,
   onOpenImport,
   isAdmin = false,
 }: AlumniDirectoryTabProps) {
@@ -344,6 +346,16 @@ export function AlumniDirectoryTab({
                       </td>
                       <td className="py-3 px-3.5 text-center">
                         <div className="flex items-center justify-center gap-1.5">
+                          {onOpenDigitalPass && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenDigitalPass(t.idCard)}
+                              className="rounded-lg bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-900 border border-amber-200 hover:bg-amber-100 transition-colors cursor-pointer"
+                              title="เปิดบัตรประจำตัวบุคลากรกีฬาดิจิทัล"
+                            >
+                              📱 บัตรดิจิทัล
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => onOpenPassport(t.idCard)}

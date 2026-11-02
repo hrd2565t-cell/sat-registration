@@ -9,6 +9,7 @@ interface PersonnelPassportModalProps {
   onClose: () => void;
   onAddDuty: (trainee: HistoricalTrainee) => void;
   onVerifyDuty?: (dutyId: string) => void;
+  onOpenDigitalPass?: (idCard: string) => void;
   isAdmin?: boolean;
 }
 
@@ -18,6 +19,7 @@ export function PersonnelPassportModal({
   onClose,
   onAddDuty,
   onVerifyDuty,
+  onOpenDigitalPass,
   isAdmin = false,
 }: PersonnelPassportModalProps) {
   const passport = getTraineePassport(idCard, allTrainees);
@@ -345,6 +347,17 @@ export function PersonnelPassportModal({
             กองพัฒนาบุคลากรกีฬา · การกีฬาแห่งประเทศไทย
           </div>
           <div className="flex items-center gap-2">
+            {onOpenDigitalPass && (
+              <button
+                type="button"
+                onClick={() => onOpenDigitalPass(primary.idCard)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 px-3.5 py-2 text-xs font-bold text-[#1e1b4b] shadow-xs hover:from-amber-300 hover:to-amber-400 transition-all cursor-pointer"
+                title="เปิดบัตรดิจิทัลบุคลากรกีฬาและ QR ตรวจสอบหน้างาน"
+              >
+                <span>📱</span>
+                <span>บัตรดิจิทัล (E-Badge)</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => onAddDuty(primary)}

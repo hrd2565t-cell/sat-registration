@@ -9,6 +9,7 @@ import { AlumniDirectoryTab } from "@/components/alumni/alumni-directory-tab";
 import { DutyTrackingTab } from "@/components/alumni/duty-tracking-tab";
 import { ProjectEvaluationTab } from "@/components/alumni/project-evaluation-tab";
 import { PersonnelPassportModal } from "@/components/alumni/personnel-passport-modal";
+import { DigitalPassModal } from "@/components/alumni/digital-pass-modal";
 import { DutyRecordModal } from "@/components/alumni/duty-record-modal";
 import { BulkImportModal } from "@/components/alumni/bulk-import-modal";
 
@@ -33,6 +34,7 @@ function AlumniContent() {
 
   const [activeTab, setActiveTab] = useState<"directory" | "duty" | "evaluation">("directory");
   const [passportIdCard, setPassportIdCard] = useState<string | null>(null);
+  const [digitalPassIdCard, setDigitalPassIdCard] = useState<string | null>(null);
   const [dutyTargetTrainee, setDutyTargetTrainee] = useState<HistoricalTrainee | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
 
@@ -67,6 +69,14 @@ function AlumniContent() {
               className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
             >
               หน้าหลัก
+            </Link>
+            <Link
+              href="/verify"
+              className="rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition-colors shadow-xs flex items-center gap-1.5"
+              title="เปิดกล้องสแกน QR Code ตรวจสอบคุณวุฒิและบัตรบุคลากรหน้างาน"
+            >
+              <span>📷</span>
+              <span>สแกนหน้างาน</span>
             </Link>
             <Link
               href="/status"
@@ -211,6 +221,7 @@ function AlumniContent() {
             trainees={trainees}
             onOpenPassport={(idCard) => setPassportIdCard(idCard)}
             onOpenDutyRecord={(t) => setDutyTargetTrainee(t)}
+            onOpenDigitalPass={(idCard) => setDigitalPassIdCard(idCard)}
             onOpenImport={() => setIsImportOpen(true)}
             isAdmin={isAdmin}
           />
@@ -245,7 +256,17 @@ function AlumniContent() {
             setDutyTargetTrainee(t);
           }}
           onVerifyDuty={(dutyId) => verifyDutyRecord(dutyId)}
+          onOpenDigitalPass={(idCard) => setDigitalPassIdCard(idCard)}
           isAdmin={isAdmin}
+        />
+      )}
+
+      {/* 2. Digital Pass (E-Badge) Modal */}
+      {digitalPassIdCard && (
+        <DigitalPassModal
+          idCard={digitalPassIdCard}
+          allTrainees={trainees}
+          onClose={() => setDigitalPassIdCard(null)}
         />
       )}
 

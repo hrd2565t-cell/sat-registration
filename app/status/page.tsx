@@ -20,6 +20,8 @@ import {
   useApplications,
 } from "@/lib/applications-store";
 import { isValidThaiIdCard } from "@/lib/validation";
+import { useAlumniStore } from "@/lib/alumni-store";
+import { DigitalPassModal } from "@/components/alumni/digital-pass-modal";
 
 function ArrowRightIcon({ className }: { className?: string }) {
   return (
@@ -58,6 +60,14 @@ function StatusHeader() {
     <Header
       rightSlot={
         <div className="flex items-center gap-2 sm:gap-3">
+          <Link
+            href="/verify"
+            className={`${navLinkClass} bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs flex items-center gap-1`}
+            title="เปิดกล้องสแกน QR Code ตรวจสอบคุณวุฒิและบัตรบุคลากรหน้างาน"
+          >
+            <span>📷</span>
+            <span>ตรวจสอบหน้างาน</span>
+          </Link>
           <Link
             href="/alumni"
             className={`${navLinkClass} border border-blue-200 bg-white text-[#16265E] hover:bg-blue-50`}
@@ -111,17 +121,23 @@ function StatusContent() {
   const searchParams = useSearchParams();
   const { applications } = useApplications();
   const { courses } = useCourses();
+  const { trainees } = useAlumniStore();
   const mounted = useMounted();
   const initialId = (searchParams.get("id") ?? "").replace(/\D/g, "");
   const initialValid = initialId.length === 13;
   const [idValue, setIdValue] = useState(initialValid ? initialId : "");
   const [searchedId, setSearchedId] = useState(initialValid ? initialId : "");
+  const [digitalPassOpen, setDigitalPassOpen] = useState(false);
   const [error, setError] = useState("");
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const results = searchedId
     ? getApplicationsByIdCard(applications, searchedId)
     : [];
+
+  const hasAlumniRecord = searchedId
+    ? trainees.some((t) => t.idCard.replace(/\D/g, "") === searchedId)
+    : false;
 
   const handleSearch = () => {
     const digits = idValue.replace(/\D/g, "");
@@ -199,6 +215,35 @@ function StatusContent() {
                 </p>
               </div>
             </Card>
+          )}
+
+          {/* Digital Badge E-Badge Card if trainee is found in SAT records */}
+          {searchedId && hasAlumniRecord && (
+            <div className="rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50/90 via-orange-50/70 to-blue-50/80 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in">
+              <div className="flex items-center gap-3 text-center sm:text-left">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-400 text-2xl text-[#1a1438] shadow-xs">
+                  🪪
+                </div>
+                <div>
+                  <span className="rounded-md bg-amber-200/80 px-2 py-0.5 text-[10px] font-bold text-amber-900">
+                    กกท. DIGITAL ACCREDITATION
+                  </span>
+                  <h3 className="text-sm font-bold text-gray-900 mt-0.5">
+                    พบบัตรประจำตัวบุคลากรกีฬาดิจิทัล (E-Badge)
+                  </h3>
+                  <p className="text-xs text-gray-600">
+                    สามารถเปิดแสดงบัตรพร้อม QR Code สแกนหน้างาน หรือบันทึกภาพลงโทรศัพท์มือถือได้ทันที
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDigitalPassOpen(true)}
+                className="shrink-0 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:from-amber-600 hover:to-amber-700 transition-all cursor-pointer"
+              >
+                📱 ดูบัตรดิจิทัล / บันทึกภาพ
+              </button>
+            </div>
           )}
 
           {searchedId && results.length === 0 && mounted && (
@@ -429,6 +474,15 @@ function StatusContent() {
           กลับสู่หน้าหลัก
         </Link>
       </main>
+
+      {/* Digital Pass Modal */}
+      {digitalPassOpen && searchedId && (
+        <DigitalPassModal
+          idCard={searchedId}
+          allTrainees={trainees}
+          onClose={() => setDigitalPassOpen(false)}
+        />
+      )}
     </div>
   );
 }
