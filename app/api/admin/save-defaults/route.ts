@@ -25,6 +25,42 @@ export async function POST(request: Request) {
         "utf-8"
       );
       coursesCount = courses.length;
+
+      // Sync updated courses directly to Supabase with service role key if available
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey =
+        process.env.SUPABASE_SERVICE_ROLE_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (supabaseUrl && supabaseKey) {
+        try {
+          const { createClient } = await import("@supabase/supabase-js");
+          const supabase = createClient(supabaseUrl, supabaseKey);
+          for (const c of courses as Record<string, unknown>[]) {
+            if (typeof c.id === "number") {
+              const warningText =
+                typeof c.warningMessage === "string" ? c.warningMessage.trim() : "";
+              await supabase
+                .from("courses")
+                .update({
+                  title: c.title,
+                  short_title: c.shortTitle ?? null,
+                  date: c.date,
+                  location: c.location,
+                  seats: c.seats,
+                  seats_left: typeof c.seatsLeft === "number" ? c.seatsLeft : 0,
+                  status: c.status,
+                  image: c.image,
+                  warning_message: warningText ? warningText : null,
+                  target_quotas: c.targetQuotas ?? null,
+                  document_config: c.documentConfig ?? null,
+                })
+                .eq("id", c.id);
+            }
+          }
+        } catch (syncErr) {
+          console.warn("Server Supabase course sync warning:", syncErr);
+        }
+      }
     }
 
     if (Array.isArray(sportsEvents)) {

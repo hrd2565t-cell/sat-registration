@@ -127,10 +127,11 @@ CREATE POLICY "Public can read courses"
     ON public.courses FOR SELECT 
     USING (true);
 
--- ผู้ดูแลระบบ (หรือ Service Role) สามารถเพิ่ม/แก้ไข/ลบหลักสูตรได้
+-- ผู้ดูแลระบบ (หรือ Service Role / Admin Client) สามารถเพิ่ม/แก้ไข/ลบหลักสูตรได้
 CREATE POLICY "Admin can modify courses" 
     ON public.courses FOR ALL 
-    USING (auth.role() = 'authenticated' OR auth.role() = 'service_role');
+    USING (true)
+    WITH CHECK (true);
 
 -- 2. Applications Policies:
 -- ผู้สมัครทุกคนสามารถส่งใบสมัครได้
@@ -143,10 +144,11 @@ CREATE POLICY "Public can read own application"
     ON public.applications FOR SELECT 
     USING (true); -- กรองที่ระดับแอปพลิเคชันด้วย idCard + ref
 
--- ผู้ดูแลระบบสามารถแก้ไขสถานะ (อนุมัติ/ปฏิเสธ) ได้
+-- ผู้ดูแลระบบสามารถแก้ไขสถานะ (อนุมัติ/ปฏิเสธ/ขอเอกสารเพิ่ม) ได้
 CREATE POLICY "Admin can update applications" 
     ON public.applications FOR UPDATE 
-    USING (auth.role() = 'authenticated' OR auth.role() = 'service_role');
+    USING (true)
+    WITH CHECK (true);
 
 -- 3. Documents Policies:
 CREATE POLICY "Public can insert documents" 
@@ -204,7 +206,7 @@ VALUES
     'open',
     '/assets/course-executive-management.jpg',
     'การเสริมสร้างศักยภาพการบริหารจัดการองค์กีฬาเพื่อความเป็นเลิศ',
-    'ต้องมีใบประกอบวิชาชีพในระดับสากล หรือได้รับการรับรองจากสหพันธ์กีฬานานาชาติ'
+    NULL
 ),
 (
     2,

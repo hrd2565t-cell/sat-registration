@@ -386,7 +386,7 @@ export function CourseEditDialog({
       capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : 40,
       status,
       seatsLeft: status === "full" ? undefined : remaining,
-      warningMessage: trimmedWarning || undefined,
+      warningMessage: trimmedWarning,
       targetQuotas: quotas,
       courseObjective: courseObjective.trim() || undefined,
       qualifications: quals.length > 0 ? quals : undefined,

@@ -17,7 +17,7 @@ interface CoursesState {
   revision: number;
 }
 
-const STORAGE_KEY = "sat-courses-v4";
+const STORAGE_KEY = "sat-courses-v5";
 
 function cloneSeedCourses() {
   return seedCourses.map((course) => ({ ...course }));
@@ -156,6 +156,10 @@ function mergeStoredCourses(stored: Course[]): Course[] {
             },
           }
         : seed?.documentConfig,
+      warningMessage:
+        saved.warningMessage !== undefined
+          ? (saved.warningMessage.trim() || undefined)
+          : (saved.id === 1 ? undefined : seed?.warningMessage),
       status: saved.status === "full" ? "full" : "open",
     };
   });
@@ -194,7 +198,10 @@ function hydrate() {
                   status: c.status === "full" ? "full" : "open",
                   image: c.image || seed?.image || "/assets/course-executive-management.jpg",
                   imageAlt: c.image_alt || seed?.imageAlt || `${c.title} - รูปประกอบ`,
-                  warningMessage: c.warning_message || undefined,
+                  warningMessage:
+                    c.id === 1 && c.warning_message?.includes("ต้องมีใบประกอบวิชาชีพ")
+                      ? undefined
+                      : c.warning_message?.trim() || undefined,
                   targetQuotas:
                     (c as { target_quotas?: import("@/lib/courses").TargetGroupQuotas })
                       .target_quotas || seed?.targetQuotas,
@@ -291,7 +298,10 @@ function hydrate() {
               status: c.status === "full" ? "full" : "open",
               image: c.image || seed?.image || "/assets/course-executive-management.jpg",
               imageAlt: c.image_alt || seed?.imageAlt || `${c.title} - รูปประกอบ`,
-              warningMessage: c.warning_message || undefined,
+              warningMessage:
+                c.id === 1 && c.warning_message?.includes("ต้องมีใบประกอบวิชาชีพ")
+                  ? undefined
+                  : c.warning_message?.trim() || undefined,
               targetQuotas:
                 (c as { target_quotas?: import("@/lib/courses").TargetGroupQuotas })
                   .target_quotas || seed?.targetQuotas,
@@ -432,6 +442,10 @@ export function updateCourse(
         patch.shortTitle !== undefined
           ? patch.shortTitle.trim() || undefined
           : course.shortTitle,
+      warningMessage:
+        patch.warningMessage !== undefined
+          ? patch.warningMessage.trim() || undefined
+          : course.warningMessage,
       useCustomSchedule:
         patch.useCustomSchedule !== undefined
           ? patch.useCustomSchedule
@@ -483,7 +497,7 @@ export function updateCourse(
         seats_left: updated.seatsLeft ?? 0,
         status: updated.status,
         image: updated.image,
-        warning_message: updated.warningMessage ?? null,
+        warning_message: updated.warningMessage && updated.warningMessage.trim() ? updated.warningMessage.trim() : null,
         target_quotas: (updated.targetQuotas as unknown as import("@/lib/supabase/types").Json) ?? null,
       })
       .eq("id", id)
