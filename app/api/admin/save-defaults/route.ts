@@ -35,26 +35,47 @@ export async function POST(request: Request) {
         try {
           const { createClient } = await import("@supabase/supabase-js");
           const supabase = createClient(supabaseUrl, supabaseKey);
-          for (const c of courses as Record<string, unknown>[]) {
+
+          const courseList = courses as Record<string, unknown>[];
+          const activeCourseIds = courseList
+            .map((c) => c.id)
+            .filter((id): id is number => typeof id === "number");
+
+          // 1. Delete courses in Supabase that have been deleted by the admin
+          const { data: existingRows } = await supabase.from("courses").select("id");
+          if (existingRows && existingRows.length > 0) {
+            const idsToDelete = existingRows
+              .map((r) => r.id)
+              .filter((id) => !activeCourseIds.includes(id));
+            if (idsToDelete.length > 0) {
+              await supabase.from("courses").delete().in("id", idsToDelete);
+            }
+          }
+
+          // 2. Upsert active courses so new courses are inserted and existing courses are updated
+          for (const c of courseList) {
             if (typeof c.id === "number") {
               const warningText =
                 typeof c.warningMessage === "string" ? c.warningMessage.trim() : "";
               await supabase
                 .from("courses")
-                .update({
-                  title: c.title,
-                  short_title: c.shortTitle ?? null,
-                  date: c.date,
-                  location: c.location,
-                  seats: c.seats,
-                  seats_left: typeof c.seatsLeft === "number" ? c.seatsLeft : 0,
-                  status: c.status,
-                  image: c.image,
-                  warning_message: warningText ? warningText : null,
-                  target_quotas: c.targetQuotas ?? null,
-                  document_config: c.documentConfig ?? null,
-                })
-                .eq("id", c.id);
+                .upsert(
+                  {
+                    id: c.id,
+                    title: c.title,
+                    short_title: c.shortTitle ?? null,
+                    date: c.date,
+                    location: c.location,
+                    seats: c.seats,
+                    seats_left: typeof c.seatsLeft === "number" ? c.seatsLeft : 0,
+                    status: c.status,
+                    image: c.image,
+                    warning_message: warningText ? warningText : null,
+                    target_quotas: c.targetQuotas ?? null,
+                    document_config: c.documentConfig ?? null,
+                  },
+                  { onConflict: "id" }
+                );
             }
           }
         } catch (syncErr) {

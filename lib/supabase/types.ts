@@ -23,6 +23,7 @@ export interface Database {
           image_alt: string | null;
           warning_message: string | null;
           target_quotas?: Json | null;
+          document_config?: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -39,6 +40,7 @@ export interface Database {
           image_alt?: string | null;
           warning_message?: string | null;
           target_quotas?: Json | null;
+          document_config?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -55,6 +57,7 @@ export interface Database {
           image_alt?: string | null;
           warning_message?: string | null;
           target_quotas?: Json | null;
+          document_config?: Json | null;
           updated_at?: string;
         };
         Relationships: [];

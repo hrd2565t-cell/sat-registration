@@ -211,6 +211,14 @@ function persist() {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.events));
+    // Auto-sync to data/sports-events.json in the background
+    fetch("/api/admin/save-defaults", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sportsEvents: state.events }),
+    }).catch(() => {
+      // Ignore background sync errors
+    });
   } catch {
     // LocalStorage fallback
   }
@@ -224,7 +232,7 @@ function hydrate() {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
+    if (Array.isArray(parsed)) {
       state = {
         events: normalizeEvents(parsed),
         revision: state.revision + 1,

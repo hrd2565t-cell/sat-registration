@@ -109,24 +109,30 @@ function mergeStoredCourses(stored: Course[]): Course[] {
         ? saved.resultDate || seed?.resultDate || globalSched.resultDate
         : globalSched.resultDate,
       targetQuotas: saved.targetQuotas ?? seed?.targetQuotas ?? { ...DEFAULT_TARGET_QUOTAS },
-      courseObjective: saved.courseObjective || seed?.courseObjective,
+      courseObjective:
+        saved.courseObjective !== undefined
+          ? saved.courseObjective
+          : seed?.courseObjective,
       qualifications:
-        saved.qualifications && saved.qualifications.length > 0
+        saved.qualifications !== undefined
           ? saved.qualifications
-          : seed?.qualifications,
+          : (seed?.qualifications ?? []),
       requiredDocuments:
-        saved.requiredDocuments && saved.requiredDocuments.length > 0
+        saved.requiredDocuments !== undefined
           ? saved.requiredDocuments
-          : seed?.requiredDocuments,
+          : (seed?.requiredDocuments ?? []),
       evaluationCriteria:
-        saved.evaluationCriteria && saved.evaluationCriteria.length > 0
+        saved.evaluationCriteria !== undefined
           ? saved.evaluationCriteria
-          : seed?.evaluationCriteria,
+          : (seed?.evaluationCriteria ?? []),
       satSupport:
-        saved.satSupport && saved.satSupport.length > 0
+        saved.satSupport !== undefined
           ? saved.satSupport
           : (seed?.satSupport ?? [...DEFAULT_SAT_SUPPORT]),
-      expensesPolicy: saved.expensesPolicy || seed?.expensesPolicy || DEFAULT_EXPENSES_POLICY,
+      expensesPolicy:
+        saved.expensesPolicy !== undefined
+          ? saved.expensesPolicy
+          : (seed?.expensesPolicy ?? DEFAULT_EXPENSES_POLICY),
       documentConfig: saved.documentConfig
         ? {
             photo: {
@@ -165,6 +171,71 @@ function mergeStoredCourses(stored: Course[]): Course[] {
   });
 }
 
+function mapCloudCourse(
+  c: import("@/lib/supabase/types").Database["public"]["Tables"]["courses"]["Row"],
+  existingCourses: Course[]
+): Course {
+  const parsedCap = Number(c.seats?.match(/\d+/)?.[0]);
+  const cap = Number.isFinite(parsedCap) && parsedCap > 0 ? parsedCap : 40;
+  const seed = getSeedCourse(c.id);
+  const existing = existingCourses.find((item) => item.id === c.id);
+
+  return {
+    ...(seed ?? {}),
+    ...(existing ?? {}),
+    id: c.id,
+    title: c.title,
+    shortTitle:
+      (c as { short_title?: string }).short_title || existing?.shortTitle || seed?.shortTitle,
+    date: c.date,
+    location: c.location,
+    seats: c.seats,
+    capacity: cap,
+    seatsLeft: c.status === "full" ? undefined : Math.min(cap, c.seats_left ?? cap),
+    status: c.status === "full" ? "full" : "open",
+    image: c.image || existing?.image || seed?.image || "/assets/course-executive-management.jpg",
+    imageAlt: c.image_alt || existing?.imageAlt || seed?.imageAlt || `${c.title} - รูปประกอบ`,
+    warningMessage:
+      c.id === 1 && c.warning_message?.includes("ต้องมีใบประกอบวิชาชีพ")
+        ? undefined
+        : c.warning_message !== undefined
+        ? (c.warning_message?.trim() || undefined)
+        : existing?.warningMessage,
+    targetQuotas:
+      (c as { target_quotas?: import("@/lib/courses").TargetGroupQuotas })
+        .target_quotas || existing?.targetQuotas || seed?.targetQuotas,
+    documentConfig: (c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config
+      ? {
+          photo: {
+            ...DEFAULT_DOCUMENT_CONFIG.photo,
+            ...(seed?.documentConfig?.photo || {}),
+            ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.photo || {}),
+          },
+          cover: {
+            ...DEFAULT_DOCUMENT_CONFIG.cover,
+            ...(seed?.documentConfig?.cover || {}),
+            ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.cover || {}),
+          },
+          certificate: {
+            ...DEFAULT_DOCUMENT_CONFIG.certificate,
+            ...(seed?.documentConfig?.certificate || {}),
+            ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.certificate || {}),
+          },
+          idcard: {
+            ...DEFAULT_DOCUMENT_CONFIG.idcard,
+            ...(seed?.documentConfig?.idcard || {}),
+            ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.idcard || {}),
+          },
+          saka: {
+            ...DEFAULT_DOCUMENT_CONFIG.saka,
+            ...(seed?.documentConfig?.saka || {}),
+            ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.saka || {}),
+          },
+        }
+      : (existing?.documentConfig ?? seed?.documentConfig),
+  };
+}
+
 function hydrate() {
   if (hydrateStarted || typeof window === "undefined") return;
   hydrateStarted = true;
@@ -180,62 +251,7 @@ function hydrate() {
           .order("id")
           .then(({ data }) => {
             if (data && data.length > 0) {
-              const cloudCourses: Course[] = data.map((c) => {
-                const parsedCap = Number(c.seats?.match(/\d+/)?.[0]);
-                const cap = Number.isFinite(parsedCap) && parsedCap > 0 ? parsedCap : 40;
-                const seed = getSeedCourse(c.id);
-                return {
-                  ...(seed ?? {}),
-                  id: c.id,
-                  title: c.title,
-                  shortTitle:
-                    (c as { short_title?: string }).short_title || seed?.shortTitle,
-                  date: c.date,
-                  location: c.location,
-                  seats: c.seats,
-                  capacity: cap,
-                  seatsLeft: c.status === "full" ? undefined : Math.min(cap, c.seats_left ?? cap),
-                  status: c.status === "full" ? "full" : "open",
-                  image: c.image || seed?.image || "/assets/course-executive-management.jpg",
-                  imageAlt: c.image_alt || seed?.imageAlt || `${c.title} - รูปประกอบ`,
-                  warningMessage:
-                    c.id === 1 && c.warning_message?.includes("ต้องมีใบประกอบวิชาชีพ")
-                      ? undefined
-                      : c.warning_message?.trim() || undefined,
-                  targetQuotas:
-                    (c as { target_quotas?: import("@/lib/courses").TargetGroupQuotas })
-                      .target_quotas || seed?.targetQuotas,
-                  documentConfig: (c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config
-                    ? {
-                        photo: {
-                          ...DEFAULT_DOCUMENT_CONFIG.photo,
-                          ...(seed?.documentConfig?.photo || {}),
-                          ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.photo || {}),
-                        },
-                        cover: {
-                          ...DEFAULT_DOCUMENT_CONFIG.cover,
-                          ...(seed?.documentConfig?.cover || {}),
-                          ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.cover || {}),
-                        },
-                        certificate: {
-                          ...DEFAULT_DOCUMENT_CONFIG.certificate,
-                          ...(seed?.documentConfig?.certificate || {}),
-                          ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.certificate || {}),
-                        },
-                        idcard: {
-                          ...DEFAULT_DOCUMENT_CONFIG.idcard,
-                          ...(seed?.documentConfig?.idcard || {}),
-                          ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.idcard || {}),
-                        },
-                        saka: {
-                          ...DEFAULT_DOCUMENT_CONFIG.saka,
-                          ...(seed?.documentConfig?.saka || {}),
-                          ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.saka || {}),
-                        },
-                      }
-                    : seed?.documentConfig,
-                };
-              });
+              const cloudCourses = data.map((c) => mapCloudCourse(c, state.courses));
               state = {
                 courses: cloudCourses,
                 revision: state.revision + 1,
@@ -280,38 +296,14 @@ function hydrate() {
       .order("id")
       .then(({ data }) => {
         if (data && data.length > 0) {
-          const cloudCourses: Course[] = data.map((c) => {
-            const parsedCap = Number(c.seats?.match(/\d+/)?.[0]);
-            const cap = Number.isFinite(parsedCap) && parsedCap > 0 ? parsedCap : 40;
-            const seed = getSeedCourse(c.id);
-            return {
-              ...(seed ?? {}),
-              id: c.id,
-              title: c.title,
-              shortTitle:
-                (c as { short_title?: string }).short_title || seed?.shortTitle,
-              date: c.date,
-              location: c.location,
-              seats: c.seats,
-              capacity: cap,
-              seatsLeft: c.status === "full" ? undefined : Math.min(cap, c.seats_left ?? cap),
-              status: c.status === "full" ? "full" : "open",
-              image: c.image || seed?.image || "/assets/course-executive-management.jpg",
-              imageAlt: c.image_alt || seed?.imageAlt || `${c.title} - รูปประกอบ`,
-              warningMessage:
-                c.id === 1 && c.warning_message?.includes("ต้องมีใบประกอบวิชาชีพ")
-                  ? undefined
-                  : c.warning_message?.trim() || undefined,
-              targetQuotas:
-                (c as { target_quotas?: import("@/lib/courses").TargetGroupQuotas })
-                  .target_quotas || seed?.targetQuotas,
-              documentConfig:
-                (c as { document_config?: import("@/lib/courses").CourseDocumentConfig })
-                  .document_config || seed?.documentConfig,
-            };
-          });
+          const cloudCourses = data.map((c) => mapCloudCourse(c, state.courses));
+          const cloudIds = new Set(data.map((c) => c.id));
+          const localOnly = state.courses.filter(
+            (course) => !cloudIds.has(course.id) && course.id > 5
+          );
+
           state = {
-            courses: cloudCourses,
+            courses: [...cloudCourses, ...localOnly],
             revision: state.revision + 1,
           };
           emit();
@@ -462,6 +454,34 @@ export function updateCourse(
         patch.targetQuotas !== undefined
           ? patch.targetQuotas
           : course.targetQuotas,
+      courseObjective:
+        patch.courseObjective !== undefined
+          ? patch.courseObjective
+          : course.courseObjective,
+      qualifications:
+        patch.qualifications !== undefined
+          ? patch.qualifications
+          : course.qualifications,
+      requiredDocuments:
+        patch.requiredDocuments !== undefined
+          ? patch.requiredDocuments
+          : course.requiredDocuments,
+      evaluationCriteria:
+        patch.evaluationCriteria !== undefined
+          ? patch.evaluationCriteria
+          : course.evaluationCriteria,
+      satSupport:
+        patch.satSupport !== undefined
+          ? patch.satSupport
+          : course.satSupport,
+      expensesPolicy:
+        patch.expensesPolicy !== undefined
+          ? patch.expensesPolicy
+          : course.expensesPolicy,
+      documentConfig:
+        patch.documentConfig !== undefined
+          ? patch.documentConfig
+          : course.documentConfig,
     };
 
     return updated;
@@ -499,6 +519,7 @@ export function updateCourse(
         image: updated.image,
         warning_message: updated.warningMessage && updated.warningMessage.trim() ? updated.warningMessage.trim() : null,
         target_quotas: (updated.targetQuotas as unknown as import("@/lib/supabase/types").Json) ?? null,
+        document_config: (updated.documentConfig as unknown as import("@/lib/supabase/types").Json) ?? null,
       })
       .eq("id", id)
       .then();
@@ -547,17 +568,18 @@ export function addCourse(
     warningMessage: data.warningMessage?.trim() || undefined,
     targetQuotas: data.targetQuotas ?? { ...DEFAULT_TARGET_QUOTAS },
     courseObjective:
-      data.courseObjective ||
-      "เพื่อพัฒนาความรู้และทักษะวิชาชีพบุคลากรทางการกีฬาตามมาตรฐานการกีฬาแห่งประเทศไทย",
+      data.courseObjective !== undefined
+        ? data.courseObjective
+        : "เพื่อพัฒนาความรู้และทักษะวิชาชีพบุคลากรทางการกีฬาตามมาตรฐานการกีฬาแห่งประเทศไทย",
     qualifications:
-      data.qualifications && data.qualifications.length > 0
+      data.qualifications !== undefined
         ? data.qualifications
         : [
             "มีสัญชาติไทย อายุ 20 ปีบริบูรณ์ขึ้นไป",
             "สังกัดหน่วยงานใน 5 กลุ่มเป้าหมาย กกท. (มีหนังสือนำส่งรับรองจากต้นสังกัด)",
           ],
     requiredDocuments:
-      data.requiredDocuments && data.requiredDocuments.length > 0
+      data.requiredDocuments !== undefined
         ? data.requiredDocuments
         : [
             "รูปถ่ายหน้าตรงขนาด 1.5 - 2 นิ้ว ถ่ายไม่เกิน 6 เดือน (ไฟล์ JPG/PNG)",
@@ -565,7 +587,7 @@ export function addCourse(
             "สำเนาบัตรประจำตัวประชาชน พร้อมลงนามรับรองสำเนาถูกต้อง",
           ],
     evaluationCriteria:
-      data.evaluationCriteria && data.evaluationCriteria.length > 0
+      data.evaluationCriteria !== undefined
         ? data.evaluationCriteria
         : [
             "มีเวลาเข้าร่วมการอบรมไม่น้อยกว่าร้อยละ 80 ของเวลาทั้งหมด",
@@ -573,10 +595,13 @@ export function addCourse(
             "ได้รับวุฒิบัตรรับรองจากการกีฬาแห่งประเทศไทย (กกท.)",
           ],
     satSupport:
-      data.satSupport && data.satSupport.length > 0
+      data.satSupport !== undefined
         ? data.satSupport
         : [...DEFAULT_SAT_SUPPORT],
-    expensesPolicy: data.expensesPolicy || DEFAULT_EXPENSES_POLICY,
+    expensesPolicy:
+      data.expensesPolicy !== undefined
+        ? data.expensesPolicy
+        : DEFAULT_EXPENSES_POLICY,
     documentConfig: data.documentConfig,
   };
 
@@ -586,6 +611,30 @@ export function addCourse(
   };
   const persisted = persist();
   emit();
+
+  if (isSupabaseConfigured()) {
+    const supabase = getSupabaseClient();
+    supabase
+      ?.from("courses")
+      .upsert(
+        {
+          id: newCourse.id,
+          title: newCourse.title,
+          short_title: newCourse.shortTitle ?? null,
+          date: newCourse.date,
+          location: newCourse.location,
+          seats: newCourse.seats,
+          seats_left: newCourse.seatsLeft ?? newCourse.capacity,
+          status: newCourse.status,
+          image: newCourse.image,
+          warning_message: newCourse.warningMessage ?? null,
+          target_quotas: (newCourse.targetQuotas as unknown as import("@/lib/supabase/types").Json) ?? null,
+          document_config: (newCourse.documentConfig as unknown as import("@/lib/supabase/types").Json) ?? null,
+        },
+        { onConflict: "id" }
+      )
+      .then();
+  }
 
   return { course: newCourse, persisted };
 }
@@ -631,6 +680,11 @@ export function deleteCourse(id: number): boolean {
   };
   persist();
   emit();
+
+  if (isSupabaseConfigured()) {
+    const supabase = getSupabaseClient();
+    supabase?.from("courses").delete().eq("id", id).then();
+  }
   return true;
 }
 
