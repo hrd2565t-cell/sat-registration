@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent, type ChangeEvent } from "react";
-import type { HistoricalTrainee, DutyRecord } from "@/lib/alumni-store";
+import { type HistoricalTrainee, type DutyRecord, KNOWLEDGE_DIMENSIONS } from "@/lib/alumni-store";
 
 interface DutyRecordModalProps {
   trainee: HistoricalTrainee;
@@ -30,9 +30,18 @@ export function DutyRecordModal({
   const [organization, setOrganization] = useState(trainee.affiliation || "");
   const [location, setLocation] = useState("");
   const [achievement, setAchievement] = useState("");
+  const [knowledgeApplied, setKnowledgeApplied] = useState("");
+  const [knowledgeDimensions, setKnowledgeDimensions] = useState<string[]>(["planning"]);
+  const [impactRating, setImpactRating] = useState<number>(5);
   const [verified, setVerified] = useState(isAdmin);
   const [attachmentName, setAttachmentName] = useState("");
   const [error, setError] = useState("");
+
+  const toggleDimension = (key: string) => {
+    setKnowledgeDimensions((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -60,6 +69,10 @@ export function DutyRecordModal({
       setError("กรุณาระบุวันที่เริ่มต้น");
       return;
     }
+    if (!knowledgeApplied.trim()) {
+      setError("กรุณาระบุว่าท่านได้นำเอาความรู้ที่ได้จากการอบรมไปใช้ในการปฏิบัติหน้าที่อย่างไร เพื่อนำข้อมูลไปประเมินโครงการ");
+      return;
+    }
 
     onSave({
       idCard: trainee.idCard,
@@ -70,6 +83,9 @@ export function DutyRecordModal({
       organization: organization.trim() || trainee.affiliation,
       location: location.trim() || undefined,
       achievement: achievement.trim() || undefined,
+      knowledgeApplied: knowledgeApplied.trim(),
+      knowledgeDimensions: knowledgeDimensions.length > 0 ? knowledgeDimensions : undefined,
+      impactRating,
       attachmentName: attachmentName || undefined,
       verified,
     });
@@ -207,6 +223,107 @@ export function DutyRecordModal({
               onChange={(e) => setAchievement(e.target.value)}
               className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#16265E] focus:outline-hidden focus:ring-1 focus:ring-[#16265E]"
             />
+          </div>
+
+          {/* Kirkpatrick Level 3 & 4: การนำความรู้ไปใช้จริงและการประเมินโครงการ */}
+          <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50/70 via-indigo-50/40 to-white p-4 space-y-3.5 shadow-xs">
+            <div className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#16265E] text-white text-xs">
+                💡
+              </span>
+              <div>
+                <h4 className="text-xs font-bold text-[#16265E]">
+                  การนำความรู้จากการอบรมไปใช้จริง (สำหรับประเมินโครงการ กกท.)
+                </h4>
+                <p className="text-[11px] text-gray-500">
+                  ระบบจะรวบรวมข้อมูลส่วนนี้ไปสังเคราะห์ในรายงานผลสัมฤทธิ์โครงการ
+                </p>
+              </div>
+            </div>
+
+            {/* มิติความรู้ที่นำไปประยุกต์ใช้ */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                มิติความรู้ที่นำไปประยุกต์ใช้ในการปฏิบัติหน้าที่ (เลือกได้มากกว่า 1 ข้อ)
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {KNOWLEDGE_DIMENSIONS.map((dim) => {
+                  const checked = knowledgeDimensions.includes(dim.key);
+                  return (
+                    <button
+                      type="button"
+                      key={dim.key}
+                      onClick={() => toggleDimension(dim.key)}
+                      className={`flex items-start gap-2 p-2 rounded-lg border text-left text-xs transition-all ${
+                        checked
+                          ? "border-[#16265E] bg-white text-[#16265E] font-medium shadow-xs ring-1 ring-[#16265E]/20"
+                          : "border-gray-200 bg-white/70 text-gray-600 hover:bg-white"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {}} // handled by button onClick
+                        className="mt-0.5 rounded text-[#16265E] focus:ring-[#16265E] pointer-events-none"
+                      />
+                      <span>
+                        <span className="mr-1">{dim.icon}</span>
+                        {dim.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ข้อคำถามหลัก: ท่านได้นำเอาความรู้ที่ได้จากการอบรม ไปใช้ในการปฏิบัติหน้าที่อย่างไร */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-800">
+                ท่านได้นำเอาความรู้ที่ได้จากการอบรม ไปใช้ในการปฏิบัติหน้าที่อย่างไร <span className="text-red-500">*</span>
+              </label>
+              <p className="text-[11px] text-gray-500 mt-0.5 mb-1.5">
+                โปรดระบุตัวอย่างจริง เช่น การวางโปรแกรมฝึกซ้อม Periodization, การใช้กฎกติกาการตัดสิน, การจัดการอาการบาดเจ็บ, หรือการบริหารทีม
+              </p>
+              <textarea
+                rows={3}
+                required
+                placeholder="เช่น นำหลักการ Periodization มาวางตารางฝึกซ้อม 8 สัปดาห์ และนำวิทยาศาสตร์การกีฬามาวิเคราะห์สมรรถภาพนักกีฬา ทำให้สามารถลดอาการบาดเจ็บและเพิ่มความอึดของนักกีฬาได้ในรอบชิง..."
+                value={knowledgeApplied}
+                onChange={(e) => setKnowledgeApplied(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs focus:border-[#16265E] focus:outline-hidden focus:ring-1 focus:ring-[#16265E]"
+              />
+            </div>
+
+            {/* ระดับประสิทธิผล (1-5 ดาว) */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                ระดับประสิทธิผลที่ความรู้จากหลักสูตรช่วยเพิ่มประสิทธิภาพการทำงาน
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setImpactRating(star)}
+                    className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition-all cursor-pointer ${
+                      impactRating >= star
+                        ? "bg-amber-100 text-amber-800 border border-amber-300 shadow-xs"
+                        : "bg-white text-gray-400 border border-gray-200 hover:bg-gray-50"
+                    }`}
+                  >
+                    <span>⭐</span>
+                    <span>{star} ดาว</span>
+                  </button>
+                ))}
+                <span className="text-xs font-semibold text-emerald-800 ml-1">
+                  {impactRating === 5 && "⭐ ระดับมากที่สุด (มีผลต่อความสำเร็จสูง)"}
+                  {impactRating === 4 && "⭐ ระดับมาก (ช่วยแก้ปัญหาได้ชัดเจน)"}
+                  {impactRating === 3 && "⭐ ระดับปานกลาง (นำมาปรับใช้ได้ตามมาตรฐาน)"}
+                  {impactRating === 2 && "⭐ ระดับน้อย (นำมาใช้บางส่วน)"}
+                  {impactRating === 1 && "⭐ ระดับน้อยที่สุด"}
+                </span>
+              </div>
+            </div>
           </div>
 
           <div>

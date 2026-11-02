@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { HistoricalTrainee, DutyRecord } from "@/lib/alumni-store";
-import { getTraineePassport } from "@/lib/alumni-store";
+import { type HistoricalTrainee, type DutyRecord, getTraineePassport, KNOWLEDGE_DIMENSIONS } from "@/lib/alumni-store";
 
 interface PersonnelPassportModalProps {
   idCard: string;
@@ -294,8 +293,42 @@ export function PersonnelPassportModal({
                         </div>
                       )}
                       {duty.achievement && (
-                        <div className="sm:col-span-2 text-emerald-800 font-medium bg-emerald-50/70 p-2 rounded-lg border border-emerald-100">
+                        <div className="sm:col-span-2 text-emerald-800 font-medium bg-emerald-50/70 p-2.5 rounded-lg border border-emerald-100">
                           🎯 ผลสัมฤทธิ์/ผลงาน: {duty.achievement}
+                        </div>
+                      )}
+                      {duty.knowledgeApplied && (
+                        <div className="sm:col-span-2 rounded-xl bg-blue-50/70 p-3 border border-blue-200 text-xs">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="font-bold text-[#16265E] flex items-center gap-1.5">
+                              <span>💡</span>
+                              <span>การนำความรู้จากการอบรมไปใช้จริง:</span>
+                            </span>
+                            {duty.impactRating && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-full border border-amber-200">
+                                ⭐ {duty.impactRating}/5 ประสิทธิผล
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-gray-700 italic leading-relaxed">
+                            "{duty.knowledgeApplied}"
+                          </p>
+                          {duty.knowledgeDimensions && duty.knowledgeDimensions.length > 0 && (
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5 pt-1 border-t border-blue-100">
+                              {duty.knowledgeDimensions.map((dimKey) => {
+                                const dimInfo = KNOWLEDGE_DIMENSIONS.find((k) => k.key === dimKey);
+                                return (
+                                  <span
+                                    key={dimKey}
+                                    className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-0.5 text-[10px] font-semibold text-blue-900 border border-blue-200 shadow-2xs"
+                                  >
+                                    <span>{dimInfo?.icon || "🏷️"}</span>
+                                    <span>{dimInfo?.label.split(" (")[0] || dimKey}</span>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

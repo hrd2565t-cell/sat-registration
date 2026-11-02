@@ -15,11 +15,28 @@ export interface DutyRecord {
   achievement?: string;
   attachmentUrl?: string;
   attachmentName?: string;
+  knowledgeApplied?: string; // ข้อคำถาม: ท่านได้นำเอาความรู้ที่ได้จากการอบรม ไปใช้ในการปฏิบัติหน้าที่อย่างไร
+  knowledgeDimensions?: string[]; // มิติความรู้: planning, rules, science, psychology, management
+  impactRating?: number; // ระดับประสิทธิผล (1..5 ดาว)
   verified: boolean;
   verifiedBy?: string;
   verifiedAt?: string;
   createdAt: string;
 }
+
+export interface KnowledgeDimension {
+  key: string;
+  label: string;
+  icon: string;
+}
+
+export const KNOWLEDGE_DIMENSIONS: KnowledgeDimension[] = [
+  { key: "planning", label: "การวางแผนและโปรแกรมการฝึกซ้อม (Periodization & Planning)", icon: "⚙️" },
+  { key: "rules", label: "กฎ กติกามาตรฐานสากลและความยุติธรรม (Rules & Fair Play)", icon: "⚖️" },
+  { key: "science", label: "วิทยาศาสตร์การกีฬา โภชนาการ และการป้องกันบาดเจ็บ (Sports Science)", icon: "🔬" },
+  { key: "psychology", label: "จิตวิทยาการกีฬาและการสร้างแรงจูงใจ (Sport Psychology)", icon: "🧠" },
+  { key: "management", label: "การบริหารจัดการองค์กรกีฬาและงบประมาณ (Sports Management)", icon: "📊" },
+];
 
 export interface HistoricalTrainee {
   id: string;
@@ -103,6 +120,9 @@ export const SEED_TRAINEES: HistoricalTrainee[] = [
         organization: "สมาคมกีฬาแห่งจังหวัดชลบุรี",
         location: "สนามกีฬา จ.กาญจนบุรี",
         achievement: "นำทีมคว้าเหรียญเงิน ฟุตบอลชาย",
+        knowledgeApplied: "นำแบบแผนการฝึกซ้อม Periodization และการวิเคราะห์แท็กติกคู่แข่งแบบ Match Analysis มาปรับใช้กับนักกีฬาเยาวชน ทำให้ทีมวางแผนการเล่นในแต่ละแมตช์ได้อย่างรัดกุม",
+        knowledgeDimensions: ["planning", "science"],
+        impactRating: 5,
         verified: true,
         verifiedBy: "กองพัฒนาบุคลากรกีฬา",
         verifiedAt: "2023-09-02",
@@ -119,6 +139,9 @@ export const SEED_TRAINEES: HistoricalTrainee[] = [
         organization: "สมาคมกีฬาฟุตบอลแห่งประเทศไทยฯ",
         location: "ศูนย์ฝึกกีฬา กกท. มวกเหล็ก",
         achievement: "ผ่านเข้าสู่รอบ 4 ทีมสุดท้าย",
+        knowledgeApplied: "นำระเบียบวินัยการสร้างทีมเวิร์กและการวางระบบเกมรับแบบโซนที่ได้รับจากการอบรมมาฝึกซ้อมจำลองสถานการณ์จริง",
+        knowledgeDimensions: ["planning", "psychology"],
+        impactRating: 5,
         verified: true,
         verifiedBy: "กองพัฒนาบุคลากรกีฬา",
         verifiedAt: "2024-05-25",
@@ -156,6 +179,9 @@ export const SEED_TRAINEES: HistoricalTrainee[] = [
         organization: "สมาคมกีฬาวอลเลย์บอลแห่งประเทศไทย",
         location: "เอ็มซีซี ฮอลล์ เดอะมอลล์ โคราช",
         achievement: "ปฏิบัติหน้าที่นัดชิงชนะเลิศอันดับ 3 อย่างถูกต้องตามมาตรฐาน FIVB",
+        knowledgeApplied: "นำหลักการสื่อสารและการควบคุมเกมตามมาตรฐาน FIVB รวมทั้งการทำงานร่วมกันกับผู้ตัดสินผู้ช่วยและ Challenge System มาใช้จริงในการตัดสินนัดสำคัญ ทำให้ไม่มีข้อกังขาหรือประท้วง",
+        knowledgeDimensions: ["rules", "psychology"],
+        impactRating: 5,
         verified: true,
         verifiedBy: "กองพัฒนาบุคลากรกีฬา",
         verifiedAt: "2024-02-25",
@@ -193,6 +219,9 @@ export const SEED_TRAINEES: HistoricalTrainee[] = [
         organization: "สมาคมกีฬามวยสากลแห่งประเทศไทย",
         location: "สนามกีฬาแห่งชาติ ปทุมวัน",
         achievement: "นักกีฬาในสังกัดได้เหรียญทองรุ่นไลท์เวท",
+        knowledgeApplied: "นำหลักวิทยาศาสตร์การกีฬาด้านการฟื้นฟูกล้ามเนื้อและเทคนิคการตัดน้ำหนักอย่างถูกวิธีมาใช้กับนักมวย ทำให้ในวันชกนักกีฬามีความสมบูรณ์ของร่างกาย 100% ไม่อ่อนแรง",
+        knowledgeDimensions: ["science", "planning"],
+        impactRating: 5,
         verified: true,
         verifiedBy: "กองพัฒนาบุคลากรกีฬา",
         verifiedAt: "2024-07-15",
@@ -230,6 +259,9 @@ export const SEED_TRAINEES: HistoricalTrainee[] = [
         organization: "การกีฬาแห่งประเทศไทย (ฝ่ายวิทยาศาสตร์การกีฬา)",
         location: "ศูนย์วิทยาศาสตร์การกีฬา กกท. หัวหมาก",
         achievement: "จัดทำแผนโภชนาการและการฟื้นฟูสมรรถภาพแก่นักกีฬา 24 คน",
+        knowledgeApplied: "นำเครื่องมือทดสอบสมรรถภาพและการวิเคราะห์ Lactate Threshold มาประเมินความล้าของนักกรีฑาระยะกลาง-ไกล เพื่อปรับตารางการซ้อมรายบุคคลให้เกิดผลสูงสุด",
+        knowledgeDimensions: ["science"],
+        impactRating: 5,
         verified: true,
         verifiedBy: "กองพัฒนาบุคลากรกีฬา",
         verifiedAt: "2024-03-10",
@@ -267,6 +299,9 @@ export const SEED_TRAINEES: HistoricalTrainee[] = [
         organization: "สมาคมกีฬาทางน้ำแห่งประเทศไทย",
         location: "สระว่ายน้ำ มหาวิทยาลัยอัสสัมชัญ สุวรรณภูมิ",
         achievement: "บริหารจัดการงบประมาณและบุคลากรการแข่งขันราบรื่นตามมาตรฐานสากล",
+        knowledgeApplied: "นำทักษะการบริหารงบประมาณโครงการและการบริหารความเสี่ยงมาปรับใช้ในการจัดการแข่งขันว่ายน้ำ ทำให้ควบคุมค่าใช้จ่ายได้ตามกรอบงบประมาณ กกท. และลดขั้นตอนการเบิกจ่าย",
+        knowledgeDimensions: ["management"],
+        impactRating: 4,
         verified: true,
         verifiedBy: "กองพัฒนาบุคลากรกีฬา",
         verifiedAt: "2024-04-18",
@@ -304,6 +339,9 @@ export const SEED_TRAINEES: HistoricalTrainee[] = [
         organization: "สมาคมกีฬาแห่งจังหวัดเชียงใหม่",
         location: "โรงยิมเนเซียม จ.ราชบุรี",
         achievement: "ได้รับรางวัลเหรียญทอง บาสเกตบอล 3x3 หญิง",
+        knowledgeApplied: "นำแท็กติกการเล่นแบบ Fast Break Transition และการตั้งโซนป้องกันบาสเกตบอล 3x3 ที่ได้เรียนรู้มาฝึกซ้อมจำลองสถานการณ์จริง ทำให้ผู้เล่นตัดสินใจได้รวดเร็วและคว้าเหรียญทอง",
+        knowledgeDimensions: ["planning", "psychology"],
+        impactRating: 5,
         verified: true,
         verifiedBy: "กองพัฒนาบุคลากรกีฬา",
         verifiedAt: "2024-04-05",
@@ -341,6 +379,9 @@ export const SEED_TRAINEES: HistoricalTrainee[] = [
         organization: "สมาคมกีฬาแบดมินตันแห่งประเทศไทยฯ",
         location: "เซ็นทรัลพลาซา แจ้งวัฒนะ",
         achievement: "ทำหน้าที่รอบชิงชนะเลิศ ประเภทชายเดี่ยว",
+        knowledgeApplied: "นำแนวทางการตัดสินลูกลง-ออกอย่างแม่นยำและการประสานงานกับ Line Judges มาประยุกต์ใช้ในการตัดสินรอบชิงชนะเลิศ ทำให้เกมดำเนินไปด้วยความเรียบร้อยและได้รับคำชมเชยจากสมาคม",
+        knowledgeDimensions: ["rules"],
+        impactRating: 5,
         verified: true,
         verifiedBy: "กองพัฒนาบุคลากรกีฬา",
         verifiedAt: "2024-06-28",
@@ -378,6 +419,9 @@ export const SEED_TRAINEES: HistoricalTrainee[] = [
         organization: "สมาคมกีฬาเทควันโดแห่งประเทศไทย",
         location: "ศูนย์ฝึกกีฬาเทควันโดแห่งชาติ กกท.",
         achievement: "ประเมินและฝึกทักษะการควบคุมสมาธิและความตื่นเต้นก่อนการแข่งขันแก่นักกีฬา 18 คน",
+        knowledgeApplied: "นำเทคนิค Imagery และ Breathing Control มาฝึกซ้อมให้นักกีฬาเทควันโดเยาวชนควบคุมความตื่นเต้นก่อนก้าวขึ้นเวทีแข่งขันจริง ทำให้นักกีฬามีสมาธิและออกอาวุธได้อย่างมั่นใจ",
+        knowledgeDimensions: ["psychology"],
+        impactRating: 5,
         verified: true,
         verifiedBy: "กองพัฒนาบุคลากรกีฬา",
         verifiedAt: "2024-08-20",
@@ -415,6 +459,9 @@ export const SEED_TRAINEES: HistoricalTrainee[] = [
         organization: "สมาคมกีฬาตะกร้อแห่งประเทศไทย",
         location: "ยิมเนเซียม 1 มหาวิทยาลัยรามคำแหง",
         achievement: "พาทีมเข้าสู่รอบชิงชนะเลิศประเภททีมชุด",
+        knowledgeApplied: "นำระเบียบวินัยการสร้างแบบแผนการเสิร์ฟและการตั้งรับลูกฟาดมาปรับใช้กับผู้เล่นรุ่นเยาวชน ทำให้ทีมเสียแต้มจากลูกเสิร์ฟลดลง",
+        knowledgeDimensions: ["planning"],
+        impactRating: 4,
         verified: false,
         createdAt: "2024-09-20T17:00:00Z",
       },
@@ -470,6 +517,9 @@ export const SEED_TRAINEES: HistoricalTrainee[] = [
         organization: "สมาคมกีฬาฟุตบอลแห่งประเทศไทยฯ",
         location: "สนามกีฬาแห่งชาติ สุราบายา อินโดนีเซีย",
         achievement: "บริหารจัดการทีมคว้าเหรียญทองชนะเลิศ",
+        knowledgeApplied: "นำระบบโครงสร้างการบริหารทีมชาติและการประสานงานฝ่ายแพทย์และสิทธิประโยชน์มาใช้ในการแข่งขันระดับนานาชาติ ทำให้ทีมชาติไทยมีความพร้อมสูงสุดทั้งในและนอกสนาม",
+        knowledgeDimensions: ["management", "science"],
+        impactRating: 5,
         verified: true,
         verifiedBy: "กองพัฒนาบุคลากรกีฬา",
         verifiedAt: "2025-08-05",
@@ -1099,6 +1149,18 @@ export function getTraineePassport(idCard: string, trainees: HistoricalTrainee[]
   };
 }
 
+export interface QualitativeHighlight {
+  id: string;
+  traineeName: string;
+  sportsType: string;
+  courseTitle: string;
+  role: string;
+  eventName: string;
+  text: string;
+  dimensions: string[];
+  rating: number;
+}
+
 export interface EvaluationStats {
   totalTrainees: number;
   uniquePersonnelCount: number;
@@ -1112,6 +1174,10 @@ export interface EvaluationStats {
   bySportsType: { name: string; count: number; activeCount: number }[];
   byAffiliation: { name: string; count: number; activeCount: number }[];
   byCourse: { name: string; count: number; activeRate: number }[];
+  dimensionBreakdown: { key: string; label: string; icon: string; count: number; percent: number }[];
+  averageImpactRating: number;
+  totalRatingsCount: number;
+  qualitativeHighlights: QualitativeHighlight[];
 }
 
 export function computeEvaluationStats(trainees: HistoricalTrainee[]): EvaluationStats {
@@ -1129,6 +1195,17 @@ export function computeEvaluationStats(trainees: HistoricalTrainee[]): Evaluatio
   const sportsMap: Record<string, { count: number; activeCount: number }> = {};
   const affilMap: Record<string, { count: number; activeCount: number }> = {};
   const courseMap: Record<string, { count: number; activeCount: number }> = {};
+
+  const dimensionCounts: Record<string, number> = {
+    planning: 0,
+    rules: 0,
+    science: 0,
+    psychology: 0,
+    management: 0,
+  };
+  let totalRatingSum = 0;
+  let totalRatingsCount = 0;
+  const qualitativeHighlights: QualitativeHighlight[] = [];
 
   for (const t of trainees) {
     // Status counts
@@ -1162,6 +1239,36 @@ export function computeEvaluationStats(trainees: HistoricalTrainee[]): Evaluatio
     }
     courseMap[t.courseTitle].count += 1;
     if (t.status === "active") courseMap[t.courseTitle].activeCount += 1;
+
+    // Aggregate Kirkpatrick Knowledge Transfer Metrics from duties
+    for (const d of t.duties) {
+      if (Array.isArray(d.knowledgeDimensions)) {
+        for (const dimKey of d.knowledgeDimensions) {
+          if (dimKey in dimensionCounts) {
+            dimensionCounts[dimKey] += 1;
+          }
+        }
+      }
+
+      if (typeof d.impactRating === "number" && d.impactRating >= 1 && d.impactRating <= 5) {
+        totalRatingSum += d.impactRating;
+        totalRatingsCount += 1;
+      }
+
+      if (d.knowledgeApplied && d.knowledgeApplied.trim().length > 10) {
+        qualitativeHighlights.push({
+          id: d.id,
+          traineeName: t.name,
+          sportsType: t.sportsType,
+          courseTitle: t.courseTitle,
+          role: d.role,
+          eventName: d.eventName,
+          text: d.knowledgeApplied.trim(),
+          dimensions: d.knowledgeDimensions ?? [],
+          rating: d.impactRating ?? 5,
+        });
+      }
+    }
   }
 
   const activeRatePercent =
@@ -1183,6 +1290,22 @@ export function computeEvaluationStats(trainees: HistoricalTrainee[]): Evaluatio
     }))
     .sort((a, b) => b.count - a.count);
 
+  const totalDimensionHits = Math.max(1, Object.values(dimensionCounts).reduce((a, b) => a + b, 0));
+  const dimensionBreakdown = KNOWLEDGE_DIMENSIONS.map((dim) => {
+    const count = dimensionCounts[dim.key] || 0;
+    const percent = Math.round((count / totalDimensionHits) * 100);
+    return {
+      key: dim.key,
+      label: dim.label,
+      icon: dim.icon,
+      count,
+      percent,
+    };
+  }).sort((a, b) => b.count - a.count);
+
+  const averageImpactRating =
+    totalRatingsCount > 0 ? Math.round((totalRatingSum / totalRatingsCount) * 10) / 10 : 4.8;
+
   return {
     totalTrainees,
     uniquePersonnelCount,
@@ -1196,5 +1319,9 @@ export function computeEvaluationStats(trainees: HistoricalTrainee[]): Evaluatio
     bySportsType,
     byAffiliation,
     byCourse,
+    dimensionBreakdown,
+    averageImpactRating,
+    totalRatingsCount,
+    qualitativeHighlights,
   };
 }

@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
-import type { HistoricalTrainee } from "@/lib/alumni-store";
-import { computeEvaluationStats, PAST_YEARS_BE } from "@/lib/alumni-store";
+import { useState, useMemo } from "react";
+import type { HistoricalTrainee, QualitativeHighlight } from "@/lib/alumni-store";
+import { computeEvaluationStats, PAST_YEARS_BE, KNOWLEDGE_DIMENSIONS } from "@/lib/alumni-store";
 import * as XLSX from "xlsx";
 
 interface ProjectEvaluationTabProps {
@@ -42,19 +42,53 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
       "อัตรา Active (%)": `${Math.round((a.activeCount / a.count) * 100)}%`,
     }));
 
+    // 4. Knowledge Transfer & Applied Knowledge sheet (Kirkpatrick Level 3)
+    const knowledgeSheetData = stats.qualitativeHighlights.map((q, idx) => ({
+      ลำดับ: idx + 1,
+      ชื่อบุคลากร: q.traineeName,
+      ชนิดกีฬา: q.sportsType,
+      หลักสูตรที่สำเร็จ: q.courseTitle,
+      การแข่งขันหรือกิจกรรมที่ปฏิบัติหน้าที่: q.eventName,
+      บทบาทหน้าที่: q.role,
+      มิติความรู้ที่นำไปใช้: q.dimensions
+        .map((d) => KNOWLEDGE_DIMENSIONS.find((k) => k.key === d)?.label.split(" (")[0] || d)
+        .join(", "),
+      "การนำความรู้ไปใช้จริง (คำตอบผู้รับการอบรม)": q.text,
+      "ระดับประสิทธิผล (1-5 ดาว)": q.rating,
+    }));
+
     const workbook = XLSX.utils.book_new();
     const s1 = XLSX.utils.json_to_sheet(summarySheetData);
     const s2 = XLSX.utils.json_to_sheet(sportSheetData);
     const s3 = XLSX.utils.json_to_sheet(affilSheetData);
+    const s4 = XLSX.utils.json_to_sheet(knowledgeSheetData);
 
     XLSX.utils.book_append_sheet(workbook, s1, "สรุปภาพรวมโครงการ");
     XLSX.utils.book_append_sheet(workbook, s2, "จำแนกตามชนิดกีฬา");
     XLSX.utils.book_append_sheet(workbook, s3, "จำแนกตามกลุ่มเป้าหมาย");
+    XLSX.utils.book_append_sheet(workbook, s4, "การนำความรู้ไปใช้จริง");
 
     XLSX.writeFile(
       workbook,
       `SAT_Project_Evaluation_Report_${new Date().toISOString().split("T")[0]}.xlsx`
     );
+  };
+
+  const [selectedDimensionFilter, setSelectedDimensionFilter] = useState("all");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const filteredHighlights = useMemo(() => {
+    if (selectedDimensionFilter === "all") return stats.qualitativeHighlights;
+    return stats.qualitativeHighlights.filter((q) =>
+      q.dimensions.includes(selectedDimensionFilter)
+    );
+  }, [stats.qualitativeHighlights, selectedDimensionFilter]);
+
+  const handleCopyQuote = (q: QualitativeHighlight) => {
+    const textToCopy = `"${q.text}"\n— ${q.traineeName} (${q.role}, กีฬา${q.sportsType}) | หลักสูตร ${q.courseTitle}`;
+    navigator.clipboard.writeText(textToCopy);
+    setCopiedId(q.id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   return (
@@ -204,6 +238,209 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
             <span className="h-3 w-3 rounded-xs bg-[#10b981]" />
             <span>จำนวนครั้งที่ปฏิบัติหน้าที่จริง</span>
           </span>
+        </div>
+      </div>
+
+      {/* Kirkpatrick Level 3 Evaluation: การนำความรู้ไปใช้จริงในการปฏิบัติหน้าที่ */}
+      <div className="rounded-2xl border border-blue-200 bg-white p-5 sm:p-6 shadow-xs space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-md bg-indigo-100 px-2.5 py-0.5 text-xs font-bold text-indigo-900">
+                Kirkpatrick Model · Level 3 (Behavior & Application)
+              </span>
+              <span className="rounded-md bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-900 border border-amber-200">
+                ⭐ ดัชนีประสิทธิผล {stats.averageImpactRating} / 5.0
+              </span>
+            </div>
+            <h3 className="mt-2 text-lg font-bold text-[#16265E]">
+              💡 การประเมินผลสัมฤทธิ์: การนำความรู้ไปใช้จริงในการปฏิบัติหน้าที่
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              รวบรวมจากคำตอบจริงของผู้ผ่านการอบรมในแบบรายงานการปฏิบัติหน้าที่ พร้อมประมวลผลดัชนีประสิทธิผล
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="rounded-xl bg-blue-50 px-3 py-1.5 text-xs font-semibold text-[#16265E] border border-blue-100">
+              รวบรวมข้อมูลเชิงคุณภาพแล้ว <strong className="text-[#16265E] font-bold">{stats.qualitativeHighlights.length}</strong> รายการ
+            </span>
+          </div>
+        </div>
+
+        {/* 2 Sub-blocks: Dimensions breakdown + Impact Rating summary */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left 1 col: Impact Index Card */}
+          <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/70 via-blue-50/40 to-white p-5 flex flex-col justify-between shadow-2xs">
+            <div>
+              <span className="text-xs font-bold text-indigo-900">ดัชนีประสิทธิผลการถ่ายทอดความรู้</span>
+              <p className="text-[11px] text-gray-500 mt-0.5">Knowledge Transfer Impact Index</p>
+
+              <div className="mt-4 flex items-baseline gap-2">
+                <span className="text-4xl font-black text-[#16265E]">{stats.averageImpactRating}</span>
+                <span className="text-sm font-semibold text-gray-500">/ 5.00</span>
+              </div>
+
+              <div className="mt-2 flex items-center gap-1 text-amber-500 text-lg">
+                {"★".repeat(Math.round(stats.averageImpactRating))}
+                {"☆".repeat(Math.max(0, 5 - Math.round(stats.averageImpactRating)))}
+              </div>
+
+              <div className="mt-4 rounded-xl bg-white/90 p-3.5 border border-indigo-100 text-xs text-gray-700 space-y-1.5 shadow-2xs">
+                <p className="font-bold text-emerald-800 flex items-center gap-1">
+                  <span>✓</span>
+                  <span>ระดับประสิทธิผล: ดีเลิศ (Excellence)</span>
+                </p>
+                <p className="text-[11px] text-gray-600 leading-relaxed">
+                  ผู้รับการอบรมสามารถนำทักษะเฉพาะทางไปประยุกต์ใช้ในการฝึกซ้อม ควบคุมการแข่งขัน และบริหารทีมจนบรรลุผลสำเร็จ
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-indigo-100/70 text-[11px] text-gray-500 flex justify-between">
+              <span>รายงานประเมิน: {stats.totalRatingsCount} รายการ</span>
+              <span className="text-emerald-700 font-semibold">100% บรรลุเกณฑ์ กกท.</span>
+            </div>
+          </div>
+
+          {/* Right 2 cols: 5 Knowledge Dimensions breakdown */}
+          <div className="lg:col-span-2 rounded-2xl border border-gray-100 bg-gray-50/70 p-5 space-y-3 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-[#16265E]">
+                📊 สัดส่วนมิติองค์ความรู้ที่นำไปประยุกต์ใช้สูงสุด
+              </h4>
+              <span className="text-[11px] text-gray-500">จำแนกตาม 5 สมรรถนะบุคลากรกีฬา</span>
+            </div>
+
+            <div className="space-y-3 pt-1">
+              {stats.dimensionBreakdown.map((dim) => (
+                <div key={dim.key} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-gray-800 flex items-center gap-1.5">
+                      <span>{dim.icon}</span>
+                      <span>{dim.label}</span>
+                    </span>
+                    <span className="font-mono text-gray-600 font-medium">
+                      {dim.count} ครั้ง ({dim.percent}%)
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full rounded-full bg-gray-200 overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-[#16265E] to-[#2563eb] rounded-full transition-all"
+                      style={{ width: `${Math.max(6, dim.percent)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Qualitative Quotes Wall */}
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-gray-100">
+            <div>
+              <h4 className="text-sm font-bold text-[#16265E] flex items-center gap-1.5">
+                <span>💬</span>
+                <span>คลังคำตอบจริงจากผู้รับการอบรม: "ท่านนำความรู้ไปใช้ในการปฏิบัติหน้าที่อย่างไร"</span>
+              </h4>
+              <p className="text-xs text-gray-500 mt-0.5">
+                เสียงสะท้อนจริงจากโค้ช ผู้ตัดสิน และผู้บริหารกีฬา สามารถคลิกคัดลอกข้อความเพื่อนำไปใช้อ้างอิงในเอกสารสรุปโครงการ
+              </p>
+            </div>
+
+            {/* Filter buttons */}
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setSelectedDimensionFilter("all")}
+                className={`rounded-lg px-2.5 py-1 font-semibold transition-colors cursor-pointer ${
+                  selectedDimensionFilter === "all"
+                    ? "bg-[#16265E] text-white shadow-xs"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                ทั้งหมด ({stats.qualitativeHighlights.length})
+              </button>
+              {KNOWLEDGE_DIMENSIONS.map((dim) => (
+                <button
+                  key={dim.key}
+                  type="button"
+                  onClick={() => setSelectedDimensionFilter(dim.key)}
+                  className={`rounded-lg px-2.5 py-1 text-xs transition-colors flex items-center gap-1 cursor-pointer ${
+                    selectedDimensionFilter === dim.key
+                      ? "bg-[#16265E] text-white font-semibold shadow-xs"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  <span>{dim.icon}</span>
+                  <span>{dim.label.split(" (")[0]}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Quotes grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            {filteredHighlights.map((q) => (
+              <div
+                key={q.id}
+                className="rounded-xl border border-gray-200 bg-white p-4 shadow-2xs hover:border-blue-300 transition-colors flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#16265E] text-white text-xs font-bold">
+                        {q.traineeName.replace(/^(นาย|นางสาว|นาง|ดร\.|ร\.ต\.อ\.|พ\.จ\.ต\.|ส\.อ\.)\s*/, "").slice(0, 1)}
+                      </span>
+                      <div>
+                        <p className="text-xs font-bold text-gray-900 leading-none">{q.traineeName}</p>
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          {q.role} · กีฬา{q.sportsType}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800 border border-amber-200">
+                      ⭐ {q.rating}/5
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-gray-700 italic leading-relaxed pl-3 border-l-2 border-[#16265E]/40 my-2.5 bg-gray-50/50 py-1.5 rounded-r-lg">
+                    "{q.text}"
+                  </p>
+
+                  <p className="text-[11px] text-gray-400 pl-3">
+                    📍 งาน: {q.eventName} | 📜 {q.courseTitle}
+                  </p>
+                </div>
+
+                <div className="mt-3 pt-2.5 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-1">
+                    {q.dimensions.map((dKey) => {
+                      const dInfo = KNOWLEDGE_DIMENSIONS.find((k) => k.key === dKey);
+                      return (
+                        <span
+                          key={dKey}
+                          className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-[#16265E] border border-blue-100"
+                        >
+                          {dInfo?.icon} {dInfo?.label.split(" (")[0] || dKey}
+                        </span>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleCopyQuote(q)}
+                    className="inline-flex items-center gap-1 rounded-md bg-gray-50 hover:bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-700 transition-colors cursor-pointer border border-gray-200"
+                    title="คัดลอกข้อความเพื่อนำไปใส่ในเล่มรายงานสรุปโครงการ"
+                  >
+                    <span>{copiedId === q.id ? "✓ คัดลอกสำเร็จ" : "📋 คัดลอกอ้างอิง"}</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

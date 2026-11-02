@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { HistoricalTrainee, DutyRecord } from "@/lib/alumni-store";
+import { type HistoricalTrainee, type DutyRecord, KNOWLEDGE_DIMENSIONS } from "@/lib/alumni-store";
 
 interface DutyTrackingTabProps {
   trainees: HistoricalTrainee[];
@@ -296,6 +296,41 @@ export function DutyTrackingTab({
                 <div className="mt-2.5 rounded-xl bg-emerald-50/70 p-2.5 border border-emerald-100 text-xs text-emerald-900 leading-relaxed">
                   <span className="font-bold">🎯 ผลสัมฤทธิ์ / ผลงาน: </span>
                   {duty.achievement}
+                </div>
+              )}
+
+              {duty.knowledgeApplied && (
+                <div className="mt-2.5 rounded-xl bg-blue-50/60 p-3 border border-blue-200/80 text-xs shadow-2xs">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 mb-1.5">
+                    <span className="font-bold text-[#16265E] flex items-center gap-1.5">
+                      <span>💡</span>
+                      <span>การนำความรู้จากการอบรมไปใช้จริง (Kirkpatrick Level 3):</span>
+                    </span>
+                    {duty.impactRating && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-900 border border-amber-200">
+                        ⭐ ระดับประสิทธิผล {duty.impactRating}/5
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-gray-700 italic leading-relaxed pl-5 border-l-2 border-[#16265E]/30">
+                    "{duty.knowledgeApplied}"
+                  </p>
+                  {duty.knowledgeDimensions && duty.knowledgeDimensions.length > 0 && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-blue-100 pl-5">
+                      {duty.knowledgeDimensions.map((dimKey) => {
+                        const dimInfo = KNOWLEDGE_DIMENSIONS.find((k) => k.key === dimKey);
+                        return (
+                          <span
+                            key={dimKey}
+                            className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-0.5 text-[10px] font-semibold text-blue-900 border border-blue-200 shadow-2xs"
+                          >
+                            <span>{dimInfo?.icon || "🏷️"}</span>
+                            <span>{dimInfo?.label.split(" (")[0] || dimKey}</span>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
