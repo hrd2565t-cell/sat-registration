@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import type { HistoricalTrainee } from "@/lib/alumni-store";
-import { SPORTS_TYPES, PAST_YEARS_BE, STANDARD_COURSES } from "@/lib/alumni-store";
+import { AFFILIATION_GROUPS, PAST_YEARS_BE, STANDARD_COURSES } from "@/lib/alumni-store";
 import * as XLSX from "xlsx";
 
 interface AlumniDirectoryTabProps {
@@ -24,9 +24,11 @@ export function AlumniDirectoryTab({
 }: AlumniDirectoryTabProps) {
   const [search, setSearch] = useState("");
   const [selectedYear, setSelectedYear] = useState<string>("all");
-  const [selectedSport, setSelectedSport] = useState<string>("all");
+  const [selectedGroup, setSelectedGroup] = useState<string>("all");
   const [selectedCourse, setSelectedCourse] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(50);
 
   const filtered = useMemo(() => {
     return trainees.filter((t) => {
@@ -35,10 +37,13 @@ export function AlumniDirectoryTab({
         const query = search.trim().toLowerCase();
         const cleanQuery = query.replace(/\D/g, "");
         const matchName = t.name.toLowerCase().includes(query);
-        const matchSport = t.sportsType?.toLowerCase().includes(query);
         const matchOrg = t.affiliation?.toLowerCase().includes(query);
-        const matchId = cleanQuery && t.idCard.replace(/\D/g, "").includes(cleanQuery);
-        if (!matchName && !matchSport && !matchOrg && !matchId) {
+        const matchGroup = t.affiliationGroup?.toLowerCase().includes(query);
+        const matchPersonnelId = t.personnelId?.toLowerCase().includes(query);
+        const matchCourse = t.courseTitle?.toLowerCase().includes(query);
+        const matchId = cleanQuery && t.idCard && t.idCard.replace(/\D/g, "").includes(cleanQuery);
+
+        if (!matchName && !matchOrg && !matchGroup && !matchPersonnelId && !matchCourse && !matchId) {
           return false;
         }
       }
@@ -48,13 +53,13 @@ export function AlumniDirectoryTab({
         return false;
       }
 
-      // Sport filter
-      if (selectedSport !== "all" && t.sportsType !== selectedSport) {
+      // Affiliation Group filter (4 main groups)
+      if (selectedGroup !== "all" && t.affiliationGroup !== selectedGroup) {
         return false;
       }
 
       // Course filter
-      if (selectedCourse !== "all" && !t.courseTitle.includes(selectedCourse)) {
+      if (selectedCourse !== "all" && t.courseTitle !== selectedCourse) {
         return false;
       }
 
@@ -65,22 +70,27 @@ export function AlumniDirectoryTab({
 
       return true;
     });
-  }, [trainees, search, selectedYear, selectedSport, selectedCourse, selectedStatus]);
+  }, [trainees, search, selectedYear, selectedGroup, selectedCourse, selectedStatus]);
+
+  // Reset to page 1 whenever filter changes
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+  const pagedItems = filtered.slice(startIndex, startIndex + pageSize);
 
   const handleExportDirectoryExcel = () => {
     const dataToExport = filtered.map((t, idx) => ({
       ลำดับ: idx + 1,
+      รหัสประจำตัว: t.personnelId || t.idCard,
+      คำนำหน้า: t.prefix || "-",
       "ชื่อ-นามสกุล": t.name,
-      "เลขประจำตัวประชาชน": t.idCard,
-      เพศ: t.gender === "female" ? "หญิง" : "ชาย",
-      เบอร์โทรศัพท์: t.phone || "-",
-      อีเมล: t.email || "-",
-      ชนิดกีฬา: t.sportsType,
-      "สังกัด/หน่วยงาน": t.affiliation,
-      "ปี พ.ศ. ที่อบรม": t.yearBE,
+      กลุ่มหน่วยงาน: t.affiliationGroup || "-",
+      "ชื่อสมาคม/หน่วยงาน": t.affiliation,
       หลักสูตรที่สำเร็จ: t.courseTitle,
+      ประเภทหลักสูตร: t.courseCategory || "-",
+      "ปี พ.ศ. ที่อบรม": t.yearBE,
       รุ่นที่: t.batch,
-      วันที่สำเร็จการอบรม: t.passedDate,
+      วันที่สำเร็จการอบรม: t.passedDate || "-",
       "สถานะการปฏิบัติงาน":
         t.status === "active"
           ? "ปฏิบัติหน้าที่ต่อเนื่อง (Active)"
@@ -99,6 +109,21 @@ export function AlumniDirectoryTab({
     );
   };
 
+  const getGroupBadgeClass = (group?: string) => {
+    switch (group) {
+      case "สมาคมกีฬาแห่งประเทศไทย":
+        return "bg-blue-50 text-blue-700 border-blue-200";
+      case "การกีฬาแห่งประเทศไทย":
+        return "bg-purple-50 text-purple-700 border-purple-200";
+      case "สมาคมกีฬาแห่งจังหวัด":
+        return "bg-amber-50 text-amber-800 border-amber-200";
+      case "หน่วยงานภายนอก":
+        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      default:
+        return "bg-gray-100 text-gray-700 border-gray-200";
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Search & Action Bar */}
@@ -111,16 +136,22 @@ export function AlumniDirectoryTab({
             </span>
             <input
               type="text"
-              placeholder="ค้นหาชื่อ-สกุล, เลขบัตร ปชช., ชนิดกีฬา, สังกัด..."
+              placeholder="ค้นหาชื่อ-สกุล, รหัสบุคลากร, ชื่อสมาคม/หน่วยงาน, หลักสูตร..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full rounded-xl border border-gray-300 bg-gray-50/60 py-2.5 pl-10 pr-4 text-xs sm:text-sm transition-colors focus:border-[#16265E] focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#16265E]"
             />
             {search && (
               <button
                 type="button"
-                onClick={() => setSearch("")}
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-xs text-gray-400 hover:text-gray-600"
+                onClick={() => {
+                  setSearch("");
+                  setCurrentPage(1);
+                }}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-xs text-gray-400 hover:text-gray-600 cursor-pointer"
               >
                 ล้าง
               </button>
@@ -133,7 +164,7 @@ export function AlumniDirectoryTab({
               <button
                 type="button"
                 onClick={onOpenImport}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-800 shadow-xs hover:bg-emerald-100 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-800 shadow-xs hover:bg-emerald-100 transition-colors cursor-pointer"
                 title="นำเข้าไฟล์ Excel ผู้ผ่านการอบรมย้อนหลัง"
               >
                 <span>📥</span>
@@ -144,7 +175,7 @@ export function AlumniDirectoryTab({
             <button
               type="button"
               onClick={handleExportDirectoryExcel}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 shadow-xs hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 shadow-xs hover:bg-gray-50 transition-colors cursor-pointer"
               title="ส่งออกรายชื่อเป็นไฟล์ Excel"
             >
               <span>📊</span>
@@ -155,39 +186,23 @@ export function AlumniDirectoryTab({
 
         {/* Filters */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-gray-100 text-xs">
-          {/* Year Filter */}
+          {/* Group Filter (4 main groups) */}
           <div>
             <label className="block text-[11px] font-semibold text-gray-500 mb-1">
-              ปี พ.ศ. ที่อบรม
+              กลุ่มหน่วยงาน
             </label>
             <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
+              value={selectedGroup}
+              onChange={(e) => {
+                setSelectedGroup(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
             >
-              <option value="all">ทุกปี พ.ศ. (2565 - 2570)</option>
-              {PAST_YEARS_BE.map((y) => (
-                <option key={y} value={y}>
-                  พ.ศ. {y}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Sport Filter */}
-          <div>
-            <label className="block text-[11px] font-semibold text-gray-500 mb-1">
-              ชนิดกีฬา
-            </label>
-            <select
-              value={selectedSport}
-              onChange={(e) => setSelectedSport(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
-            >
-              <option value="all">ทุกชนิดกีฬา</option>
-              {SPORTS_TYPES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
+              <option value="all">ทุกกลุ่มหน่วยงาน (4 กลุ่ม)</option>
+              {AFFILIATION_GROUPS.map((g) => (
+                <option key={g} value={g}>
+                  {g}
                 </option>
               ))}
             </select>
@@ -196,20 +211,44 @@ export function AlumniDirectoryTab({
           {/* Course Filter */}
           <div>
             <label className="block text-[11px] font-semibold text-gray-500 mb-1">
-              หลักสูตร
+              หลักสูตรอบรม (17 หลักสูตร)
             </label>
             <select
               value={selectedCourse}
-              onChange={(e) => setSelectedCourse(e.target.value)}
+              onChange={(e) => {
+                setSelectedCourse(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
             >
               <option value="all">ทุกหลักสูตร</option>
-              <option value="ผู้ฝึกสอน">ผู้ฝึกสอนกีฬา</option>
-              <option value="ผู้ตัดสิน">ผู้ตัดสินกีฬา</option>
-              <option value="วิทยาศาสตร์การกีฬา">วิทยาศาสตร์การกีฬา</option>
-              <option value="บริหารจัดการ">การบริหารจัดการองค์กร</option>
-              <option value="จิตวิทยา">จิตวิทยาการกีฬา</option>
-              <option value="งบประมาณ">งบประมาณและพัสดุ</option>
+              {STANDARD_COURSES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Year Filter */}
+          <div>
+            <label className="block text-[11px] font-semibold text-gray-500 mb-1">
+              ปี พ.ศ. ที่อบรม
+            </label>
+            <select
+              value={selectedYear}
+              onChange={(e) => {
+                setSelectedYear(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
+            >
+              <option value="all">ทุกปี พ.ศ. (2547 - 2569)</option>
+              {PAST_YEARS_BE.map((y) => (
+                <option key={y} value={y}>
+                  พ.ศ. {y}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -220,7 +259,10 @@ export function AlumniDirectoryTab({
             </label>
             <select
               value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
+              onChange={(e) => {
+                setSelectedStatus(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
             >
               <option value="all">ทุกสถานะ</option>
@@ -233,9 +275,9 @@ export function AlumniDirectoryTab({
       </div>
 
       {/* Results Header */}
-      <div className="flex items-center justify-between text-xs text-gray-600 px-1">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-gray-600 px-1">
         <span>
-          แสดงผล <strong className="text-[#16265E]">{filtered.length}</strong> จากทั้งหมด {trainees.length} รายการ
+          แสดงผล <strong className="text-[#16265E]">{startIndex + 1} - {Math.min(startIndex + pageSize, filtered.length)}</strong> จากทั้งหมด <strong className="text-[#16265E]">{filtered.length}</strong> รายการ (ฐานข้อมูลจริง {trainees.length} รายการ)
         </span>
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1.5">
@@ -261,61 +303,79 @@ export function AlumniDirectoryTab({
               <tr>
                 <th className="py-3 px-3.5 font-bold">#</th>
                 <th className="py-3 px-3.5 font-bold">บุคลากรกีฬา</th>
-                <th className="py-3 px-3.5 font-bold">ชนิดกีฬา</th>
-                <th className="py-3 px-3.5 font-bold">หลักสูตร / รุ่นที่</th>
+                <th className="py-3 px-3.5 font-bold">กลุ่มหน่วยงาน</th>
+                <th className="py-3 px-3.5 font-bold">ชื่อสมาคม / หน่วยงาน</th>
+                <th className="py-3 px-3.5 font-bold">หลักสูตรที่สำเร็จ</th>
                 <th className="py-3 px-3.5 font-bold">ปี พ.ศ.</th>
                 <th className="py-3 px-3.5 font-bold">สถานะการทำหน้าที่</th>
                 <th className="py-3 px-3.5 font-bold text-center">จัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filtered.length === 0 ? (
+              {pagedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-gray-500">
+                  <td colSpan={8} className="py-12 text-center text-gray-500">
                     <span className="text-3xl">🔍</span>
                     <p className="mt-2 text-sm font-semibold">ไม่พบข้อมูลที่ตรงกับเงื่อนไขการค้นหา</p>
                     <p className="text-xs text-gray-400 mt-0.5">ลองปรับคำค้นหา หรือรีเซ็ตตัวกรองด้านบน</p>
                   </td>
                 </tr>
               ) : (
-                filtered.map((t, index) => {
-                  const cleanId = t.idCard.replace(/\D/g, "");
-                  const maskedId =
-                    cleanId.length === 13
-                      ? `${cleanId.slice(0, 1)}-${cleanId.slice(1, 5)}-XXXXX-${cleanId.slice(12)}`
-                      : t.idCard;
+                pagedItems.map((t, index) => {
+                  const globalIndex = startIndex + index + 1;
+                  const identifier = t.personnelId || t.idCard;
 
                   return (
                     <tr
-                      key={t.id || index}
+                      key={t.id || globalIndex}
                       className="hover:bg-blue-50/40 transition-colors group"
                     >
-                      <td className="py-3 px-3.5 text-gray-400 font-mono">{index + 1}</td>
+                      <td className="py-3 px-3.5 text-gray-400 font-mono">{globalIndex}</td>
                       <td className="py-3 px-3.5">
                         <div className="flex items-center gap-2.5">
                           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#16265E] to-[#2563eb] font-bold text-white text-[11px] shadow-xs">
-                            {t.name.replace(/^(นาย|นางสาว|นาง|ดร\.|ร\.ต\.อ\.|พ\.จ\.ต\.|ส\.อ\.)\s*/, "").slice(0, 2)}
+                            {t.name.replace(/^(นาย|นางสาว|นาง|ดร\.|นาวาเอก|นาวาโท|นาวาตรี|เรือเอก|ร\.ต\.อ\.|พ\.จ\.ต\.|ส\.อ\.)\s*/, "").slice(0, 2)}
                           </div>
                           <div>
                             <button
                               type="button"
-                              onClick={() => onOpenPassport(t.idCard)}
+                              onClick={() => onOpenPassport(identifier)}
                               className="font-bold text-[#16265E] hover:underline text-left cursor-pointer"
                             >
                               {t.name}
                             </button>
-                            <p className="text-[11px] text-gray-500 font-mono">{maskedId}</p>
+                            <p className="text-[11px] text-gray-500 font-mono">
+                              {t.personnelId ? `รหัส ${t.personnelId}` : identifier}
+                            </p>
                           </div>
                         </div>
                       </td>
                       <td className="py-3 px-3.5">
-                        <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 font-medium text-blue-700 border border-blue-200">
-                          {t.sportsType}
+                        <span
+                          className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold border ${getGroupBadgeClass(
+                            t.affiliationGroup
+                          )}`}
+                        >
+                          {t.affiliationGroup || "หน่วยงานภายนอก"}
                         </span>
                       </td>
                       <td className="py-3 px-3.5">
-                        <p className="font-semibold text-gray-800 truncate max-w-xs">{t.courseTitle}</p>
-                        <p className="text-[11px] text-gray-500">{t.batch}</p>
+                        <p className="font-semibold text-gray-800 max-w-xs line-clamp-2" title={t.affiliation}>
+                          {t.affiliation}
+                        </p>
+                      </td>
+                      <td className="py-3 px-3.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-[#16265E] bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                            {t.courseTitle}
+                          </span>
+                          {t.courseCategory && (
+                            <span className="text-[10px] text-gray-500">
+                              ({t.courseCategory})
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-gray-400 mt-0.5">{t.batch}</p>
                       </td>
                       <td className="py-3 px-3.5">
                         <span className="font-bold text-[#16265E]">{t.yearBE}</span>
@@ -343,7 +403,7 @@ export function AlumniDirectoryTab({
                           {onOpenDigitalPass && (
                             <button
                               type="button"
-                              onClick={() => onOpenDigitalPass(t.idCard)}
+                              onClick={() => onOpenDigitalPass(identifier)}
                               className="rounded-lg bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-900 border border-amber-200 hover:bg-amber-100 transition-colors cursor-pointer"
                               title="เปิดบัตรประจำตัวบุคลากรกีฬาดิจิทัล"
                             >
@@ -352,7 +412,7 @@ export function AlumniDirectoryTab({
                           )}
                           <button
                             type="button"
-                            onClick={() => onOpenPassport(t.idCard)}
+                            onClick={() => onOpenPassport(identifier)}
                             className="rounded-lg bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-[#16265E] hover:bg-blue-100 transition-colors cursor-pointer"
                             title="ดูพาสปอร์ตประวัติบุคลากร"
                           >
@@ -375,6 +435,67 @@ export function AlumniDirectoryTab({
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Bar */}
+        {filtered.length > pageSize && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-gray-100 px-4 py-3 bg-gray-50/70 text-xs">
+            <div className="flex items-center gap-2 text-gray-600">
+              <span>แสดงแถวต่อหน้า:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700"
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={250}>250</option>
+              </select>
+              <span>(หน้า {safePage} จาก {totalPages})</span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setCurrentPage(1)}
+                disabled={safePage === 1}
+                className="rounded-md border border-gray-300 bg-white px-2.5 py-1 font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                « หน้าแรก
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="rounded-md border border-gray-300 bg-white px-2.5 py-1 font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                ‹ ก่อนหน้า
+              </button>
+              <span className="px-2 font-bold text-[#16265E]">
+                {safePage} / {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="rounded-md border border-gray-300 bg-white px-2.5 py-1 font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                ถัดไป ›
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={safePage === totalPages}
+                className="rounded-md border border-gray-300 bg-white px-2.5 py-1 font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                หน้าสุดท้าย »
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -110,7 +110,7 @@ export function DutyRecordModal({
               บันทึกการปฏิบัติหน้าที่ในวงการกีฬา
             </h3>
             <p className="text-xs text-gray-500 mt-0.5">
-              บุคลากร: <span className="font-semibold text-gray-700">{trainee.name}</span> ({trainee.sportsType})
+              บุคลากร: <span className="font-semibold text-gray-700">{trainee.name}</span> ({trainee.affiliation})
             </p>
           </div>
           <button

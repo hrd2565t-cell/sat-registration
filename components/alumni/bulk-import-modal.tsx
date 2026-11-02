@@ -118,8 +118,20 @@ export function BulkImportModal({ onClose, onImport }: BulkImportModalProps) {
             row["ชนิดกีฬา"] ?? row["กีฬา"] ?? row["sportsType"] ?? "กีฬาอื่นๆ"
           ).trim();
 
+          const personnelId = String(
+            row["รหัสประจำตัว"] ?? row["รหัส"] ?? row["personnelId"] ?? ""
+          ).trim();
+
+          const affiliationGroup = String(
+            row["กลุ่มหน่วยงาน"] ?? row["affiliationGroup"] ?? ""
+          ).trim();
+
+          const courseCategory = String(
+            row["ประเภทหลักสูตร"] ?? row["หมวดหลักสูตร"] ?? row["courseCategory"] ?? ""
+          ).trim();
+
           const yearRaw = Number(row["ปี พ.ศ. ที่อบรม"] ?? row["ปี พ.ศ."] ?? row["ปี"] ?? row["yearBE"]);
-          const yearBE = Number.isFinite(yearRaw) && yearRaw >= 2550 ? yearRaw : 2568;
+          const yearBE = Number.isFinite(yearRaw) && yearRaw >= 2540 ? yearRaw : 2568;
 
           const courseTitle = String(
             row["ชื่อหลักสูตร"] ??
@@ -143,17 +155,20 @@ export function BulkImportModal({ onClose, onImport }: BulkImportModalProps) {
               : "active";
 
           return {
-            idCard: idCardRaw.replace(/\D/g, "") || "1100000000000",
+            idCard: idCardRaw.replace(/\D/g, "") || personnelId || "1100000000000",
+            personnelId: personnelId || undefined,
             name,
             gender,
             phone,
             email,
             affiliation,
-            sportsType,
+            affiliationGroup: affiliationGroup || undefined,
+            sportsType: sportsType || affiliation,
             yearBE,
             courseTitle,
+            courseCategory: courseCategory || undefined,
             batch,
-            certNo,
+            certNo: certNo || undefined,
             passedDate,
             status,
           };

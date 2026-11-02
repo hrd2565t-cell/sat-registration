@@ -215,16 +215,18 @@ export function DigitalPassModal({
 
             {/* Position / Credential Title */}
             <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5">
-              <span className="rounded-full bg-amber-400 px-2.5 py-0.5 text-[11px] font-extrabold text-[#1a1438] shadow-xs">
-                🏅 กีฬา{primary.sportsType}
-              </span>
+              {primary.affiliationGroup && (
+                <span className="rounded-full bg-amber-400 px-2.5 py-0.5 text-[11px] font-extrabold text-[#1a1438] shadow-xs">
+                  🏛️ {primary.affiliationGroup}
+                </span>
+              )}
               <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-semibold text-blue-100 border border-white/15">
                 {primary.affiliation}
               </span>
             </div>
 
             <p className="mt-1.5 text-xs text-white/70 font-mono tracking-wider">
-              🪪 {maskedId}
+              {primary.personnelId ? `🆔 รหัส ${primary.personnelId}` : `🪪 ${maskedId}`}
             </p>
           </div>
 

@@ -207,10 +207,10 @@ function AlumniContent() {
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-gray-900 truncate">{person.name}</p>
                       <p className="text-[11px] text-gray-600 mt-0.5">
-                        กีฬา{person.sportsType} · {person.affiliation}
+                        {person.affiliationGroup ? `[${person.affiliationGroup}] ` : ""}{person.affiliation}
                       </p>
                       <p className="text-[10px] text-gray-400 font-mono mt-0.5">
-                        {person.records.length} หลักสูตรรับรอง (ปีล่าสุด พ.ศ. {person.latestYearBE})
+                        {person.personnelId ? `รหัส ${person.personnelId} · ` : ""}{person.records.length} หลักสูตรรับรอง (ปีล่าสุด พ.ศ. {person.latestYearBE})
                       </p>
                     </div>
 

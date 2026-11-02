@@ -297,7 +297,7 @@ function VerifyContent() {
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-gray-900 truncate">{person.name}</p>
                       <p className="text-xs text-gray-600 mt-0.5">
-                        🏅 กีฬา{person.sportsType} · {person.affiliation}
+                        {person.affiliationGroup ? `[${person.affiliationGroup}] ` : ""}{person.affiliation}
                       </p>
                       <p className="text-[11px] text-gray-400 mt-1 font-mono">
                         {person.records.length} หลักสูตรรับรอง (ปีล่าสุด พ.ศ. {person.latestYearBE})
@@ -353,9 +353,11 @@ function VerifyContent() {
 
                 <div className="text-center sm:text-left flex-1 min-w-0">
                   <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                    <span className="rounded-md bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-[#16265E]">
-                      กีฬา{passport.primary.sportsType}
-                    </span>
+                    {passport.primary.affiliationGroup && (
+                      <span className="rounded-md bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-[#16265E]">
+                        🏛️ {passport.primary.affiliationGroup}
+                      </span>
+                    )}
                     <span className="rounded-md bg-gray-200/80 px-2.5 py-0.5 text-xs font-semibold text-gray-700">
                       {passport.primary.affiliation}
                     </span>
@@ -366,14 +368,19 @@ function VerifyContent() {
                   </h3>
 
                   <div className="mt-1 text-xs text-gray-500 space-x-3 font-mono">
-                    <span>
-                      เลขประจำตัวประชาชน:{" "}
-                      <strong>
-                        {passport.primary.idCard.replace(/\D/g, "").length === 13
-                          ? `${passport.primary.idCard.slice(0, 1)}-${passport.primary.idCard.slice(1, 5)}-XXXXX-${passport.primary.idCard.slice(10, 12)}-${passport.primary.idCard.slice(12)}`
-                          : passport.primary.idCard}
-                      </strong>
-                    </span>
+                    {passport.primary.personnelId && (
+                      <span className="inline-block rounded-md bg-amber-50 px-2 py-0.5 font-bold text-amber-900 border border-amber-200">
+                        🆔 รหัสบุคลากร: {passport.primary.personnelId}
+                      </span>
+                    )}
+                    {passport.primary.idCard.replace(/\D/g, "").length === 13 && (
+                      <span>
+                        เลขประจำตัวประชาชน:{" "}
+                        <strong>
+                          {`${passport.primary.idCard.slice(0, 1)}-${passport.primary.idCard.slice(1, 5)}-XXXXX-${passport.primary.idCard.slice(10, 12)}-${passport.primary.idCard.slice(12)}`}
+                        </strong>
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -399,6 +406,11 @@ function VerifyContent() {
                           <span className="font-bold text-gray-900 text-xs sm:text-sm">
                             {cert.courseTitle}
                           </span>
+                          {cert.courseCategory && (
+                            <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-800 border border-blue-200">
+                              {cert.courseCategory}
+                            </span>
+                          )}
                         </div>
                         <span className="inline-flex self-start sm:self-auto rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">
                           ✓ สำเร็จการอบรม

@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import rawRealTrainees from "@/data/alumni.json";
 
 export interface DutyRecord {
   id: string;
@@ -40,19 +41,23 @@ export const KNOWLEDGE_DIMENSIONS: KnowledgeDimension[] = [
 
 export interface HistoricalTrainee {
   id: string;
-  idCard: string; // 13 digits unique citizen id
+  personnelId?: string; // e.g. "USR-2026-0001"
+  idCard: string; // 13 digits unique citizen id or personnelId fallback
   name: string;
+  prefix?: string;
   gender?: "male" | "female";
-  phone: string;
-  email: string;
-  affiliation: string; // 5 target groups or organization
-  sportsType: string;
-  yearBE: number; // 2565..2570
+  phone?: string;
+  email?: string;
+  affiliation: string; // Specific organization or association name
+  affiliationGroup?: string; // 4 main groups: สมาคมกีฬาแห่งประเทศไทย, การกีฬาแห่งประเทศไทย, สมาคมกีฬาแห่งจังหวัด, หน่วยงานภายนอก
+  sportsType: string; // Sports type or specific association
+  yearBE: number; // 2547..2569
   courseId?: number;
-  courseTitle: string;
-  batch: string; // e.g. "รุ่นที่ 1/2566"
-  certNo?: string; // Optional (e.g. "กกท.-ผฝ.66/001")
-  passedDate: string; // e.g. "2023-08-20"
+  courseTitle: string; // Course abbreviation e.g. "ICSC", "ICSM", "TSLP", "Bnc", etc.
+  courseCategory?: string; // "ผู้บริหารกีฬา" | "ผู้ฝึกสอนกีฬา" | "อื่นๆ"
+  batch: string; // e.g. "รุ่นปี พ.ศ. 2566"
+  certNo?: string; // Optional
+  passedDate: string; // e.g. "2023-09-30"
   status: "active" | "inactive" | "pending_verification";
   avatarUrl?: string;
   duties: DutyRecord[];
@@ -60,775 +65,62 @@ export interface HistoricalTrainee {
   updatedAt: string;
 }
 
+export const AFFILIATION_GROUPS = [
+  "สมาคมกีฬาแห่งประเทศไทย",
+  "การกีฬาแห่งประเทศไทย",
+  "สมาคมกีฬาแห่งจังหวัด",
+  "หน่วยงานภายนอก",
+] as const;
+
 export const SPORTS_TYPES = [
+  "สมาคมกีฬาแห่งประเทศไทย",
+  "การกีฬาแห่งประเทศไทย",
+  "สมาคมกีฬาแห่งจังหวัด",
+  "หน่วยงานภายนอก",
   "ฟุตบอล",
+  "รักบี้ฟุตบอล",
   "วอลเลย์บอล",
-  "มวยสากล",
   "กรีฑา",
   "ว่ายน้ำ",
-  "บาสเกตบอล",
-  "แบดมินตัน",
-  "เทควันโด",
   "เซปักตะกร้อ",
-  "เทเบิลเทนนิส",
-  "ยกน้ำหนัก",
   "ยิงปืน",
-  "จักรยาน",
-  "เรือพาย",
-  "ยิมนาสติก",
+  "มวยสากล",
+  "เทควันโด",
+  "แบดมินตัน",
+  "บาสเกตบอล",
   "กีฬาอื่นๆ",
 ] as const;
 
-export const PAST_YEARS_BE = [2570, 2569, 2568, 2567, 2566, 2565] as const;
-
-export const STANDARD_COURSES = [
-  "หลักสูตร ผู้ฝึกสอนกีฬาระดับชาติ",
-  "หลักสูตร ผู้ตัดสินกีฬาอาชีพ",
-  "หลักสูตร วิทยาศาสตร์การกีฬาและการพัฒนานักกีฬาสู่ความเป็นเลิศ",
-  "หลักสูตร การเสริมสร้างศักยภาพการบริหารจัดการองค์กรกีฬา",
-  "หลักสูตร จิตวิทยาการกีฬาเพื่อความเป็นเลิศ",
-  "หลักสูตร การบริหารงบประมาณและพัสดุทางการกีฬา",
+export const PAST_YEARS_BE = [
+  2569, 2568, 2567, 2566, 2565, 2564, 2563, 2562, 2561, 2560,
+  2559, 2558, 2557, 2556, 2555, 2554, 2553, 2552, 2551, 2550,
+  2549, 2548, 2547,
 ] as const;
 
-// 32 Realistic Seed Trainees across 2566-2569
-export const SEED_TRAINEES: HistoricalTrainee[] = [
-  {
-    id: "trn-66-001",
-    idCard: "1100500123456",
-    name: "นาย กิตติศักดิ์ ชัยชนะ",
-    gender: "male",
-    phone: "081-234-5678",
-    email: "kittisak.c@sat-coach.org",
-    affiliation: "สมาคมกีฬาแห่งประเทศไทย",
-    sportsType: "ฟุตบอล",
-    yearBE: 2566,
-    courseId: 1,
-    courseTitle: "หลักสูตร ผู้ฝึกสอนกีฬาระดับชาติ",
-    batch: "รุ่นที่ 1/2566",
-    certNo: "กกท.-ผฝ.66/008",
-    passedDate: "2023-03-15",
-    status: "active",
-    duties: [
-      {
-        id: "duty-001",
-        traineeId: "trn-66-001",
-        idCard: "1100500123456",
-        eventName: "การแข่งขันกีฬาแห่งชาติ ครั้งที่ 48 'กาญจนบุรีเกมส์'",
-        role: "หัวหน้าผู้ฝึกสอนทีมฟุตบอลชาย",
-        startDate: "2023-08-14",
-        endDate: "2023-08-29",
-        organization: "สมาคมกีฬาแห่งจังหวัดชลบุรี",
-        location: "สนามกีฬา จ.กาญจนบุรี",
-        achievement: "นำทีมคว้าเหรียญเงิน ฟุตบอลชาย",
-        knowledgeApplied: "นำแบบแผนการฝึกซ้อม Periodization และการวิเคราะห์แท็กติกคู่แข่งแบบ Match Analysis มาปรับใช้กับนักกีฬาเยาวชน ทำให้ทีมวางแผนการเล่นในแต่ละแมตช์ได้อย่างรัดกุม",
-        knowledgeDimensions: ["planning", "science"],
-        impactRating: 5,
-        verified: true,
-        verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-        verifiedAt: "2023-09-02",
-        createdAt: "2023-09-01T10:00:00Z",
-      },
-      {
-        id: "duty-002",
-        traineeId: "trn-66-001",
-        idCard: "1100500123456",
-        eventName: "ฟุตบอลเยาวชนชิงแชมป์ประเทศไทย U-17 ประจำปี 2567",
-        role: "หัวหน้าผู้ฝึกสอน",
-        startDate: "2024-05-10",
-        endDate: "2024-05-22",
-        organization: "สมาคมกีฬาฟุตบอลแห่งประเทศไทยฯ",
-        location: "ศูนย์ฝึกกีฬา กกท. มวกเหล็ก",
-        achievement: "ผ่านเข้าสู่รอบ 4 ทีมสุดท้าย",
-        knowledgeApplied: "นำระเบียบวินัยการสร้างทีมเวิร์กและการวางระบบเกมรับแบบโซนที่ได้รับจากการอบรมมาฝึกซ้อมจำลองสถานการณ์จริง",
-        knowledgeDimensions: ["planning", "psychology"],
-        impactRating: 5,
-        verified: true,
-        verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-        verifiedAt: "2024-05-25",
-        createdAt: "2024-05-24T14:30:00Z",
-      },
-    ],
-    createdAt: "2023-03-16T08:00:00Z",
-    updatedAt: "2024-05-25T14:30:00Z",
-  },
-  {
-    id: "trn-66-002",
-    idCard: "3101700987654",
-    name: "นางสาว พิมลวรรณ สุวรรณรัตน์",
-    gender: "female",
-    phone: "089-876-5432",
-    email: "pimonwan.s@sat-referee.org",
-    affiliation: "สมาคมกีฬาแห่งประเทศไทย",
-    sportsType: "วอลเลย์บอล",
-    yearBE: 2566,
-    courseId: 2,
-    courseTitle: "หลักสูตร ผู้ตัดสินกีฬาอาชีพ",
-    batch: "รุ่นที่ 1/2566",
-    certNo: "กกท.-ผต.66/014",
-    passedDate: "2023-04-20",
-    status: "active",
-    duties: [
-      {
-        id: "duty-003",
-        traineeId: "trn-66-002",
-        idCard: "3101700987654",
-        eventName: "วอลเลย์บอลไทยแลนด์ลีก ประจำฤดูกาล 2023-2024",
-        role: "ผู้ตัดสินที่ 1 (First Referee)",
-        startDate: "2023-11-10",
-        endDate: "2024-02-18",
-        organization: "สมาคมกีฬาวอลเลย์บอลแห่งประเทศไทย",
-        location: "เอ็มซีซี ฮอลล์ เดอะมอลล์ โคราช",
-        achievement: "ปฏิบัติหน้าที่นัดชิงชนะเลิศอันดับ 3 อย่างถูกต้องตามมาตรฐาน FIVB",
-        knowledgeApplied: "นำหลักการสื่อสารและการควบคุมเกมตามมาตรฐาน FIVB รวมทั้งการทำงานร่วมกันกับผู้ตัดสินผู้ช่วยและ Challenge System มาใช้จริงในการตัดสินนัดสำคัญ ทำให้ไม่มีข้อกังขาหรือประท้วง",
-        knowledgeDimensions: ["rules", "psychology"],
-        impactRating: 5,
-        verified: true,
-        verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-        verifiedAt: "2024-02-25",
-        createdAt: "2024-02-20T09:00:00Z",
-      },
-    ],
-    createdAt: "2023-04-21T08:00:00Z",
-    updatedAt: "2024-02-25T09:00:00Z",
-  },
-  {
-    id: "trn-66-003",
-    idCard: "1409900234567",
-    name: "ร้อยตำรวจเอก สมชาย มงคลชัย",
-    gender: "male",
-    phone: "086-555-1234",
-    email: "somchai.m@sat-sports.org",
-    affiliation: "การกีฬาแห่งประเทศไทย",
-    sportsType: "มวยสากล",
-    yearBE: 2566,
-    courseId: 1,
-    courseTitle: "หลักสูตร ผู้ฝึกสอนกีฬาระดับชาติ",
-    batch: "รุ่นที่ 2/2566",
-    certNo: "กกท.-ผฝ.66/032",
-    passedDate: "2023-06-18",
-    status: "active",
-    duties: [
-      {
-        id: "duty-004",
-        traineeId: "trn-66-003",
-        idCard: "1409900234567",
-        eventName: "การแข่งขันมวยสากลชิงชนะเลิศแห่งประเทศไทย ประจำปี 2567",
-        role: "ผู้ฝึกสอนประจำมุม (Cornerman)",
-        startDate: "2024-07-02",
-        endDate: "2024-07-08",
-        organization: "สมาคมกีฬามวยสากลแห่งประเทศไทย",
-        location: "สนามกีฬาแห่งชาติ ปทุมวัน",
-        achievement: "นักกีฬาในสังกัดได้เหรียญทองรุ่นไลท์เวท",
-        knowledgeApplied: "นำหลักวิทยาศาสตร์การกีฬาด้านการฟื้นฟูกล้ามเนื้อและเทคนิคการตัดน้ำหนักอย่างถูกวิธีมาใช้กับนักมวย ทำให้ในวันชกนักกีฬามีความสมบูรณ์ของร่างกาย 100% ไม่อ่อนแรง",
-        knowledgeDimensions: ["science", "planning"],
-        impactRating: 5,
-        verified: true,
-        verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-        verifiedAt: "2024-07-15",
-        createdAt: "2024-07-10T11:00:00Z",
-      },
-    ],
-    createdAt: "2023-06-19T08:00:00Z",
-    updatedAt: "2024-07-15T11:00:00Z",
-  },
-  {
-    id: "trn-66-004",
-    idCard: "1509900345678",
-    name: "ดร. กฤษดา ศิริวัฒน์",
-    gender: "male",
-    phone: "084-111-9988",
-    email: "kritsada.s@sci-sport.org",
-    affiliation: "สมาคมกีฬาแห่งจังหวัด",
-    sportsType: "กรีฑา",
-    yearBE: 2566,
-    courseId: 3,
-    courseTitle: "หลักสูตร วิทยาศาสตร์การกีฬาและการพัฒนานักกีฬาสู่ความเป็นเลิศ",
-    batch: "รุ่นที่ 1/2566",
-    certNo: "กกท.-วก.66/005",
-    passedDate: "2023-05-10",
-    status: "active",
-    duties: [
-      {
-        id: "duty-005",
-        traineeId: "trn-66-004",
-        idCard: "1509900345678",
-        eventName: "การทดสอบสมรรถภาพทางกายนักกรีฑาทีมชาติไทย เตรียมซีเกมส์",
-        role: "นักสรีรวิทยาการกีฬาและประเมินสมรรถภาพ",
-        startDate: "2024-03-01",
-        endDate: "2024-03-05",
-        organization: "การกีฬาแห่งประเทศไทย (ฝ่ายวิทยาศาสตร์การกีฬา)",
-        location: "ศูนย์วิทยาศาสตร์การกีฬา กกท. หัวหมาก",
-        achievement: "จัดทำแผนโภชนาการและการฟื้นฟูสมรรถภาพแก่นักกีฬา 24 คน",
-        knowledgeApplied: "นำเครื่องมือทดสอบสมรรถภาพและการวิเคราะห์ Lactate Threshold มาประเมินความล้าของนักกรีฑาระยะกลาง-ไกล เพื่อปรับตารางการซ้อมรายบุคคลให้เกิดผลสูงสุด",
-        knowledgeDimensions: ["science"],
-        impactRating: 5,
-        verified: true,
-        verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-        verifiedAt: "2024-03-10",
-        createdAt: "2024-03-08T15:00:00Z",
-      },
-    ],
-    createdAt: "2023-05-11T08:00:00Z",
-    updatedAt: "2024-03-10T15:00:00Z",
-  },
-  {
-    id: "trn-66-005",
-    idCard: "3100200456789",
-    name: "นาง วรรณภา เจริญผล",
-    gender: "female",
-    phone: "082-345-6789",
-    email: "wannapha.c@sat-manage.org",
-    affiliation: "การกีฬาแห่งประเทศไทย",
-    sportsType: "ว่ายน้ำ",
-    yearBE: 2566,
-    courseId: 4,
-    courseTitle: "หลักสูตร การเสริมสร้างศักยภาพการบริหารจัดการองค์กรกีฬา",
-    batch: "รุ่นที่ 1/2566",
-    certNo: "กกท.-บห.66/021",
-    passedDate: "2023-07-25",
-    status: "active",
-    duties: [
-      {
-        id: "duty-006",
-        traineeId: "trn-66-005",
-        idCard: "3100200456789",
-        eventName: "การแข่งขันว่ายน้ำชิงชนะเลิศแห่งประเทศไทย ประจำปี 2567",
-        role: "ผู้อำนวยการจัดการแข่งขัน (Tournament Director)",
-        startDate: "2024-04-05",
-        endDate: "2024-04-10",
-        organization: "สมาคมกีฬาทางน้ำแห่งประเทศไทย",
-        location: "สระว่ายน้ำ มหาวิทยาลัยอัสสัมชัญ สุวรรณภูมิ",
-        achievement: "บริหารจัดการงบประมาณและบุคลากรการแข่งขันราบรื่นตามมาตรฐานสากล",
-        knowledgeApplied: "นำทักษะการบริหารงบประมาณโครงการและการบริหารความเสี่ยงมาปรับใช้ในการจัดการแข่งขันว่ายน้ำ ทำให้ควบคุมค่าใช้จ่ายได้ตามกรอบงบประมาณ กกท. และลดขั้นตอนการเบิกจ่าย",
-        knowledgeDimensions: ["management"],
-        impactRating: 4,
-        verified: true,
-        verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-        verifiedAt: "2024-04-18",
-        createdAt: "2024-04-15T16:00:00Z",
-      },
-    ],
-    createdAt: "2023-07-26T08:00:00Z",
-    updatedAt: "2024-04-18T16:00:00Z",
-  },
-  {
-    id: "trn-67-001",
-    idCard: "1103700567890",
-    name: "นาย เอกชัย วงศ์สว่าง",
-    gender: "male",
-    phone: "085-678-1234",
-    email: "ekkachai.w@sat-coach.org",
-    affiliation: "สมาคมกีฬาแห่งจังหวัด",
-    sportsType: "บาสเกตบอล",
-    yearBE: 2567,
-    courseId: 1,
-    courseTitle: "หลักสูตร ผู้ฝึกสอนกีฬาระดับชาติ",
-    batch: "รุ่นที่ 1/2567",
-    certNo: "กกท.-ผฝ.67/005",
-    passedDate: "2024-02-28",
-    status: "active",
-    duties: [
-      {
-        id: "duty-007",
-        traineeId: "trn-67-001",
-        idCard: "1103700567890",
-        eventName: "การแข่งขันกีฬาเยาวชนแห่งชาติ ครั้งที่ 39 'ราชบุรีเกมส์'",
-        role: "ผู้ฝึกสอนบาสเกตบอล 3x3 ทีมหญิง",
-        startDate: "2024-03-21",
-        endDate: "2024-03-31",
-        organization: "สมาคมกีฬาแห่งจังหวัดเชียงใหม่",
-        location: "โรงยิมเนเซียม จ.ราชบุรี",
-        achievement: "ได้รับรางวัลเหรียญทอง บาสเกตบอล 3x3 หญิง",
-        knowledgeApplied: "นำแท็กติกการเล่นแบบ Fast Break Transition และการตั้งโซนป้องกันบาสเกตบอล 3x3 ที่ได้เรียนรู้มาฝึกซ้อมจำลองสถานการณ์จริง ทำให้ผู้เล่นตัดสินใจได้รวดเร็วและคว้าเหรียญทอง",
-        knowledgeDimensions: ["planning", "psychology"],
-        impactRating: 5,
-        verified: true,
-        verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-        verifiedAt: "2024-04-05",
-        createdAt: "2024-04-02T10:00:00Z",
-      },
-    ],
-    createdAt: "2024-02-29T08:00:00Z",
-    updatedAt: "2024-04-05T10:00:00Z",
-  },
-  {
-    id: "trn-67-002",
-    idCard: "3100600678901",
-    name: "นาย ภัทรพล ธรรมรักษ์",
-    gender: "male",
-    phone: "083-999-4455",
-    email: "pattaraphol.t@sat-ref.org",
-    affiliation: "สมาคมกีฬาแห่งประเทศไทย",
-    sportsType: "แบดมินตัน",
-    yearBE: 2567,
-    courseId: 2,
-    courseTitle: "หลักสูตร ผู้ตัดสินกีฬาอาชีพ",
-    batch: "รุ่นที่ 1/2567",
-    certNo: "กกท.-ผต.67/018",
-    passedDate: "2024-03-15",
-    status: "active",
-    duties: [
-      {
-        id: "duty-008",
-        traineeId: "trn-67-002",
-        idCard: "3100600678901",
-        eventName: "การแข่งขันแบดมินตันชิงชนะเลิศแห่งประเทศไทย ประจำปี 2567",
-        role: "ผู้ตัดสินชี้ขาด (Umpire)",
-        startDate: "2024-06-18",
-        endDate: "2024-06-23",
-        organization: "สมาคมกีฬาแบดมินตันแห่งประเทศไทยฯ",
-        location: "เซ็นทรัลพลาซา แจ้งวัฒนะ",
-        achievement: "ทำหน้าที่รอบชิงชนะเลิศ ประเภทชายเดี่ยว",
-        knowledgeApplied: "นำแนวทางการตัดสินลูกลง-ออกอย่างแม่นยำและการประสานงานกับ Line Judges มาประยุกต์ใช้ในการตัดสินรอบชิงชนะเลิศ ทำให้เกมดำเนินไปด้วยความเรียบร้อยและได้รับคำชมเชยจากสมาคม",
-        knowledgeDimensions: ["rules"],
-        impactRating: 5,
-        verified: true,
-        verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-        verifiedAt: "2024-06-28",
-        createdAt: "2024-06-25T11:00:00Z",
-      },
-    ],
-    createdAt: "2024-03-16T08:00:00Z",
-    updatedAt: "2024-06-28T11:00:00Z",
-  },
-  {
-    id: "trn-67-003",
-    idCard: "1101400789012",
-    name: "นางสาว สุภัทรา บุญช่วย",
-    gender: "female",
-    phone: "087-222-3344",
-    email: "supattra.b@psych-sport.org",
-    affiliation: "กองทุนพัฒนาการกีฬาแห่งชาติ",
-    sportsType: "เทควันโด",
-    yearBE: 2567,
-    courseId: 5,
-    courseTitle: "หลักสูตร จิตวิทยาการกีฬาเพื่อความเป็นเลิศ",
-    batch: "รุ่นที่ 1/2567",
-    certNo: "กกท.-จว.67/003",
-    passedDate: "2024-05-12",
-    status: "active",
-    duties: [
-      {
-        id: "duty-009",
-        traineeId: "trn-67-003",
-        idCard: "1101400789012",
-        eventName: "แคมป์ฝึกซ้อมพัฒนาศักยภาพทางจิตวิทยา ทีมนักกีฬาเทควันโดเยาวชนทีมชาติ",
-        role: "ผู้เชี่ยวชาญด้านจิตวิทยาการกีฬา",
-        startDate: "2024-08-01",
-        endDate: "2024-08-15",
-        organization: "สมาคมกีฬาเทควันโดแห่งประเทศไทย",
-        location: "ศูนย์ฝึกกีฬาเทควันโดแห่งชาติ กกท.",
-        achievement: "ประเมินและฝึกทักษะการควบคุมสมาธิและความตื่นเต้นก่อนการแข่งขันแก่นักกีฬา 18 คน",
-        knowledgeApplied: "นำเทคนิค Imagery และ Breathing Control มาฝึกซ้อมให้นักกีฬาเทควันโดเยาวชนควบคุมความตื่นเต้นก่อนก้าวขึ้นเวทีแข่งขันจริง ทำให้นักกีฬามีสมาธิและออกอาวุธได้อย่างมั่นใจ",
-        knowledgeDimensions: ["psychology"],
-        impactRating: 5,
-        verified: true,
-        verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-        verifiedAt: "2024-08-20",
-        createdAt: "2024-08-18T13:00:00Z",
-      },
-    ],
-    createdAt: "2024-05-13T08:00:00Z",
-    updatedAt: "2024-08-20T13:00:00Z",
-  },
-  {
-    id: "trn-67-004",
-    idCard: "3102000890123",
-    name: "นาย ธีรภัทร ชาญวิทย์",
-    gender: "male",
-    phone: "089-444-5566",
-    email: "theeraphat.c@sat-coach.org",
-    affiliation: "หน่วยงานภายนอก / บุคคลทั่วไป",
-    sportsType: "เซปักตะกร้อ",
-    yearBE: 2567,
-    courseId: 1,
-    courseTitle: "หลักสูตร ผู้ฝึกสอนกีฬาระดับชาติ",
-    batch: "รุ่นที่ 2/2567",
-    certNo: "กกท.-ผฝ.67/041",
-    passedDate: "2024-06-30",
-    status: "pending_verification",
-    duties: [
-      {
-        id: "duty-010",
-        traineeId: "trn-67-004",
-        idCard: "3102000890123",
-        eventName: "การแข่งขันตะกร้อเยาวชนชิงถ้วยพระราชทาน ครั้งที่ 28",
-        role: "ผู้ฝึกสอนทีมเยาวชนสโมสรตะกร้อกรุงเทพฯ",
-        startDate: "2024-09-10",
-        endDate: "2024-09-16",
-        organization: "สมาคมกีฬาตะกร้อแห่งประเทศไทย",
-        location: "ยิมเนเซียม 1 มหาวิทยาลัยรามคำแหง",
-        achievement: "พาทีมเข้าสู่รอบชิงชนะเลิศประเภททีมชุด",
-        knowledgeApplied: "นำระเบียบวินัยการสร้างแบบแผนการเสิร์ฟและการตั้งรับลูกฟาดมาปรับใช้กับผู้เล่นรุ่นเยาวชน ทำให้ทีมเสียแต้มจากลูกเสิร์ฟลดลง",
-        knowledgeDimensions: ["planning"],
-        impactRating: 4,
-        verified: false,
-        createdAt: "2024-09-20T17:00:00Z",
-      },
-    ],
-    createdAt: "2024-07-01T08:00:00Z",
-    updatedAt: "2024-09-20T17:00:00Z",
-  },
-  {
-    id: "trn-67-005",
-    idCard: "1101800901234",
-    name: "นาย ชาญชัย ธนะสิทธิ์",
-    gender: "male",
-    phone: "081-777-8899",
-    email: "chanchai.t@sat-sci.org",
-    affiliation: "สมาคมกีฬาแห่งประเทศไทย",
-    sportsType: "เทเบิลเทนนิส",
-    yearBE: 2567,
-    courseId: 3,
-    courseTitle: "หลักสูตร วิทยาศาสตร์การกีฬาและการพัฒนานักกีฬาสู่ความเป็นเลิศ",
-    batch: "รุ่นที่ 2/2567",
-    certNo: "กกท.-วก.67/019",
-    passedDate: "2024-07-15",
-    status: "inactive",
-    duties: [],
-    createdAt: "2024-07-16T08:00:00Z",
-    updatedAt: "2024-07-16T08:00:00Z",
-  },
-  {
-    id: "trn-68-001",
-    idCard: "1100500123456", // Same citizen ID as trn-66-001 (Cross-year multi-course progression!)
-    name: "นาย กิตติศักดิ์ ชัยชนะ",
-    gender: "male",
-    phone: "081-234-5678",
-    email: "kittisak.c@sat-coach.org",
-    affiliation: "สมาคมกีฬาแห่งประเทศไทย",
-    sportsType: "ฟุตบอล",
-    yearBE: 2568,
-    courseId: 4,
-    courseTitle: "หลักสูตร การเสริมสร้างศักยภาพการบริหารจัดการองค์กรกีฬา",
-    batch: "รุ่นที่ 1/2568",
-    certNo: "กกท.-บห.68/002",
-    passedDate: "2025-02-15",
-    status: "active",
-    duties: [
-      {
-        id: "duty-011",
-        traineeId: "trn-68-001",
-        idCard: "1100500123456",
-        eventName: "การแข่งขันฟุตบอลเยาวชนอาเซียน U-19 Championship 2025",
-        role: "ผู้จัดการทีม (Team Manager)",
-        startDate: "2025-07-12",
-        endDate: "2025-07-28",
-        organization: "สมาคมกีฬาฟุตบอลแห่งประเทศไทยฯ",
-        location: "สนามกีฬาแห่งชาติ สุราบายา อินโดนีเซีย",
-        achievement: "บริหารจัดการทีมคว้าเหรียญทองชนะเลิศ",
-        knowledgeApplied: "นำระบบโครงสร้างการบริหารทีมชาติและการประสานงานฝ่ายแพทย์และสิทธิประโยชน์มาใช้ในการแข่งขันระดับนานาชาติ ทำให้ทีมชาติไทยมีความพร้อมสูงสุดทั้งในและนอกสนาม",
-        knowledgeDimensions: ["management", "science"],
-        impactRating: 5,
-        verified: true,
-        verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-        verifiedAt: "2025-08-05",
-        createdAt: "2025-08-01T12:00:00Z",
-      },
-    ],
-    createdAt: "2025-02-16T08:00:00Z",
-    updatedAt: "2025-08-05T12:00:00Z",
-  },
-  {
-    id: "trn-68-002",
-    idCard: "3100800112233",
-    name: "นางสาว อรทัย รัตนกุล",
-    gender: "female",
-    phone: "086-123-9876",
-    email: "orathai.r@sat-coach.org",
-    affiliation: "สมาคมกีฬาแห่งจังหวัด",
-    sportsType: "ยกน้ำหนัก",
-    yearBE: 2568,
-    courseId: 1,
-    courseTitle: "หลักสูตร ผู้ฝึกสอนกีฬาระดับชาติ",
-    batch: "รุ่นที่ 1/2568",
-    certNo: "กกท.-ผฝ.68/011",
-    passedDate: "2025-03-20",
-    status: "active",
-    duties: [
-      {
-        id: "duty-012",
-        traineeId: "trn-68-002",
-        idCard: "3100800112233",
-        eventName: "ยกน้ำหนักเยาวชนชิงชนะเลิศแห่งประเทศไทย ประจำปี 2568",
-        role: "ผู้ฝึกสอนหลักประจำทีม จ.นครราชสีมา",
-        startDate: "2025-05-15",
-        endDate: "2025-05-20",
-        organization: "สมาคมกีฬายกน้ำหนักสมัครเล่นแห่งประเทศไทย",
-        location: "โรงยิมเนเซียมเทศบาลเมืองทุ่งสง",
-        achievement: "นักกีฬาทำลายสถิติเยาวชนประเทศไทย 2 รายการ",
-        verified: true,
-        verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-        verifiedAt: "2025-05-28",
-        createdAt: "2025-05-22T10:00:00Z",
-      },
-    ],
-    createdAt: "2025-03-21T08:00:00Z",
-    updatedAt: "2025-05-28T10:00:00Z",
-  },
-  {
-    id: "trn-68-003",
-    idCard: "1103200223344",
-    name: "พันจ่าตรี ณัฐดนัย สมบูรณ์",
-    gender: "male",
-    phone: "084-555-6677",
-    email: "natdanai.s@sat-ref.org",
-    affiliation: "สมาคมกีฬาแห่งประเทศไทย",
-    sportsType: "มวยสากล",
-    yearBE: 2568,
-    courseId: 2,
-    courseTitle: "หลักสูตร ผู้ตัดสินกีฬาอาชีพ",
-    batch: "รุ่นที่ 1/2568",
-    certNo: "กกท.-ผต.68/007",
-    passedDate: "2025-04-10",
-    status: "active",
-    duties: [
-      {
-        id: "duty-013",
-        traineeId: "trn-68-003",
-        idCard: "1103200223344",
-        eventName: "มวยสากลนานาชาติ ไทยแลนด์ โอเพ่น 2025",
-        role: "กรรมการผู้ตัดสินบนเวที (Referee)",
-        startDate: "2025-06-05",
-        endDate: "2025-06-12",
-        organization: "สมาคมกีฬามวยสากลแห่งประเทศไทย",
-        location: "อาคารนิมิบุตร สนามกีฬาแห่งชาติ",
-        achievement: "ได้รับรางวัลผู้ตัดสินดีเด่นประจำการแข่งขัน",
-        verified: true,
-        verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-        verifiedAt: "2025-06-20",
-        createdAt: "2025-06-15T14:00:00Z",
-      },
-    ],
-    createdAt: "2025-04-11T08:00:00Z",
-    updatedAt: "2025-06-20T14:00:00Z",
-  },
-  {
-    id: "trn-68-004",
-    idCard: "3101500334455",
-    name: "นางสาว วรรณิศา เลิศไพศาล",
-    gender: "female",
-    phone: "082-888-9900",
-    email: "wannisa.l@sat-sci.org",
-    affiliation: "การกีฬาแห่งประเทศไทย",
-    sportsType: "ว่ายน้ำ",
-    yearBE: 2568,
-    courseId: 3,
-    courseTitle: "หลักสูตร วิทยาศาสตร์การกีฬาและการพัฒนานักกีฬาสู่ความเป็นเลิศ",
-    batch: "รุ่นที่ 1/2568",
-    certNo: "กกท.-วก.68/012",
-    passedDate: "2025-05-18",
-    status: "active",
-    duties: [
-      {
-        id: "duty-014",
-        traineeId: "trn-68-004",
-        idCard: "3101500334455",
-        eventName: "การแข่งขันว่ายน้ำชิงชนะเลิศเอเชีย 2025",
-        role: "นักชีวกลศาสตร์การกีฬาประจำทีมนักกีฬาไทย",
-        startDate: "2025-09-10",
-        endDate: "2025-09-18",
-        organization: "สมาคมกีฬาทางน้ำแห่งประเทศไทย",
-        location: "ศูนย์กีฬาทางน้ำ โตเกียว ประเทศญี่ปุ่น",
-        achievement: "บันทึกและวิเคราะห์เทคนิคการออกตัวและกลับตัวด้วยระบบ Video Motion Analysis",
-        verified: true,
-        verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-        verifiedAt: "2025-09-25",
-        createdAt: "2025-09-20T16:00:00Z",
-      },
-    ],
-    createdAt: "2025-05-19T08:00:00Z",
-    updatedAt: "2025-09-25T16:00:00Z",
-  },
-  {
-    id: "trn-68-005",
-    idCard: "1102500445566",
-    name: "นาย ธีรวัฒน์ ชัยมงคล",
-    gender: "male",
-    phone: "085-333-2211",
-    email: "theerawat.c@sat-budget.org",
-    affiliation: "การกีฬาแห่งประเทศไทย",
-    sportsType: "กรีฑา",
-    yearBE: 2568,
-    courseId: 6,
-    courseTitle: "หลักสูตร การบริหารงบประมาณและพัสดุทางการกีฬา",
-    batch: "รุ่นที่ 1/2568",
-    certNo: "กกท.-พส.68/009",
-    passedDate: "2025-06-25",
-    status: "inactive",
-    duties: [],
-    createdAt: "2025-06-26T08:00:00Z",
-    updatedAt: "2025-06-26T08:00:00Z",
-  },
-  {
-    id: "trn-69-001",
-    idCard: "1100900556677",
-    name: "นาย ธนภัทร สิริธนโชติ",
-    gender: "male",
-    phone: "081-444-7788",
-    email: "thanaphat.s@sat-coach.org",
-    affiliation: "สมาคมกีฬาแห่งประเทศไทย",
-    sportsType: "ฟุตบอล",
-    yearBE: 2569,
-    courseId: 1,
-    courseTitle: "หลักสูตร ผู้ฝึกสอนกีฬาระดับชาติ",
-    batch: "รุ่นที่ 1/2569",
-    certNo: "กกท.-ผฝ.69/003",
-    passedDate: "2026-02-10",
-    status: "active",
-    duties: [
-      {
-        id: "duty-015",
-        traineeId: "trn-69-001",
-        idCard: "1100900556677",
-        eventName: "ฟุตบอลลีกอาชีพ ไทยลีก 3 โซนภาคกลาง ฤดูกาล 2026",
-        role: "หัวหน้าผู้ฝึกสอน (Head Coach)",
-        startDate: "2026-04-01",
-        endDate: "2026-09-30",
-        organization: "สโมสรฟุตบอลสระบุรี ยูไนเต็ด",
-        location: "สนามกีฬากลาง จ.สระบุรี",
-        achievement: "นำทีมอยู่อันดับ 3 ของตารางคะแนน",
-        verified: true,
-        verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-        verifiedAt: "2026-08-10",
-        createdAt: "2026-08-05T10:00:00Z",
-      },
-    ],
-    createdAt: "2026-02-11T08:00:00Z",
-    updatedAt: "2026-08-10T10:00:00Z",
-  },
-  {
-    id: "trn-69-002",
-    idCard: "3101900667788",
-    name: "นางสาว สุภารัตน์ เกษมสุข",
-    gender: "female",
-    phone: "083-777-6655",
-    email: "suparat.k@sat-ref.org",
-    affiliation: "สมาคมกีฬาแห่งจังหวัด",
-    sportsType: "วอลเลย์บอล",
-    yearBE: 2569,
-    courseId: 2,
-    courseTitle: "หลักสูตร ผู้ตัดสินกีฬาอาชีพ",
-    batch: "รุ่นที่ 1/2569",
-    certNo: "กกท.-ผต.69/012",
-    passedDate: "2026-03-18",
-    status: "pending_verification",
-    duties: [
-      {
-        id: "duty-016",
-        traineeId: "trn-69-002",
-        idCard: "3101900667788",
-        eventName: "วอลเลย์บอลเยาวชน กฟภ. (PEA) ชิงชนะเลิศแห่งประเทศไทย ประจำปี 2569",
-        role: "ผู้ตัดสินที่ 2",
-        startDate: "2026-07-15",
-        endDate: "2026-07-22",
-        organization: "สมาคมกีฬาวอลเลย์บอลแห่งประเทศไทย",
-        location: "โรงยิมเนเซียมเทศบาลเมืองสุพรรณบุรี",
-        achievement: "ปฏิบัติหน้าที่รอบ 8 ทีมสุดท้าย",
-        verified: false,
-        createdAt: "2026-07-25T15:00:00Z",
-      },
-    ],
-    createdAt: "2026-03-19T08:00:00Z",
-    updatedAt: "2026-07-25T15:00:00Z",
-  },
-  {
-    id: "trn-69-003",
-    idCard: "1103800778899",
-    name: "นาย กวินท์ โชติวรศิลป์",
-    gender: "male",
-    phone: "089-222-1100",
-    email: "kawin.c@sat-manage.org",
-    affiliation: "กองทุนพัฒนาการกีฬาแห่งชาติ",
-    sportsType: "เทควันโด",
-    yearBE: 2569,
-    courseId: 4,
-    courseTitle: "หลักสูตร การเสริมสร้างศักยภาพการบริหารจัดการองค์กรกีฬา",
-    batch: "รุ่นที่ 1/2569",
-    certNo: "กกท.-บห.69/015",
-    passedDate: "2026-04-22",
-    status: "active",
-    duties: [
-      {
-        id: "duty-017",
-        traineeId: "trn-69-003",
-        idCard: "1103800778899",
-        eventName: "การแข่งขันเทควันโดเยาวชนระดับนานาชาติ กกท. คัพ 2026",
-        role: "เลขาธิการฝ่ายประสานงานสิทธิประโยชน์และสิทธิการถ่ายทอดสด",
-        startDate: "2026-08-02",
-        endDate: "2026-08-06",
-        organization: "การกีฬาแห่งประเทศไทย ร่วมกับ สมาคมกีฬาเทควันโดฯ",
-        location: "อินดอร์สเตเดียม หัวหมาก",
-        achievement: "จัดหารายได้ผู้สนับสนุนเพิ่มขึ้นร้อยละ 25 ตามเป้าหมายกองทุน",
-        verified: true,
-        verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-        verifiedAt: "2026-08-15",
-        createdAt: "2026-08-10T14:00:00Z",
-      },
-    ],
-    createdAt: "2026-04-23T08:00:00Z",
-    updatedAt: "2026-08-15T14:00:00Z",
-  },
-  {
-    id: "trn-69-004",
-    idCard: "3100400889900",
-    name: "สิบเอก รณชัย บุญประสิทธิ์",
-    gender: "male",
-    phone: "086-777-9911",
-    email: "ronnachai.b@sat-coach.org",
-    affiliation: "สมาคมกีฬาแห่งประเทศไทย",
-    sportsType: "ยิงปืน",
-    yearBE: 2569,
-    courseId: 1,
-    courseTitle: "หลักสูตร ผู้ฝึกสอนกีฬาระดับชาติ",
-    batch: "รุ่นที่ 1/2569",
-    certNo: "กกท.-ผฝ.69/022",
-    passedDate: "2026-05-15",
-    status: "active",
-    duties: [
-      {
-        id: "duty-018",
-        traineeId: "trn-69-004",
-        idCard: "3100400889900",
-        eventName: "การแข่งขันยิงปืนชิงชนะเลิศแห่งประเทศไทย ประจำปี 2569",
-        role: "ผู้ฝึกสอนปืนสั้นอัดลมทีมชาติชุดเตรียมเอเชียนเกมส์",
-        startDate: "2026-09-05",
-        endDate: "2026-09-12",
-        organization: "สมาคมกีฬายิงปืนแห่งประเทศไทย ในพระบรมราชูปถัมภ์",
-        location: "สนามยิงปืน กกท. หัวหมาก",
-        achievement: "นักกีฬาได้ 2 เหรียญทอง 1 เหรียญเงิน",
-        verified: true,
-        verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-        verifiedAt: "2026-09-20",
-        createdAt: "2026-09-15T16:00:00Z",
-      },
-    ],
-    createdAt: "2026-05-16T08:00:00Z",
-    updatedAt: "2026-09-20T16:00:00Z",
-  },
-  {
-    id: "trn-69-005",
-    idCard: "1104500990011",
-    name: "นางสาว จันทิมา กุลสตรี",
-    gender: "female",
-    phone: "084-888-2233",
-    email: "janthima.k@sat-sci.org",
-    affiliation: "สมาคมกีฬาแห่งจังหวัด",
-    sportsType: "จักรยาน",
-    yearBE: 2569,
-    courseId: 3,
-    courseTitle: "หลักสูตร วิทยาศาสตร์การกีฬาและการพัฒนานักกีฬาสู่ความเป็นเลิศ",
-    batch: "รุ่นที่ 1/2569",
-    certNo: "กกท.-วก.69/014",
-    passedDate: "2026-06-12",
-    status: "inactive",
-    duties: [],
-    createdAt: "2026-06-13T08:00:00Z",
-    updatedAt: "2026-06-13T08:00:00Z",
-  },
-];
+export const STANDARD_COURSES = [
+  "Bnc",
+  "ICSC",
+  "ICSM",
+  "HCDP-ICSM",
+  "TSLP",
+  "GGE",
+  "SSCC",
+  "HCDP-ICSC",
+  "PSCE",
+  "Olympic",
+  "PSAAD-ISPEP",
+  "PSAAD",
+  "Lv.1",
+  "TSL-ISPEP",
+  "Switzerland",
+  "National classifier",
+  "การพัฒนาบุคลากรกีฬาสู่นักบริหารจัดการองค์กรกีฬาเพื่อความยั่งยืน",
+] as const;
 
-const STORAGE_KEY = "sat-alumni-v1";
+// 2,732 authentic historical training records (1,913 unique personnel) from official SAT Excel files
+export const SEED_TRAINEES: HistoricalTrainee[] = rawRealTrainees as HistoricalTrainee[];
+
+const STORAGE_KEY = "sat-alumni-real-v2";
 
 interface AlumniState {
   trainees: HistoricalTrainee[];
@@ -1009,8 +301,13 @@ export function addDutyRecord(
   };
 
   const nextList = state.trainees.map((t) => {
-    // Update all entries matching this person's citizen id so cross-course history syncs
-    if (t.idCard === target.idCard) {
+    // Update all entries matching this person so cross-course history syncs
+    const isSamePerson =
+      (target.personnelId && t.personnelId === target.personnelId) ||
+      (t.idCard && t.idCard === target.idCard) ||
+      t.id === target.id;
+
+    if (isSamePerson) {
       const nextDuties = [newDuty, ...t.duties];
       return {
         ...t,
@@ -1116,7 +413,7 @@ export function resetAlumniData() {
 export function normalizeThaiName(name: string): string {
   if (!name) return "";
   return name
-    .replace(/^(นาย|นางสาว|นาง|ดร\.|อาจารย์|โค้ช|ว่าที่\s*ร\.ต\.|ร\.ต\.อ\.|พ\.จ\.ต\.|ส\.อ\.|พ\.ต\.ท\.|พ\.ต\.อ\.)\s*/i, "")
+    .replace(/^(นาย|นางสาว|นาง|ดร\.|อาจารย์|โค้ช|ว่าที่\s*ร\.ต\.|ร\.ต\.อ\.|พ\.จ\.ต\.|ส\.อ\.|พ\.ต\.ท\.|พ\.ต\.อ\.|นาวาเอก|นาวาโท|นาวาตรี|เรือเอก|พันเอก|ร้อยเอก)\s*/i, "")
     .replace(/\s+/g, "")
     .toLowerCase();
 }
@@ -1124,8 +421,10 @@ export function normalizeThaiName(name: string): string {
 export interface TraineeSearchResult {
   uniqueKey: string;
   name: string;
+  personnelId?: string;
   sportsType: string;
   affiliation: string;
+  affiliationGroup?: string;
   records: HistoricalTrainee[];
   latestYearBE: number;
   idCard: string;
@@ -1133,8 +432,8 @@ export interface TraineeSearchResult {
 }
 
 /**
- * Flexible search by Name, Citizen ID, or Certificate Number.
- * Groups multiple courses by person and handles legacy records without Citizen ID.
+ * Flexible search by Name, Citizen ID, or Personnel ID.
+ * Groups multiple courses by person and handles legacy records.
  */
 export function searchTrainees(query: string, trainees: HistoricalTrainee[]): TraineeSearchResult[] {
   const q = query.trim();
@@ -1143,12 +442,17 @@ export function searchTrainees(query: string, trainees: HistoricalTrainee[]): Tr
   const digits = q.replace(/\D/g, "");
   const normQuery = normalizeThaiName(q);
 
-  // Group trainees by unique person (idCard if 13 digits, else by normalized name)
+  // Group trainees by unique person (personnelId > idCard if 13 digits > normalized name)
   const personMap = new Map<string, HistoricalTrainee[]>();
 
   for (const t of trainees) {
     const cleanId = t.idCard ? t.idCard.replace(/\D/g, "") : "";
-    const personKey = cleanId.length === 13 ? cleanId : `name_${normalizeThaiName(t.name)}_${t.sportsType}`;
+    const personKey = t.personnelId
+      ? t.personnelId
+      : cleanId.length === 13
+      ? cleanId
+      : `name_${normalizeThaiName(t.name)}_${t.affiliation}`;
+
     if (!personMap.has(personKey)) {
       personMap.set(personKey, []);
     }
@@ -1163,25 +467,37 @@ export function searchTrainees(query: string, trainees: HistoricalTrainee[]): Tr
 
     let matches = false;
 
-    // Match 1: 13-digit ID or partial ID (min 6 digits)
+    // Match 1: 13-digit ID or partial numeric digits (min 4 digits)
     const cleanId = primary.idCard ? primary.idCard.replace(/\D/g, "") : "";
-    if (digits && digits.length >= 6 && cleanId.includes(digits)) {
+    if (digits && digits.length >= 4 && cleanId.includes(digits)) {
       matches = true;
     }
 
-    // Match 2: Name match (supports partial name or normalized without prefix)
+    // Match 2: Personnel ID (e.g. USR-2026-0001, 0001, USR)
+    if (primary.personnelId && primary.personnelId.toLowerCase().includes(q.toLowerCase())) {
+      matches = true;
+    }
+
+    // Match 3: Name match (supports partial name or normalized without prefix)
     const normName = normalizeThaiName(primary.name);
     if (normQuery.length >= 2 && (normName.includes(normQuery) || normQuery.includes(normName) || primary.name.includes(q))) {
+      matches = true;
+    }
+
+    // Match 4: Specific affiliation or association match
+    if (q.length >= 3 && primary.affiliation && primary.affiliation.toLowerCase().includes(q.toLowerCase())) {
       matches = true;
     }
 
     if (matches) {
       const dutyCount = records.reduce((acc, r) => acc + (r.duties?.length || 0), 0);
       results.push({
-        uniqueKey: cleanId || primary.id,
+        uniqueKey: primary.personnelId || cleanId || primary.id,
         name: primary.name,
+        personnelId: primary.personnelId,
         sportsType: primary.sportsType,
         affiliation: primary.affiliation,
+        affiliationGroup: primary.affiliationGroup,
         records: sorted,
         latestYearBE: primary.yearBE,
         idCard: primary.idCard,
@@ -1194,7 +510,7 @@ export function searchTrainees(query: string, trainees: HistoricalTrainee[]): Tr
 }
 
 /**
- * Returns all historical records & courses matching an identifier (Citizen ID, ID, or Name).
+ * Returns all historical records & courses matching an identifier (Personnel ID, Citizen ID, ID, or Name).
  * Supports legacy archives without citizen ID.
  */
 export function getTraineePassport(identifier: string, trainees: HistoricalTrainee[]) {
@@ -1207,9 +523,14 @@ export function getTraineePassport(identifier: string, trainees: HistoricalTrain
     ? trainees.filter((t) => t.idCard && t.idCard.replace(/\D/g, "") === digits)
     : [];
 
-  // 2. If not found, match by primary ID or exact idCard string
+  // 2. If not found, match by personnelId, primary ID, or exact idCard string
   if (records.length === 0) {
-    records = trainees.filter((t) => t.id === raw || t.idCard === raw);
+    records = trainees.filter(
+      (t) =>
+        (t.personnelId && t.personnelId.toLowerCase() === raw.toLowerCase()) ||
+        t.id === raw ||
+        t.idCard === raw
+    );
   }
 
   // 3. Match by normalized name
@@ -1274,7 +595,9 @@ export interface EvaluationStats {
   traineesByYear: Record<number, number>;
   bySportsType: { name: string; count: number; activeCount: number }[];
   byAffiliation: { name: string; count: number; activeCount: number }[];
-  byCourse: { name: string; count: number; activeRate: number }[];
+  byAffiliationGroup: { name: string; count: number; activeCount: number; percent: number }[];
+  byCourseCategory: { name: string; count: number; activeCount: number; percent: number }[];
+  byCourse: { name: string; count: number; activeRate: number; category?: string }[];
   dimensionBreakdown: { key: string; label: string; icon: string; count: number; percent: number }[];
   averageImpactRating: number;
   totalRatingsCount: number;
@@ -1282,8 +605,10 @@ export interface EvaluationStats {
 }
 
 export function computeEvaluationStats(trainees: HistoricalTrainee[]): EvaluationStats {
-  const uniqueIdCards = new Set(trainees.map((t) => t.idCard));
-  const uniquePersonnelCount = uniqueIdCards.size;
+  const uniquePersonnelSet = new Set(
+    trainees.map((t) => t.personnelId || (t.idCard && t.idCard.replace(/\D/g, "").length === 13 ? t.idCard : normalizeThaiName(t.name)))
+  );
+  const uniquePersonnelCount = uniquePersonnelSet.size;
   const totalTrainees = trainees.length;
 
   let activeCount = 0;
@@ -1295,7 +620,9 @@ export function computeEvaluationStats(trainees: HistoricalTrainee[]): Evaluatio
   const dutiesByYear: Record<number, number> = {};
   const sportsMap: Record<string, { count: number; activeCount: number }> = {};
   const affilMap: Record<string, { count: number; activeCount: number }> = {};
-  const courseMap: Record<string, { count: number; activeCount: number }> = {};
+  const affilGroupMap: Record<string, { count: number; activeCount: number }> = {};
+  const courseCatMap: Record<string, { count: number; activeCount: number }> = {};
+  const courseMap: Record<string, { count: number; activeCount: number; category?: string }> = {};
 
   const dimensionCounts: Record<string, number> = {
     planning: 0,
@@ -1320,23 +647,42 @@ export function computeEvaluationStats(trainees: HistoricalTrainee[]): Evaluatio
     traineesByYear[t.yearBE] = (traineesByYear[t.yearBE] || 0) + 1;
     dutiesByYear[t.yearBE] = (dutiesByYear[t.yearBE] || 0) + t.duties.length;
 
-    // By Sports
-    if (!sportsMap[t.sportsType]) {
-      sportsMap[t.sportsType] = { count: 0, activeCount: 0 };
+    // By Affiliation Group
+    const groupName = t.affiliationGroup || "หน่วยงานภายนอก";
+    if (!affilGroupMap[groupName]) {
+      affilGroupMap[groupName] = { count: 0, activeCount: 0 };
     }
-    sportsMap[t.sportsType].count += 1;
-    if (t.status === "active") sportsMap[t.sportsType].activeCount += 1;
+    affilGroupMap[groupName].count += 1;
+    if (t.status === "active") affilGroupMap[groupName].activeCount += 1;
 
-    // By Affiliation
-    if (!affilMap[t.affiliation]) {
-      affilMap[t.affiliation] = { count: 0, activeCount: 0 };
+    // By Specific Affiliation
+    if (t.affiliation) {
+      if (!affilMap[t.affiliation]) {
+        affilMap[t.affiliation] = { count: 0, activeCount: 0 };
+      }
+      affilMap[t.affiliation].count += 1;
+      if (t.status === "active") affilMap[t.affiliation].activeCount += 1;
     }
-    affilMap[t.affiliation].count += 1;
-    if (t.status === "active") affilMap[t.affiliation].activeCount += 1;
+
+    // By Sports / Association
+    const sType = t.sportsType || t.affiliation;
+    if (!sportsMap[sType]) {
+      sportsMap[sType] = { count: 0, activeCount: 0 };
+    }
+    sportsMap[sType].count += 1;
+    if (t.status === "active") sportsMap[sType].activeCount += 1;
+
+    // By Course Category
+    const catName = t.courseCategory || "อื่นๆ";
+    if (!courseCatMap[catName]) {
+      courseCatMap[catName] = { count: 0, activeCount: 0 };
+    }
+    courseCatMap[catName].count += 1;
+    if (t.status === "active") courseCatMap[catName].activeCount += 1;
 
     // By Course
     if (!courseMap[t.courseTitle]) {
-      courseMap[t.courseTitle] = { count: 0, activeCount: 0 };
+      courseMap[t.courseTitle] = { count: 0, activeCount: 0, category: t.courseCategory };
     }
     courseMap[t.courseTitle].count += 1;
     if (t.status === "active") courseMap[t.courseTitle].activeCount += 1;
@@ -1375,11 +721,29 @@ export function computeEvaluationStats(trainees: HistoricalTrainee[]): Evaluatio
   const activeRatePercent =
     totalTrainees > 0 ? Math.round((activeCount / totalTrainees) * 100) : 0;
 
-  const bySportsType = Object.entries(sportsMap)
-    .map(([name, val]) => ({ name, count: val.count, activeCount: val.activeCount }))
+  const byAffiliationGroup = Object.entries(affilGroupMap)
+    .map(([name, val]) => ({
+      name,
+      count: val.count,
+      activeCount: val.activeCount,
+      percent: totalTrainees > 0 ? Math.round((val.count / totalTrainees) * 100) : 0,
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const byCourseCategory = Object.entries(courseCatMap)
+    .map(([name, val]) => ({
+      name,
+      count: val.count,
+      activeCount: val.activeCount,
+      percent: totalTrainees > 0 ? Math.round((val.count / totalTrainees) * 100) : 0,
+    }))
     .sort((a, b) => b.count - a.count);
 
   const byAffiliation = Object.entries(affilMap)
+    .map(([name, val]) => ({ name, count: val.count, activeCount: val.activeCount }))
+    .sort((a, b) => b.count - a.count);
+
+  const bySportsType = Object.entries(sportsMap)
     .map(([name, val]) => ({ name, count: val.count, activeCount: val.activeCount }))
     .sort((a, b) => b.count - a.count);
 
@@ -1387,6 +751,7 @@ export function computeEvaluationStats(trainees: HistoricalTrainee[]): Evaluatio
     .map(([name, val]) => ({
       name,
       count: val.count,
+      category: val.category,
       activeRate: val.count > 0 ? Math.round((val.activeCount / val.count) * 100) : 0,
     }))
     .sort((a, b) => b.count - a.count);
@@ -1419,6 +784,8 @@ export function computeEvaluationStats(trainees: HistoricalTrainee[]): Evaluatio
     traineesByYear,
     bySportsType,
     byAffiliation,
+    byAffiliationGroup,
+    byCourseCategory,
     byCourse,
     dimensionBreakdown,
     averageImpactRating,

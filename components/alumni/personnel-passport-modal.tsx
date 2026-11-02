@@ -111,9 +111,14 @@ export function PersonnelPassportModal({
               </h2>
 
               <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-blue-100/85">
-                <span>🪪 {maskedId}</span>
-                <span>🏅 กีฬา{primary.sportsType}</span>
-                <span>🏛️ {primary.affiliation}</span>
+                {primary.personnelId && <span>🆔 รหัส {primary.personnelId}</span>}
+                {cleanId.length === 13 && <span>🪪 {maskedId}</span>}
+                {primary.affiliationGroup && (
+                  <span className="rounded-md bg-white/20 px-2 py-0.5 font-bold text-amber-300">
+                    🏛️ {primary.affiliationGroup}
+                  </span>
+                )}
+                <span>📍 {primary.affiliation}</span>
                 {primary.phone && <span>📞 {primary.phone}</span>}
               </div>
             </div>
@@ -181,9 +186,16 @@ export function PersonnelPassportModal({
                         #{idx + 1}
                       </span>
                       <div>
-                        <h4 className="font-bold text-[#16265E] text-sm sm:text-base">
-                          {cert.courseTitle}
-                        </h4>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-bold text-[#16265E] text-sm sm:text-base">
+                            {cert.courseTitle}
+                          </h4>
+                          {cert.courseCategory && (
+                            <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-800 border border-blue-200">
+                              {cert.courseCategory}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-gray-500">{cert.batch} · ประจำปี พ.ศ. {cert.yearBE}</p>
                       </div>
                     </div>
@@ -198,12 +210,12 @@ export function PersonnelPassportModal({
                       <span className="font-medium text-gray-800">{cert.passedDate || "-"}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-gray-400">สังกัดที่ลงทะเบียน:</span>
-                      <span className="font-medium text-gray-800">{cert.affiliation}</span>
+                      <span className="text-gray-400">กลุ่มหน่วยงาน:</span>
+                      <span className="font-medium text-gray-800">{cert.affiliationGroup || "-"}</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-gray-400">ชนิดกีฬา:</span>
-                      <span className="font-medium text-gray-800">{cert.sportsType}</span>
+                    <div className="flex items-center gap-1.5 sm:col-span-2">
+                      <span className="text-gray-400">ชื่อสมาคม/หน่วยงาน:</span>
+                      <span className="font-medium text-gray-800">{cert.affiliation}</span>
                     </div>
                   </div>
                 </div>

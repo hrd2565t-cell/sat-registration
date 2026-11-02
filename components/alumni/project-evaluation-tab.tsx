@@ -15,38 +15,50 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
   const handleExportEvaluationReport = () => {
     // 1. Summary sheet
     const summarySheetData = [
-      { ตัวชี้วัด: "จำนวนผู้สำเร็จการอบรมทั้งหมด (คน)", ค่าสถิติ: stats.totalTrainees },
-      { ตัวชี้วัด: "จำนวนบุคลากรเดี่ยว (Unique Passport)", ค่าสถิติ: stats.uniquePersonnelCount },
+      { ตัวชี้วัด: "จำนวนประวัติการอบรมทั้งหมด (รายการ)", ค่าสถิติ: stats.totalTrainees },
+      { ตัวชี้วัด: "จำนวนบุคลากรเดี่ยวในระบบ (คน)", ค่าสถิติ: stats.uniquePersonnelCount },
       { ตัวชี้วัด: "บุคลากรที่ยังปฏิบัติหน้าที่ต่อเนื่อง (Active)", ค่าสถิติ: stats.activeCount },
       { ตัวชี้วัด: "อัตราการนำความรู้ไปปฏิบัติหน้าที่จริง (%)", ค่าสถิติ: `${stats.activeRatePercent}%` },
       { ตัวชี้วัด: "บุคลากรที่รอตรวจสอบการทำหน้าที่ (Pending)", ค่าสถิติ: stats.pendingCount },
       { ตัวชี้วัด: "บุคลากรที่ยังไม่มีประวัติในรอบปี (Inactive)", ค่าสถิติ: stats.inactiveCount },
       { ตัวชี้วัด: "จำนวนครั้งการลงสนามปฏิบัติหน้าที่สะสม", ค่าสถิติ: stats.totalDutiesReported },
+      { ตัวชี้วัด: "ดัชนีประสิทธิผลการนำความรู้ไปใช้ (คะแนนเต็ม 5)", ค่าสถิติ: stats.averageImpactRating },
     ];
 
-    // 2. By Sport sheet
-    const sportSheetData = stats.bySportsType.map((s, idx) => ({
-      อันดับ: idx + 1,
-      ชนิดกีฬา: s.name,
-      จำนวนผู้ผ่านการอบรม: s.count,
-      จำนวนที่ยังปฏิบัติหน้าที่: s.activeCount,
-      "อัตรา Active (%)": `${Math.round((s.activeCount / s.count) * 100)}%`,
-    }));
-
-    // 3. By Affiliation sheet
-    const affilSheetData = stats.byAffiliation.map((a, idx) => ({
+    // 2. By Affiliation Group sheet (4 main groups)
+    const groupSheetData = stats.byAffiliationGroup.map((g, idx) => ({
       ลำดับ: idx + 1,
-      กลุ่มเป้าหมายสังกัด: a.name,
-      จำนวนผู้ผ่านการอบรม: a.count,
-      จำนวนที่ยังปฏิบัติหน้าที่: a.activeCount,
-      "อัตรา Active (%)": `${Math.round((a.activeCount / a.count) * 100)}%`,
+      กลุ่มหน่วยงาน: g.name,
+      จำนวนรายการ: g.count,
+      สัดส่วน: `${g.percent}%`,
+      จำนวนที่ยังปฏิบัติหน้าที่: g.activeCount,
+      "อัตรา Active (%)": `${g.count > 0 ? Math.round((g.activeCount / g.count) * 100) : 0}%`,
     }));
 
-    // 4. Knowledge Transfer & Applied Knowledge sheet (Kirkpatrick Level 3)
+    // 3. By Course Category sheet
+    const categorySheetData = stats.byCourseCategory.map((c, idx) => ({
+      ลำดับ: idx + 1,
+      ประเภทหลักสูตร: c.name,
+      จำนวนรายการ: c.count,
+      สัดส่วน: `${c.percent}%`,
+      จำนวนที่ยังปฏิบัติหน้าที่: c.activeCount,
+      "อัตรา Active (%)": `${c.count > 0 ? Math.round((c.activeCount / c.count) * 100) : 0}%`,
+    }));
+
+    // 4. By Course sheet (17 courses)
+    const courseSheetData = stats.byCourse.map((c, idx) => ({
+      ลำดับ: idx + 1,
+      ชื่อหลักสูตร: c.name,
+      ประเภทหลักสูตร: c.category || "-",
+      จำนวนผู้ผ่านการอบรม: c.count,
+      "อัตราการนำไปใช้จริง (Active %)": `${c.activeRate}%`,
+    }));
+
+    // 5. Knowledge Transfer & Applied Knowledge sheet (Kirkpatrick Level 3)
     const knowledgeSheetData = stats.qualitativeHighlights.map((q, idx) => ({
       ลำดับ: idx + 1,
       ชื่อบุคลากร: q.traineeName,
-      ชนิดกีฬา: q.sportsType,
+      สังกัดหรือหน่วยงาน: q.sportsType,
       หลักสูตรที่สำเร็จ: q.courseTitle,
       การแข่งขันหรือกิจกรรมที่ปฏิบัติหน้าที่: q.eventName,
       บทบาทหน้าที่: q.role,
@@ -59,14 +71,16 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
 
     const workbook = XLSX.utils.book_new();
     const s1 = XLSX.utils.json_to_sheet(summarySheetData);
-    const s2 = XLSX.utils.json_to_sheet(sportSheetData);
-    const s3 = XLSX.utils.json_to_sheet(affilSheetData);
-    const s4 = XLSX.utils.json_to_sheet(knowledgeSheetData);
+    const s2 = XLSX.utils.json_to_sheet(groupSheetData);
+    const s3 = XLSX.utils.json_to_sheet(categorySheetData);
+    const s4 = XLSX.utils.json_to_sheet(courseSheetData);
+    const s5 = XLSX.utils.json_to_sheet(knowledgeSheetData);
 
     XLSX.utils.book_append_sheet(workbook, s1, "สรุปภาพรวมโครงการ");
-    XLSX.utils.book_append_sheet(workbook, s2, "จำแนกตามชนิดกีฬา");
-    XLSX.utils.book_append_sheet(workbook, s3, "จำแนกตามกลุ่มเป้าหมาย");
-    XLSX.utils.book_append_sheet(workbook, s4, "การนำความรู้ไปใช้จริง");
+    XLSX.utils.book_append_sheet(workbook, s2, "จำแนกตามกลุ่มหน่วยงาน");
+    XLSX.utils.book_append_sheet(workbook, s3, "จำแนกตามประเภทหลักสูตร");
+    XLSX.utils.book_append_sheet(workbook, s4, "ประสิทธิผลรายหลักสูตร");
+    XLSX.utils.book_append_sheet(workbook, s5, "การนำความรู้ไปใช้จริง");
 
     XLSX.writeFile(
       workbook,
@@ -85,11 +99,16 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
   }, [stats.qualitativeHighlights, selectedDimensionFilter]);
 
   const handleCopyQuote = (q: QualitativeHighlight) => {
-    const textToCopy = `"${q.text}"\n— ${q.traineeName} (${q.role}, กีฬา${q.sportsType}) | หลักสูตร ${q.courseTitle}`;
+    const textToCopy = `"${q.text}"\n— ${q.traineeName} (${q.role}, ${q.sportsType}) | หลักสูตร ${q.courseTitle}`;
     navigator.clipboard.writeText(textToCopy);
     setCopiedId(q.id);
     setTimeout(() => setCopiedId(null), 2000);
   };
+
+  // Find maximum trainees in a single year for bar scaling
+  const maxTraineeYear = useMemo(() => {
+    return Math.max(...Object.values(stats.traineesByYear), 1);
+  }, [stats.traineesByYear]);
 
   return (
     <div className="space-y-6">
@@ -100,14 +119,19 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <span className="rounded-md bg-[#f59e0b] px-2.5 py-0.5 text-xs font-bold text-[#1e1b4b]">
-              รายงานผลสัมฤทธิ์ระดับนโยบาย กกท.
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-md bg-[#f59e0b] px-2.5 py-0.5 text-xs font-bold text-[#1e1b4b]">
+                รายงานผลสัมฤทธิ์ระดับนโยบาย กกท.
+              </span>
+              <span className="rounded-md bg-white/15 px-2.5 py-0.5 text-xs font-semibold text-blue-100">
+                ข้อมูลย้อนหลัง 23 ปี (พ.ศ. 2547 - 2569)
+              </span>
+            </div>
             <h2 className="mt-2 text-2xl font-bold tracking-tight text-white">
               แดชบอร์ดการประเมินผลโครงการพัฒนาบุคลากรกีฬา
             </h2>
             <p className="mt-1 text-xs sm:text-sm text-blue-100/80">
-              วิเคราะห์ความคุ้มค่าและผลสัมฤทธิ์ของการจัดอบรม เปรียบเทียบข้อมูลย้อนหลังปี พ.ศ. 2565 - 2570
+              วิเคราะห์ความคุ้มค่าและผลสัมฤทธิ์ของการจัดอบรม จากฐานข้อมูลจริง 2,732 รายการ (1,913 บุคลากรเดี่ยว)
             </p>
           </div>
 
@@ -115,129 +139,228 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
             <button
               type="button"
               onClick={handleExportEvaluationReport}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-[#16265E] shadow-sm hover:bg-blue-50 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-[#16265E] shadow-sm hover:bg-blue-50 transition-colors cursor-pointer"
             >
               <span>📊</span>
-              <span>ส่งออกรายงาน (.xlsx)</span>
+              <span>ส่งออกรายงานประเมินผล (Excel 5 แผ่น)</span>
             </button>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2.5 text-xs font-semibold text-white hover:bg-white/20 transition-colors"
-            >
-              <span>🖨️</span>
-              <span>พิมพ์</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 4 Core KPIs */}
-        <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="rounded-xl bg-white/10 p-4 backdrop-blur-xs border border-white/10">
-            <p className="text-blue-200 text-xs font-medium">ผู้ผ่านการอบรมสะสม</p>
-            <p className="mt-1 text-3xl font-extrabold text-white">{stats.totalTrainees}</p>
-            <p className="text-[11px] text-blue-200/70 mt-0.5">
-              รวม {stats.uniquePersonnelCount} คน (มีผู้จบหลายหลักสูตร)
-            </p>
-          </div>
-
-          <div className="rounded-xl bg-white/10 p-4 backdrop-blur-xs border border-white/10">
-            <p className="text-emerald-300 text-xs font-medium">อัตราการปฏิบัติหน้าที่จริง (Active)</p>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-3xl font-extrabold text-[#34d399]">{stats.activeRatePercent}%</span>
-              <span className="text-xs text-emerald-200 font-semibold">({stats.activeCount} คน)</span>
-            </div>
-            {/* Progress bar */}
-            <div className="mt-2 h-1.5 w-full rounded-full bg-white/20 overflow-hidden">
-              <div
-                className="h-full bg-[#10b981] rounded-full"
-                style={{ width: `${stats.activeRatePercent}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="rounded-xl bg-white/10 p-4 backdrop-blur-xs border border-white/10">
-            <p className="text-amber-300 text-xs font-medium">การลงสนามปฏิบัติหน้าที่สะสม</p>
-            <p className="mt-1 text-3xl font-extrabold text-[#facc15]">{stats.totalDutiesReported}</p>
-            <p className="text-[11px] text-amber-200/70 mt-0.5">ครั้งในการแข่งขันและทัวร์นาเมนต์</p>
-          </div>
-
-          <div className="rounded-xl bg-white/10 p-4 backdrop-blur-xs border border-white/10">
-            <p className="text-blue-200 text-xs font-medium">รอการตรวจสอบ (Pending)</p>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-3xl font-extrabold text-white">{stats.pendingCount}</span>
-              <span className="text-xs text-white/70">รายการ</span>
-            </div>
-            <p className="text-[11px] text-blue-200/70 mt-0.5">
-              Inactive: {stats.inactiveCount} คน ({100 - stats.activeRatePercent}%)
-            </p>
           </div>
         </div>
       </div>
 
-      {/* Annual Trend & Comparison */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 shadow-xs">
-        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+      {/* KPI Overview Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="rounded-2xl border border-blue-200 bg-white p-5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-500">ประวัติการอบรมทั้งหมด</span>
+            <span className="rounded-full bg-blue-50 p-2 text-blue-700">📜</span>
+          </div>
+          <p className="mt-2 text-3xl font-black text-[#16265E]">
+            {stats.totalTrainees.toLocaleString()}
+          </p>
+          <p className="mt-1 text-xs text-gray-500">
+            บุคลากรเดี่ยว: <strong className="text-[#16265E] font-bold">{stats.uniquePersonnelCount.toLocaleString()}</strong> ท่าน
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-emerald-200 bg-white p-5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-500">อัตราการนำไปใช้จริง</span>
+            <span className="rounded-full bg-emerald-50 p-2 text-emerald-700">🎯</span>
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <p className="text-3xl font-black text-emerald-700">{stats.activeRatePercent}%</p>
+            <span className="text-xs font-semibold text-emerald-600">Active</span>
+          </div>
+          <p className="mt-1 text-xs text-gray-500">
+            บุคลากรที่ปฏิบัติหน้าที่ต่อเนื่อง: {stats.activeCount.toLocaleString()} รายการ
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-amber-200 bg-white p-5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-500">การลงสนามปฏิบัติหน้าที่</span>
+            <span className="rounded-full bg-amber-50 p-2 text-amber-700">🏃</span>
+          </div>
+          <p className="mt-2 text-3xl font-black text-amber-800">
+            {stats.totalDutiesReported.toLocaleString()}
+          </p>
+          <p className="mt-1 text-xs text-gray-500">
+            ครั้งที่มีการบันทึกรายงานในระบบ กกท.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-purple-200 bg-white p-5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-500">ดัชนีประสิทธิผล (Level 3)</span>
+            <span className="rounded-full bg-purple-50 p-2 text-purple-700">⭐</span>
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <p className="text-3xl font-black text-purple-800">{stats.averageImpactRating}</p>
+            <span className="text-xs font-semibold text-gray-500">/ 5.0</span>
+          </div>
+          <p className="mt-1 text-xs text-emerald-700 font-semibold">
+            ระดับดีเลิศ (Kirkpatrick Impact)
+          </p>
+        </div>
+      </div>
+
+      {/* 23-Year Annual Historical Trend */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
           <div>
-            <h3 className="text-base font-bold text-[#16265E]">
-              📈 แนวโน้มการผลิตบุคลากรและการปฏิบัติหน้าที่รายปีงบประมาณ
+            <h3 className="text-base font-bold text-[#16265E] flex items-center gap-2">
+              <span>📈 สถิติการจัดอบรมย้อนหลัง 23 ปี (พ.ศ. 2547 - 2569)</span>
             </h3>
             <p className="text-xs text-gray-500 mt-0.5">
-              สถิติเปรียบเทียบยอดผู้สำเร็จการอบรม และการลงสนามปฏิบัติหน้าที่ย้อนหลัง
+              แสดงจำนวนบุคลากรที่สำเร็จการอบรมในแต่ละปีงบประมาณ
             </p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span className="inline-block h-3 w-3 rounded-xs bg-[#16265E]" />
+            <span>จำนวนผู้ผ่านการอบรม (คน)</span>
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {PAST_YEARS_BE.slice().reverse().map((year) => {
-            const traineeCount = stats.traineesByYear[year] || 0;
-            const dutyCount = stats.dutiesByYear[year] || 0;
-            const maxTrainee = Math.max(...Object.values(stats.traineesByYear), 10);
-            const heightPercent = Math.max(15, Math.round((traineeCount / maxTrainee) * 100));
+        {/* Scrollable multi-year chart */}
+        <div className="overflow-x-auto pb-2">
+          <div className="flex items-end gap-2.5 min-w-[760px] pt-4 h-48 px-2">
+            {PAST_YEARS_BE.slice()
+              .reverse()
+              .map((year) => {
+                const traineeCount = stats.traineesByYear[year] || 0;
+                const dutyCount = stats.dutiesByYear[year] || 0;
+                const heightPercent = maxTraineeYear > 0 ? Math.round((traineeCount / maxTraineeYear) * 100) : 0;
 
-            return (
-              <div
-                key={year}
-                className="flex flex-col items-center rounded-xl border border-gray-100 bg-gray-50/70 p-3 text-center transition-colors hover:border-blue-300"
-              >
-                <span className="text-xs font-bold text-[#16265E]">พ.ศ. {year}</span>
-
-                {/* Bar visualization */}
-                <div className="my-3 flex h-24 w-full items-end justify-center gap-1.5 px-2">
+                return (
                   <div
-                    className="w-4 rounded-t-md bg-[#16265E] transition-all"
-                    style={{ height: `${heightPercent}%` }}
-                    title={`ผู้ผ่านการอบรม: ${traineeCount} คน`}
-                  />
-                  <div
-                    className="w-4 rounded-t-md bg-[#10b981] transition-all"
-                    style={{ height: `${Math.min(100, Math.max(10, dutyCount * 12))}%` }}
-                    title={`การปฏิบัติหน้าที่: ${dutyCount} ครั้ง`}
-                  />
-                </div>
+                    key={year}
+                    className="flex-1 flex flex-col items-center group relative cursor-pointer"
+                  >
+                    {/* Tooltip on hover */}
+                    <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-900 text-white text-[10px] rounded-md px-2 py-1 pointer-events-none whitespace-nowrap z-10 shadow-md">
+                      พ.ศ. {year}: {traineeCount} คน {dutyCount > 0 ? `(${dutyCount} หน้าที่)` : ""}
+                    </div>
 
-                <div className="w-full border-t border-gray-200 pt-2 text-[11px] space-y-0.5">
-                  <p className="text-gray-600">
-                    อบรม: <strong className="text-[#16265E]">{traineeCount}</strong> คน
-                  </p>
-                  <p className="text-emerald-700">
-                    ปฏิบัติงาน: <strong>{dutyCount}</strong> ครั้ง
-                  </p>
+                    <span className="text-[10px] font-bold text-[#16265E] mb-1">
+                      {traineeCount > 0 ? traineeCount : ""}
+                    </span>
+
+                    <div className="w-full flex justify-center items-end h-28">
+                      <div
+                        className="w-full max-w-[24px] rounded-t-md bg-[#16265E] group-hover:bg-blue-600 transition-all"
+                        style={{ height: `${Math.max(traineeCount > 0 ? 8 : 2, heightPercent)}%` }}
+                      />
+                    </div>
+
+                    <span className="mt-2 text-[10px] font-medium text-gray-500 transform -rotate-45 origin-left sm:rotate-0 sm:origin-center">
+                      '{String(year).slice(2)}
+                    </span>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      </div>
+
+      {/* Two Column Section: 4 Affiliation Groups vs Course Categories */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Affiliation Groups Breakdown */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <div>
+              <h3 className="text-base font-bold text-[#16265E] flex items-center gap-2">
+                <span>🏛️ สัดส่วนตาม 4 กลุ่มหน่วยงาน</span>
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                การกระจายตัวของบุคลากรกีฬาตามโครงสร้างองค์กร
+              </p>
+            </div>
+            <span className="rounded-md bg-blue-50 px-2.5 py-1 text-xs font-bold text-[#16265E]">
+              4 กลุ่มหลัก
+            </span>
+          </div>
+
+          <div className="space-y-3 pt-1">
+            {stats.byAffiliationGroup.map((g) => {
+              const activePct = g.count > 0 ? Math.round((g.activeCount / g.count) * 100) : 0;
+              return (
+                <div
+                  key={g.name}
+                  className="rounded-xl border border-gray-100 bg-gray-50/70 p-3.5 space-y-2 hover:bg-blue-50/30 transition-colors"
+                >
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-gray-800">{g.name}</span>
+                    <span className="font-mono text-[#16265E] font-bold">
+                      {g.count.toLocaleString()} รายการ ({g.percent}%)
+                    </span>
+                  </div>
+
+                  <div className="h-2 w-full rounded-full bg-gray-200 overflow-hidden flex">
+                    <div
+                      className="bg-[#16265E] h-full"
+                      style={{ width: `${g.percent}%` }}
+                      title={`สัดส่วน: ${g.percent}%`}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-gray-500 pt-0.5">
+                    <span>ปฏิบัติงานต่อเนื่อง: <strong className="text-emerald-700">{g.activeCount}</strong> คน</span>
+                    <span className="font-semibold text-emerald-700">Active {activePct}%</span>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-center gap-6 text-xs text-gray-600">
-          <span className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-xs bg-[#16265E]" />
-            <span>จำนวนผู้ผ่านการอบรม (คน)</span>
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-xs bg-[#10b981]" />
-            <span>จำนวนครั้งที่ปฏิบัติหน้าที่จริง</span>
-          </span>
+        {/* Course Category Breakdown */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <div>
+              <h3 className="text-base font-bold text-[#16265E] flex items-center gap-2">
+                <span>🎯 สัดส่วนตามประเภทหลักสูตร</span>
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                จำแนกตามสายวิชาชีพบุคลากรกีฬา
+              </p>
+            </div>
+            <span className="rounded-md bg-purple-50 px-2.5 py-1 text-xs font-bold text-purple-700">
+              3 สายวิชาชีพ
+            </span>
+          </div>
+
+          <div className="space-y-3 pt-1">
+            {stats.byCourseCategory.map((cat) => {
+              const activePct = cat.count > 0 ? Math.round((cat.activeCount / cat.count) * 100) : 0;
+              return (
+                <div
+                  key={cat.name}
+                  className="rounded-xl border border-gray-100 bg-gray-50/70 p-3.5 space-y-2 hover:bg-purple-50/30 transition-colors"
+                >
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-gray-800">{cat.name}</span>
+                    <span className="font-mono text-purple-900 font-bold">
+                      {cat.count.toLocaleString()} รายการ ({cat.percent}%)
+                    </span>
+                  </div>
+
+                  <div className="h-2 w-full rounded-full bg-gray-200 overflow-hidden flex">
+                    <div
+                      className="bg-purple-700 h-full"
+                      style={{ width: `${cat.percent}%` }}
+                      title={`สัดส่วน: ${cat.percent}%`}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-gray-500 pt-0.5">
+                    <span>ปฏิบัติงานต่อเนื่อง: <strong className="text-emerald-700">{cat.activeCount}</strong> คน</span>
+                    <span className="font-semibold text-emerald-700">Active {activePct}%</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -292,7 +415,7 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
                   <span>ระดับประสิทธิผล: ดีเลิศ (Excellence)</span>
                 </p>
                 <p className="text-[11px] text-gray-600 leading-relaxed">
-                  ผู้รับการอบรมสามารถนำทักษะเฉพาะทางไปประยุกต์ใช้ในการฝึกซ้อม ควบคุมการแข่งขัน และบริหารทีมจนบรรลุผลสำเร็จ
+                  บุคลากรสามารถนำทักษะเฉพาะทางจากการอบรมไปปฏิบัติหน้าที่ในสมาคมกีฬา กกท. และหน่วยงานภายนอกจนบรรลุผลสัมฤทธิ์
                 </p>
               </div>
             </div>
@@ -380,23 +503,22 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
             </div>
           </div>
 
-          {/* Quotes grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-2">
             {filteredHighlights.map((q) => (
               <div
                 key={q.id}
-                className="rounded-xl border border-gray-200 bg-white p-4 shadow-2xs hover:border-blue-300 transition-colors flex flex-col justify-between"
+                className="rounded-2xl border border-gray-200 bg-white p-4 shadow-2xs hover:border-blue-300 transition-all flex flex-col justify-between"
               >
                 <div>
-                  <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#16265E] text-white text-xs font-bold">
-                        {q.traineeName.replace(/^(นาย|นางสาว|นาง|ดร\.|ร\.ต\.อ\.|พ\.จ\.ต\.|ส\.อ\.)\s*/, "").slice(0, 1)}
-                      </span>
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#16265E] text-[10px] font-bold text-white shrink-0">
+                        {q.traineeName.replace(/^(นาย|นางสาว|นาง|ดร\.|นาวาเอก|นาวาโท|นาวาตรี|เรือเอก|ร\.ต\.อ\.|พ\.จ\.ต\.|ส\.อ\.)\s*/, "").slice(0, 2)}
+                      </div>
                       <div>
-                        <p className="text-xs font-bold text-gray-900 leading-none">{q.traineeName}</p>
-                        <p className="text-[11px] text-gray-500 mt-1">
-                          {q.role} · กีฬา{q.sportsType}
+                        <p className="text-xs font-bold text-gray-900">{q.traineeName}</p>
+                        <p className="text-[11px] text-gray-500">
+                          {q.role} · {q.sportsType}
                         </p>
                       </div>
                     </div>
@@ -444,95 +566,13 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
         </div>
       </div>
 
-      {/* Two Column Section: Sports Types vs Affiliation */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Sports Type Distribution */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 shadow-xs">
-          <h3 className="text-base font-bold text-[#16265E] flex items-center justify-between">
-            <span>🏅 สัดส่วนบุคลากรจำแนกตามชนิดกีฬา</span>
-            <span className="text-xs font-normal text-gray-500">เรียงตามจำนวนมากสุด</span>
-          </h3>
-          <p className="text-xs text-gray-500 mt-0.5">
-            ชนิดกีฬาที่มีบุคลากรผ่านการอบรมและยังปฏิบัติหน้าที่ต่อเนื่อง
-          </p>
-
-          <div className="mt-4 space-y-3">
-            {stats.bySportsType.slice(0, 8).map((s) => {
-              const activePct = Math.round((s.activeCount / s.count) * 100);
-              const barWidth = Math.round((s.count / stats.totalTrainees) * 100);
-
-              return (
-                <div key={s.name} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-gray-800">กีฬา{s.name}</span>
-                    <span className="text-gray-500 font-mono">
-                      {s.count} คน (Active {activePct}%)
-                    </span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden flex">
-                    <div
-                      className="bg-[#16265E] h-full"
-                      style={{ width: `${barWidth}%` }}
-                      title={`สัดส่วน: ${barWidth}%`}
-                    />
-                    <div
-                      className="bg-emerald-500 h-full"
-                      style={{ width: `${(activePct * barWidth) / 100}%` }}
-                      title={`Active: ${activePct}%`}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Target Groups / Affiliation */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 shadow-xs">
-          <h3 className="text-base font-bold text-[#16265E] flex items-center justify-between">
-            <span>🏛️ สัดส่วนตาม 5 กลุ่มเป้าหมาย กกท.</span>
-            <span className="text-xs font-normal text-gray-500">สังกัดหน่วยงาน</span>
-          </h3>
-          <p className="text-xs text-gray-500 mt-0.5">
-            การกระจายตัวของบุคลากรในหน่วยงานกีฬาภาครัฐและเอกชน
-          </p>
-
-          <div className="mt-4 space-y-3">
-            {stats.byAffiliation.map((a) => {
-              const activePct = a.count > 0 ? Math.round((a.activeCount / a.count) * 100) : 0;
-              return (
-                <div
-                  key={a.name}
-                  className="rounded-xl border border-gray-100 bg-gray-50/60 p-3 flex items-center justify-between gap-3"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-gray-800 truncate">{a.name}</p>
-                    <div className="mt-1 h-1.5 w-full rounded-full bg-gray-200 overflow-hidden">
-                      <div
-                        className="h-full bg-emerald-500 rounded-full"
-                        style={{ width: `${activePct}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-sm font-extrabold text-[#16265E]">{a.count}</span>
-                    <span className="text-xs text-gray-500"> คน</span>
-                    <p className="text-[10px] text-emerald-700 font-semibold">Active {activePct}%</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Courses Efficiency Table */}
+      {/* Courses Efficiency Table (17 authentic courses) */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 shadow-xs">
         <h3 className="text-base font-bold text-[#16265E]">
-          📋 ประสิทธิภาพและการนำไปใช้จริงจำแนกตามหลักสูตร
+          📋 ประสิทธิภาพและการนำไปใช้จริงจำแนกตาม 17 หลักสูตรอบรม
         </h3>
         <p className="text-xs text-gray-500 mt-0.5">
-          เปรียบเทียบอัตราส่วนบุคลากรที่สำเร็จการอบรมและยังคงปฏิบัติงานจริงในแต่ละสายวิชาชีพ
+          เปรียบเทียบอัตราส่วนบุคลากรที่สำเร็จการอบรมและยังคงปฏิบัติงานจริงในแต่ละหลักสูตร
         </p>
 
         <div className="mt-4 overflow-x-auto">
@@ -541,8 +581,9 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
               <tr>
                 <th className="py-2.5 px-3">#</th>
                 <th className="py-2.5 px-3">ชื่อหลักสูตร</th>
-                <th className="py-2.5 px-3 text-center">ยอดผู้สำเร็จการอบรม (คน)</th>
-                <th className="py-2.5 px-3 text-center">ปฏิบัติหน้าที่ต่อเนื่อง (คน)</th>
+                <th className="py-2.5 px-3">ประเภทหลักสูตร</th>
+                <th className="py-2.5 px-3 text-center">ยอดผู้สำเร็จการอบรม (รายการ)</th>
+                <th className="py-2.5 px-3 text-center">ปฏิบัติหน้าที่ต่อเนื่อง (Active)</th>
                 <th className="py-2.5 px-3 text-center">อัตราการนำไปใช้จริง (Active Rate)</th>
                 <th className="py-2.5 px-3">ผลการประเมินโครงการ</th>
               </tr>
@@ -552,6 +593,7 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
                 <tr key={c.name} className="hover:bg-blue-50/40 transition-colors">
                   <td className="py-2.5 px-3 text-gray-400 font-mono">{idx + 1}</td>
                   <td className="py-2.5 px-3 font-semibold text-gray-900">{c.name}</td>
+                  <td className="py-2.5 px-3 text-gray-600">{c.category || "-"}</td>
                   <td className="py-2.5 px-3 text-center font-bold text-[#16265E]">{c.count}</td>
                   <td className="py-2.5 px-3 text-center font-bold text-emerald-700">
                     {Math.round((c.count * c.activeRate) / 100)}
