@@ -1113,15 +1113,126 @@ export function resetAlumniData() {
   emit();
 }
 
-/**
- * Returns all historical records & courses matching a citizen ID.
- * Supports cross-year personnel tracking passport.
- */
-export function getTraineePassport(idCard: string, trainees: HistoricalTrainee[]) {
-  const digits = idCard.replace(/\D/g, "");
-  if (!digits) return undefined;
+export function normalizeThaiName(name: string): string {
+  if (!name) return "";
+  return name
+    .replace(/^(นาย|นางสาว|นาง|ดร\.|อาจารย์|โค้ช|ว่าที่\s*ร\.ต\.|ร\.ต\.อ\.|พ\.จ\.ต\.|ส\.อ\.|พ\.ต\.ท\.|พ\.ต\.อ\.)\s*/i, "")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
 
-  const records = trainees.filter((t) => t.idCard.replace(/\D/g, "") === digits);
+export interface TraineeSearchResult {
+  uniqueKey: string;
+  name: string;
+  sportsType: string;
+  affiliation: string;
+  records: HistoricalTrainee[];
+  latestYearBE: number;
+  idCard: string;
+  activeDutyCount: number;
+}
+
+/**
+ * Flexible search by Name, Citizen ID, or Certificate Number.
+ * Groups multiple courses by person and handles legacy records without Citizen ID.
+ */
+export function searchTrainees(query: string, trainees: HistoricalTrainee[]): TraineeSearchResult[] {
+  const q = query.trim();
+  if (!q) return [];
+
+  const digits = q.replace(/\D/g, "");
+  const normQuery = normalizeThaiName(q);
+
+  // Group trainees by unique person (idCard if 13 digits, else by normalized name)
+  const personMap = new Map<string, HistoricalTrainee[]>();
+
+  for (const t of trainees) {
+    const cleanId = t.idCard ? t.idCard.replace(/\D/g, "") : "";
+    const personKey = cleanId.length === 13 ? cleanId : `name_${normalizeThaiName(t.name)}_${t.sportsType}`;
+    if (!personMap.has(personKey)) {
+      personMap.set(personKey, []);
+    }
+    personMap.get(personKey)!.push(t);
+  }
+
+  const results: TraineeSearchResult[] = [];
+
+  for (const [, records] of personMap.entries()) {
+    const sorted = [...records].sort((a, b) => b.yearBE - a.yearBE);
+    const primary = sorted[0];
+
+    let matches = false;
+
+    // Match 1: 13-digit ID or partial ID (min 6 digits)
+    const cleanId = primary.idCard ? primary.idCard.replace(/\D/g, "") : "";
+    if (digits && digits.length >= 6 && cleanId.includes(digits)) {
+      matches = true;
+    }
+
+    // Match 2: Name match (supports partial name or normalized without prefix)
+    const normName = normalizeThaiName(primary.name);
+    if (normQuery.length >= 2 && (normName.includes(normQuery) || normQuery.includes(normName) || primary.name.includes(q))) {
+      matches = true;
+    }
+
+    // Match 3: certNo match
+    if (records.some((r) => r.certNo && r.certNo.toLowerCase().includes(q.toLowerCase()))) {
+      matches = true;
+    }
+
+    if (matches) {
+      const dutyCount = records.reduce((acc, r) => acc + (r.duties?.length || 0), 0);
+      results.push({
+        uniqueKey: cleanId || primary.id,
+        name: primary.name,
+        sportsType: primary.sportsType,
+        affiliation: primary.affiliation,
+        records: sorted,
+        latestYearBE: primary.yearBE,
+        idCard: primary.idCard,
+        activeDutyCount: dutyCount,
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Returns all historical records & courses matching an identifier (Citizen ID, ID, or Name).
+ * Supports legacy archives without citizen ID.
+ */
+export function getTraineePassport(identifier: string, trainees: HistoricalTrainee[]) {
+  if (!identifier) return undefined;
+  const raw = identifier.trim();
+  const digits = raw.replace(/\D/g, "");
+
+  // 1. If 13 digits, match by ID card
+  let records = digits.length === 13
+    ? trainees.filter((t) => t.idCard && t.idCard.replace(/\D/g, "") === digits)
+    : [];
+
+  // 2. If not found, match by primary ID or exact idCard string
+  if (records.length === 0) {
+    records = trainees.filter((t) => t.id === raw || t.idCard === raw);
+  }
+
+  // 3. Match by certNo
+  if (records.length === 0) {
+    records = trainees.filter((t) => t.certNo && t.certNo.toLowerCase() === raw.toLowerCase());
+  }
+
+  // 4. Match by normalized name
+  if (records.length === 0) {
+    const normSearch = normalizeThaiName(raw);
+    if (normSearch.length >= 2) {
+      records = trainees.filter((t) => {
+        const normTrainee = normalizeThaiName(t.name);
+        return normTrainee === normSearch || normTrainee.includes(normSearch) || t.name.includes(raw);
+      });
+    }
+  }
+
   if (records.length === 0) return undefined;
 
   // Primary profile is the most recent record

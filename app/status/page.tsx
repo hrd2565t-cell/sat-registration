@@ -252,20 +252,28 @@ function StatusContent() {
               radius="lg"
               className="w-full shadow-[0_1px_4px_rgba(16,24,40,0.08)]"
             >
-              <div className="px-4 py-8 text-center">
+              <div className="px-4 py-8 text-center space-y-2">
                 <p className="text-[13px] font-semibold text-[#111827]">
-                  ไม่พบข้อมูลการสมัครสำหรับเลขบัตรนี้
+                  ไม่พบข้อมูลการสมัครในรอบปัจจุบันสำหรับเลขบัตรนี้
                 </p>
-                <p className="mt-1 text-[11px] leading-relaxed text-[#6b7280]">
-                  กรุณาตรวจสอบเลขบัตรประชาชนอีกครั้ง
-                  หรือเริ่มสมัครใหม่หากยังไม่เคยส่งข้อมูล
+                <p className="text-[11px] leading-relaxed text-[#6b7280] max-w-md mx-auto">
+                  หากท่านเป็นผู้ผ่านการอบรมในปีก่อนๆ หรือไม่มีการบันทึกเลขบัตรประชาชนไว้ในอดีต ท่านสามารถค้นหาประวัติจากชื่อ-นามสกุลได้
                 </p>
-                <Link
-                  href="/"
-                  className="mt-3 inline-flex h-8 items-center rounded-[5px] bg-[#1e3a8a] px-3.5 text-[11px] font-semibold text-white transition-colors hover:bg-[#1e40af]"
-                >
-                  เลือกหลักสูตรและสมัคร
-                </Link>
+                <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+                  <Link
+                    href="/alumni"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-[5px] bg-[#16265E] px-3.5 text-[11px] font-semibold text-white transition-colors hover:bg-[#1e3a8a]"
+                  >
+                    <span>🔍</span>
+                    <span>ค้นหาจากชื่อ-นามสกุลในทำเนียบย้อนหลัง</span>
+                  </Link>
+                  <Link
+                    href="/"
+                    className="inline-flex h-8 items-center rounded-[5px] border border-gray-300 bg-white px-3.5 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                  >
+                    เลือกหลักสูตรและสมัครใหม่
+                  </Link>
+                </div>
               </div>
             </Card>
           )}

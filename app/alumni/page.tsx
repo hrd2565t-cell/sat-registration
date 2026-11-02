@@ -4,7 +4,7 @@ import { useState, Suspense } from "react";
 import Link from "next/link";
 import { Header } from "@/components/layout/header";
 import { useIsAdmin } from "@/lib/admin-auth";
-import { useAlumniStore, type HistoricalTrainee } from "@/lib/alumni-store";
+import { useAlumniStore, searchTrainees, type HistoricalTrainee, type TraineeSearchResult } from "@/lib/alumni-store";
 import { AlumniDirectoryTab } from "@/components/alumni/alumni-directory-tab";
 import { DutyTrackingTab } from "@/components/alumni/duty-tracking-tab";
 import { ProjectEvaluationTab } from "@/components/alumni/project-evaluation-tab";
@@ -38,24 +38,36 @@ function AlumniContent() {
   const [dutyTargetTrainee, setDutyTargetTrainee] = useState<HistoricalTrainee | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
 
-  // Quick ID card verification search
+  // Smart unified search (Name, ID Card, or Cert No)
   const [quickVerifyId, setQuickVerifyId] = useState("");
   const [quickVerifyError, setQuickVerifyError] = useState("");
+  const [searchResults, setSearchResults] = useState<TraineeSearchResult[] | null>(null);
 
   const handleQuickVerify = (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = quickVerifyId.replace(/\D/g, "");
-    if (clean.length !== 13) {
-      setQuickVerifyError("กรุณากรอกเลขประจำตัวประชาชน 13 หลักให้ถูกต้อง");
+    const query = quickVerifyId.trim();
+    if (!query) {
+      setQuickVerifyError("กรุณากรอกชื่อ-นามสกุล, เลขบัตรประชาชน หรือเลขวุฒิบัตร");
+      setSearchResults(null);
       return;
     }
-    const found = trainees.some((t) => t.idCard.replace(/\D/g, "") === clean);
-    if (!found) {
-      setQuickVerifyError("ไม่พบข้อมูลผู้ผ่านการอบรมที่ตรงกับเลขบัตรประชาชนนี้ในระบบ");
+
+    const matches = searchTrainees(query, trainees);
+    if (matches.length === 0) {
+      setQuickVerifyError(`ไม่พบข้อมูลบุคลากรที่ตรงกับ "${query}" (กรุณาตรวจสอบการสะกดชื่อ หรือค้นหาด้วยเลขวุฒิบัตร)`);
+      setSearchResults(null);
       return;
     }
+
     setQuickVerifyError("");
-    setPassportIdCard(clean);
+    if (matches.length === 1) {
+      // Exactly 1 person found -> open passport directly!
+      setPassportIdCard(matches[0].idCard || matches[0].uniqueKey);
+      setSearchResults(null);
+    } else {
+      // Multiple matches -> show candidates list
+      setSearchResults(matches);
+    }
   };
 
   return (
@@ -144,8 +156,7 @@ function AlumniContent() {
               <div className="flex items-center gap-2 rounded-xl bg-white/10 p-1.5 backdrop-blur-xs border border-white/20">
                 <input
                   type="text"
-                  maxLength={17}
-                  placeholder="กรอกเลขบัตรประชาชน 13 หลัก..."
+                  placeholder="พิมพ์ชื่อ-นามสกุล, เลขบัตร ปชช. หรือเลขวุฒิบัตร..."
                   value={quickVerifyId}
                   onChange={(e) => {
                     setQuickVerifyId(e.target.value);
@@ -155,7 +166,7 @@ function AlumniContent() {
                 />
                 <button
                   type="submit"
-                  className="shrink-0 rounded-lg bg-[#f59e0b] px-4 py-2 text-xs sm:text-sm font-bold text-[#1e1b4b] hover:bg-[#fbbf24] transition-colors shadow-xs"
+                  className="shrink-0 rounded-lg bg-[#f59e0b] px-4 py-2 text-xs sm:text-sm font-bold text-[#1e1b4b] hover:bg-[#fbbf24] transition-colors shadow-xs cursor-pointer"
                 >
                   ค้นหาพาสปอร์ต
                 </button>
@@ -165,6 +176,71 @@ function AlumniContent() {
               )}
             </form>
           </div>
+
+          {/* Multiple Candidates Selection Dropdown / Drawer */}
+          {searchResults && searchResults.length > 1 && (
+            <div className="mt-5 rounded-2xl bg-white p-4 text-gray-900 shadow-xl border border-blue-200 animate-in fade-in space-y-3">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#16265E] text-[10px] font-bold text-white">
+                    {searchResults.length}
+                  </span>
+                  <h4 className="text-xs font-bold text-[#16265E]">
+                    พบข้อมูลบุคลากร {searchResults.length} ท่านที่ตรงกับคำค้นหา (โปรดเลือกบุคลากรที่ต้องการดู)
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSearchResults(null)}
+                  className="rounded-lg p-1 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors cursor-pointer"
+                >
+                  ✕ ปิด
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto">
+                {searchResults.map((person) => (
+                  <div
+                    key={person.uniqueKey}
+                    className="rounded-xl border border-gray-200 bg-gray-50/70 p-3 hover:bg-blue-50/50 hover:border-blue-300 transition-colors flex items-center justify-between gap-3 shadow-2xs"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-gray-900 truncate">{person.name}</p>
+                      <p className="text-[11px] text-gray-600 mt-0.5">
+                        กีฬา{person.sportsType} · {person.affiliation}
+                      </p>
+                      <p className="text-[10px] text-gray-400 font-mono mt-0.5">
+                        {person.records.length} หลักสูตรรับรอง (ปีล่าสุด พ.ศ. {person.latestYearBE})
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPassportIdCard(person.idCard || person.uniqueKey);
+                          setSearchResults(null);
+                        }}
+                        className="rounded-lg bg-[#16265E] px-3 py-1 text-[11px] font-semibold text-white hover:bg-[#1e3a8a] transition-colors cursor-pointer"
+                      >
+                        🪪 พาสปอร์ต
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDigitalPassIdCard(person.idCard || person.uniqueKey);
+                          setSearchResults(null);
+                        }}
+                        className="rounded-lg bg-amber-100 px-3 py-1 text-[11px] font-bold text-amber-900 border border-amber-300 hover:bg-amber-200 transition-colors cursor-pointer"
+                      >
+                        📱 บัตรดิจิทัล
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Main Tab Controls */}

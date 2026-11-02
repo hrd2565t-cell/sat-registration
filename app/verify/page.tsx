@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
-import { useAlumniStore, getTraineePassport, type HistoricalTrainee } from "@/lib/alumni-store";
+import { useAlumniStore, getTraineePassport, searchTrainees, type HistoricalTrainee, type TraineeSearchResult } from "@/lib/alumni-store";
 
 export default function VerifyPage() {
   return (
@@ -26,7 +26,12 @@ function VerifyContent() {
   const router = useRouter();
   const { trainees } = useAlumniStore();
 
-  const queryIdCard = searchParams.get("idCard") || searchParams.get("id") || "";
+  const searchQuery =
+    searchParams.get("q") ||
+    searchParams.get("name") ||
+    searchParams.get("idCard") ||
+    searchParams.get("id") ||
+    "";
 
   const [activeMode, setActiveMode] = useState<"camera" | "upload" | "manual">("camera");
   const [manualInput, setManualInput] = useState("");
@@ -37,9 +42,18 @@ function VerifyContent() {
   const scannerContainerId = "sat-qr-reader";
   const html5QrCodeRef = useRef<any>(null);
 
-  // Lookup passport if queryIdCard is given
-  const cleanId = queryIdCard.replace(/\D/g, "");
-  const passport = cleanId ? getTraineePassport(cleanId, trainees) : null;
+  // Flexible candidate search (by Name, ID card, or Cert No)
+  const candidateMatches: TraineeSearchResult[] = searchQuery
+    ? searchTrainees(searchQuery, trainees)
+    : [];
+
+  // If exactly 1 candidate, or direct ID lookup, get single passport
+  const targetId =
+    candidateMatches.length === 1
+      ? candidateMatches[0].idCard || candidateMatches[0].uniqueKey
+      : searchQuery;
+
+  const passport = targetId ? getTraineePassport(targetId, trainees) : null;
 
   // Cleanup scanner on unmount or mode change
   const stopScanner = async () => {
@@ -65,7 +79,7 @@ function VerifyContent() {
 
   // Initialize camera scanner when activeMode === 'camera' and not showing a verified dossier
   useEffect(() => {
-    if (queryIdCard) {
+    if (searchQuery) {
       stopScanner();
       return;
     }
@@ -129,7 +143,7 @@ function VerifyContent() {
       clearTimeout(timer);
       stopScanner();
     };
-  }, [activeMode, queryIdCard]);
+  }, [activeMode, searchQuery]);
 
   // Handle scanned text
   const handleQrDecoded = (decodedText: string) => {
@@ -178,15 +192,15 @@ function VerifyContent() {
     }
   };
 
-  // Handle manual submit
+  // Handle manual submit (Name, Citizen ID, or Cert No)
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = manualInput.replace(/\D/g, "");
-    if (!clean) {
-      setScannerError("กรุณากรอกเลขประจำตัวประชาชน 13 หลัก หรือเลขวุฒิบัตร");
+    const query = manualInput.trim();
+    if (!query) {
+      setScannerError("กรุณากรอกชื่อ-นามสกุล, เลขประจำตัวประชาชน หรือเลขวุฒิบัตร");
       return;
     }
-    router.push(`/verify?idCard=${encodeURIComponent(clean)}`);
+    router.push(`/verify?q=${encodeURIComponent(query)}`);
   };
 
   // Reset to scan another person
@@ -249,8 +263,61 @@ function VerifyContent() {
         </div>
 
         {/* ================= IF HAS QUERY ID: SHOW OFFICIAL DOSSIER ================= */}
-        {queryIdCard ? (
-          passport ? (
+        {searchQuery ? (
+          candidateMatches.length > 1 ? (
+            /* Multiple Candidates Selection for Organizers */
+            <div className="rounded-3xl border border-blue-200 bg-white p-5 sm:p-7 shadow-lg space-y-4 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div>
+                  <span className="rounded-md bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-[#16265E] uppercase">
+                    CANDIDATE SELECTION
+                  </span>
+                  <h2 className="text-base sm:text-lg font-black text-gray-900 mt-1">
+                    พบข้อมูลบุคลากร {candidateMatches.length} ท่านที่ตรงกับ &ldquo;{searchQuery}&rdquo;
+                  </h2>
+                  <p className="text-xs text-gray-500">
+                    โปรดเลือกบุคคลที่ต้องการตรวจสอบคุณวุฒิและประวัติการรับรองหน้างาน
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleScanNext}
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 cursor-pointer"
+                >
+                  ✕ ค้นหาใหม่
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {candidateMatches.map((person) => (
+                  <div
+                    key={person.uniqueKey}
+                    className="rounded-2xl border border-gray-200 bg-gray-50/70 p-4 hover:bg-blue-50/50 hover:border-blue-300 transition-colors flex items-center justify-between gap-3 shadow-2xs"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-gray-900 truncate">{person.name}</p>
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        🏅 กีฬา{person.sportsType} · {person.affiliation}
+                      </p>
+                      <p className="text-[11px] text-gray-400 mt-1 font-mono">
+                        {person.records.length} หลักสูตรรับรอง (ปีล่าสุด พ.ศ. {person.latestYearBE})
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        router.push(`/verify?idCard=${encodeURIComponent(person.idCard || person.uniqueKey)}`);
+                      }}
+                      className="shrink-0 rounded-xl bg-[#16265E] px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#1e3a8a] transition-colors cursor-pointer"
+                    >
+                      🛡️ ตรวจสอบ
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : passport ? (
             <div className="rounded-3xl border border-emerald-300 bg-white p-5 sm:p-7 shadow-lg space-y-5 animate-in fade-in zoom-in-95 duration-200">
               {/* Official Verified Banner */}
               <div className="rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-600 to-emerald-700 p-4 text-white shadow-md flex items-center justify-between gap-3">
@@ -442,11 +509,11 @@ function VerifyContent() {
                   ไม่พบข้อมูลบุคลากรในสารบบ กกท.
                 </h3>
                 <p className="text-xs text-gray-500 max-w-md mx-auto">
-                  ไม่พบประวัติวุฒิบัตรหรือข้อมูลผู้ผ่านการอบรมสำหรับรหัส:{" "}
-                  <strong className="text-red-700">{queryIdCard}</strong>
+                  ไม่พบประวัติวุฒิบัตรหรือข้อมูลผู้ผ่านการอบรมสำหรับ:{" "}
+                  <strong className="text-red-700">&ldquo;{searchQuery}&rdquo;</strong>
                 </p>
                 <p className="text-[11px] text-gray-400">
-                  กรุณาตรวจสอบความถูกต้องของ QR Code หรือพิมพ์ค้นหาด้วยเลขประจำตัวประชาชน 13 หลัก
+                  กรุณาตรวจสอบความถูกต้องของชื่อ-นามสกุล, QR Code หรือค้นหาด้วยเลขประจำตัวประชาชน 13 หลัก
                 </p>
               </div>
 
@@ -514,7 +581,7 @@ function VerifyContent() {
                 }`}
               >
                 <span>⌨️</span>
-                <span>กรอกเลขบัตร</span>
+                <span>ค้นหาชื่อ / เลขบัตร</span>
               </button>
             </div>
 
@@ -543,7 +610,7 @@ function VerifyContent() {
                 <div className="text-center text-xs text-gray-500">
                   <p>ระบบจะตรวจจับ QR Code โดยอัตโนมัติเมื่อวางอยู่ในกรอบ</p>
                   <p className="text-[11px] text-gray-400 mt-0.5">
-                    หากอุปกรณ์ไม่อนุญาตให้เปิดกล้อง สามารถเลือกแท็บ "กรอกเลขบัตร" หรือ "อัปโหลดภาพ QR" ได้
+                    หากอุปกรณ์ไม่อนุญาตให้เปิดกล้อง สามารถเลือกแท็บ &ldquo;ค้นหาชื่อ / เลขบัตร&rdquo; หรือ &ldquo;อัปโหลดภาพ QR&rdquo; ได้
                   </p>
                 </div>
               </div>
@@ -577,26 +644,25 @@ function VerifyContent() {
               </div>
             )}
 
-            {/* TAB 3: MANUAL INPUT FALLBACK */}
+            {/* TAB 3: MANUAL INPUT FALLBACK (NAME, ID, OR CERT NO) */}
             {activeMode === "manual" && (
               <form onSubmit={handleManualSearch} className="py-4 space-y-4 max-w-md mx-auto">
                 <div className="text-center">
                   <h3 className="text-sm font-bold text-gray-900">
-                    ค้นหาด้วยเลขประจำตัวประชาชน 13 หลัก
+                    ค้นหาด้วยชื่อ-นามสกุล, เลขบัตรประชาชน หรือเลขวุฒิบัตร
                   </h3>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    ใช้ในกรณีกล้องหน้างานขัดข้อง หรือไม่มีภาพ QR Code
+                    รองรับทั้งบุคลากรปัจจุบันและข้อมูลย้อนหลังในอดีตที่ไม่ได้บันทึกเลขบัตร ปชช.
                   </p>
                 </div>
 
                 <div>
                   <input
                     type="text"
-                    maxLength={17}
-                    placeholder="กรอกเลขประจำตัวประชาชน 13 หลัก..."
+                    placeholder="พิมพ์ชื่อ, นามสกุล, เลขบัตร 13 หลัก หรือเลขวุฒิบัตร..."
                     value={manualInput}
                     onChange={(e) => setManualInput(e.target.value)}
-                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-mono text-center focus:border-[#16265E] focus:outline-hidden"
+                    className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-center focus:border-[#16265E] focus:outline-hidden"
                   />
                 </div>
 
