@@ -51,7 +51,7 @@ export interface HistoricalTrainee {
   courseId?: number;
   courseTitle: string;
   batch: string; // e.g. "รุ่นที่ 1/2566"
-  certNo: string; // e.g. "กกท.-ผฝ.66/001"
+  certNo?: string; // Optional (e.g. "กกท.-ผฝ.66/001")
   passedDate: string; // e.g. "2023-08-20"
   status: "active" | "inactive" | "pending_verification";
   avatarUrl?: string;
@@ -1175,11 +1175,6 @@ export function searchTrainees(query: string, trainees: HistoricalTrainee[]): Tr
       matches = true;
     }
 
-    // Match 3: certNo match
-    if (records.some((r) => r.certNo && r.certNo.toLowerCase().includes(q.toLowerCase()))) {
-      matches = true;
-    }
-
     if (matches) {
       const dutyCount = records.reduce((acc, r) => acc + (r.duties?.length || 0), 0);
       results.push({
@@ -1217,12 +1212,7 @@ export function getTraineePassport(identifier: string, trainees: HistoricalTrain
     records = trainees.filter((t) => t.id === raw || t.idCard === raw);
   }
 
-  // 3. Match by certNo
-  if (records.length === 0) {
-    records = trainees.filter((t) => t.certNo && t.certNo.toLowerCase() === raw.toLowerCase());
-  }
-
-  // 4. Match by normalized name
+  // 3. Match by normalized name
   if (records.length === 0) {
     const normSearch = normalizeThaiName(raw);
     if (normSearch.length >= 2) {

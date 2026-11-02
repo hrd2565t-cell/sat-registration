@@ -47,14 +47,14 @@ function AlumniContent() {
     e.preventDefault();
     const query = quickVerifyId.trim();
     if (!query) {
-      setQuickVerifyError("กรุณากรอกชื่อ-นามสกุล, เลขบัตรประชาชน หรือเลขวุฒิบัตร");
+      setQuickVerifyError("กรุณากรอกชื่อ-นามสกุล หรือเลขประจำตัวประชาชน");
       setSearchResults(null);
       return;
     }
 
     const matches = searchTrainees(query, trainees);
     if (matches.length === 0) {
-      setQuickVerifyError(`ไม่พบข้อมูลบุคลากรที่ตรงกับ "${query}" (กรุณาตรวจสอบการสะกดชื่อ หรือค้นหาด้วยเลขวุฒิบัตร)`);
+      setQuickVerifyError(`ไม่พบข้อมูลบุคลากรที่ตรงกับ "${query}" (กรุณาตรวจสอบการสะกดชื่อ หรือเลขประจำตัวประชาชน)`);
       setSearchResults(null);
       return;
     }
@@ -156,7 +156,7 @@ function AlumniContent() {
               <div className="flex items-center gap-2 rounded-xl bg-white/10 p-1.5 backdrop-blur-xs border border-white/20">
                 <input
                   type="text"
-                  placeholder="พิมพ์ชื่อ-นามสกุล, เลขบัตร ปชช. หรือเลขวุฒิบัตร..."
+                  placeholder="พิมพ์ชื่อ-นามสกุล หรือเลขประจำตัวประชาชน..."
                   value={quickVerifyId}
                   onChange={(e) => {
                     setQuickVerifyId(e.target.value);

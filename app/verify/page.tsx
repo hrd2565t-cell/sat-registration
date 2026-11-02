@@ -192,12 +192,12 @@ function VerifyContent() {
     }
   };
 
-  // Handle manual submit (Name, Citizen ID, or Cert No)
+  // Handle manual submit (Name or Citizen ID)
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const query = manualInput.trim();
     if (!query) {
-      setScannerError("กรุณากรอกชื่อ-นามสกุล, เลขประจำตัวประชาชน หรือเลขวุฒิบัตร");
+      setScannerError("กรุณากรอกชื่อ-นามสกุล หรือเลขประจำตัวประชาชน");
       return;
     }
     router.push(`/verify?q=${encodeURIComponent(query)}`);
@@ -405,18 +405,14 @@ function VerifyContent() {
                         </span>
                       </div>
 
-                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-1 text-[11px] text-gray-600 pt-1 border-t border-gray-100">
+                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px] text-gray-600 pt-1 border-t border-gray-100">
                         <div>
-                          <span className="text-gray-400">เลขที่วุฒิบัตร: </span>
-                          <strong className="text-gray-800">{cert.certNo || "-"}</strong>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">รุ่น / ปี: </span>
-                          <span>{cert.batch} (พ.ศ. {cert.yearBE})</span>
+                          <span className="text-gray-400">รุ่น / ปีการอบรม: </span>
+                          <span className="font-semibold text-gray-800">{cert.batch} (พ.ศ. {cert.yearBE})</span>
                         </div>
                         <div>
                           <span className="text-gray-400">วันที่สำเร็จ: </span>
-                          <span>{cert.passedDate || "-"}</span>
+                          <span className="font-semibold text-gray-800">{cert.passedDate || "-"}</span>
                         </div>
                       </div>
                     </div>
@@ -644,22 +640,22 @@ function VerifyContent() {
               </div>
             )}
 
-            {/* TAB 3: MANUAL INPUT FALLBACK (NAME, ID, OR CERT NO) */}
+            {/* TAB 3: MANUAL INPUT FALLBACK (NAME OR ID) */}
             {activeMode === "manual" && (
               <form onSubmit={handleManualSearch} className="py-4 space-y-4 max-w-md mx-auto">
                 <div className="text-center">
                   <h3 className="text-sm font-bold text-gray-900">
-                    ค้นหาด้วยชื่อ-นามสกุล, เลขบัตรประชาชน หรือเลขวุฒิบัตร
+                    ค้นหาด้วยชื่อ-นามสกุล หรือเลขประจำตัวประชาชน
                   </h3>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    รองรับทั้งบุคลากรปัจจุบันและข้อมูลย้อนหลังในอดีตที่ไม่ได้บันทึกเลขบัตร ปชช.
+                    รองรับทั้งบุคลากรปัจจุบันและข้อมูลย้อนหลังในอดีต
                   </p>
                 </div>
 
                 <div>
                   <input
                     type="text"
-                    placeholder="พิมพ์ชื่อ, นามสกุล, เลขบัตร 13 หลัก หรือเลขวุฒิบัตร..."
+                    placeholder="พิมพ์ชื่อ, นามสกุล หรือเลขประจำตัวประชาชน 13 หลัก..."
                     value={manualInput}
                     onChange={(e) => setManualInput(e.target.value)}
                     className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm text-center focus:border-[#16265E] focus:outline-hidden"

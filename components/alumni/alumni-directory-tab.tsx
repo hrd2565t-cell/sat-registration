@@ -35,11 +35,10 @@ export function AlumniDirectoryTab({
         const query = search.trim().toLowerCase();
         const cleanQuery = query.replace(/\D/g, "");
         const matchName = t.name.toLowerCase().includes(query);
-        const matchCert = t.certNo?.toLowerCase().includes(query);
         const matchSport = t.sportsType?.toLowerCase().includes(query);
         const matchOrg = t.affiliation?.toLowerCase().includes(query);
         const matchId = cleanQuery && t.idCard.replace(/\D/g, "").includes(cleanQuery);
-        if (!matchName && !matchCert && !matchSport && !matchOrg && !matchId) {
+        if (!matchName && !matchSport && !matchOrg && !matchId) {
           return false;
         }
       }
@@ -81,7 +80,6 @@ export function AlumniDirectoryTab({
       "ปี พ.ศ. ที่อบรม": t.yearBE,
       หลักสูตรที่สำเร็จ: t.courseTitle,
       รุ่นที่: t.batch,
-      เลขที่วุฒิบัตร: t.certNo,
       วันที่สำเร็จการอบรม: t.passedDate,
       "สถานะการปฏิบัติงาน":
         t.status === "active"
@@ -113,7 +111,7 @@ export function AlumniDirectoryTab({
             </span>
             <input
               type="text"
-              placeholder="ค้นหาชื่อ-สกุล, เลขบัตร ปชช., เลขที่วุฒิบัตร, ชนิดกีฬา..."
+              placeholder="ค้นหาชื่อ-สกุล, เลขบัตร ปชช., ชนิดกีฬา, สังกัด..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-xl border border-gray-300 bg-gray-50/60 py-2.5 pl-10 pr-4 text-xs sm:text-sm transition-colors focus:border-[#16265E] focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#16265E]"
@@ -266,7 +264,6 @@ export function AlumniDirectoryTab({
                 <th className="py-3 px-3.5 font-bold">ชนิดกีฬา</th>
                 <th className="py-3 px-3.5 font-bold">หลักสูตร / รุ่นที่</th>
                 <th className="py-3 px-3.5 font-bold">ปี พ.ศ.</th>
-                <th className="py-3 px-3.5 font-bold">เลขที่วุฒิบัตร</th>
                 <th className="py-3 px-3.5 font-bold">สถานะการทำหน้าที่</th>
                 <th className="py-3 px-3.5 font-bold text-center">จัดการ</th>
               </tr>
@@ -274,7 +271,7 @@ export function AlumniDirectoryTab({
             <tbody className="divide-y divide-gray-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-gray-500">
+                  <td colSpan={7} className="py-12 text-center text-gray-500">
                     <span className="text-3xl">🔍</span>
                     <p className="mt-2 text-sm font-semibold">ไม่พบข้อมูลที่ตรงกับเงื่อนไขการค้นหา</p>
                     <p className="text-xs text-gray-400 mt-0.5">ลองปรับคำค้นหา หรือรีเซ็ตตัวกรองด้านบน</p>
@@ -322,9 +319,6 @@ export function AlumniDirectoryTab({
                       </td>
                       <td className="py-3 px-3.5">
                         <span className="font-bold text-[#16265E]">{t.yearBE}</span>
-                      </td>
-                      <td className="py-3 px-3.5 font-mono text-gray-600">
-                        {t.certNo || "-"}
                       </td>
                       <td className="py-3 px-3.5">
                         {t.status === "active" ? (

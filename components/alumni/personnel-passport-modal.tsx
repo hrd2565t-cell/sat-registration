@@ -192,11 +192,7 @@ export function PersonnelPassportModal({
                     </span>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-600">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-gray-400">เลขที่วุฒิบัตร:</span>
-                      <span className="font-semibold text-gray-800">{cert.certNo || "-"}</span>
-                    </div>
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-gray-600">
                     <div className="flex items-center gap-1.5">
                       <span className="text-gray-400">วันที่สำเร็จการอบรม:</span>
                       <span className="font-medium text-gray-800">{cert.passedDate || "-"}</span>

@@ -95,9 +95,6 @@ export function DigitalPassModal({
       ? `${cleanId.slice(0, 1)}-${cleanId.slice(1, 5)}-XXXXX-${cleanId.slice(10, 12)}-${cleanId.slice(12)}`
       : primary.idCard;
 
-  const latestCert = records[0];
-  const certNumber = latestCert?.certNo || `SAT-${primary.yearBE}-${cleanId.slice(-4)}`;
-
   // Save Card as high-resolution PNG image for phone gallery / album
   const handleSaveImage = async () => {
     if (!cardRef.current) return;
@@ -251,7 +248,7 @@ export function DigitalPassModal({
               สแกนตรวจสอบคุณวุฒิและสถานะหน้างาน
             </p>
             <p className="text-[9px] text-gray-500">
-              เลขทะเบียน: <span className="font-mono font-bold text-gray-700">{certNumber}</span>
+              รับรองโดย <span className="font-semibold text-gray-700">การกีฬาแห่งประเทศไทย (กกท.)</span>
             </p>
           </div>
 

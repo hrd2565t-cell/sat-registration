@@ -33,7 +33,6 @@ export function BulkImportModal({ onClose, onImport }: BulkImportModalProps) {
         "ปี พ.ศ. ที่อบรม": 2568,
         ชื่อหลักสูตร: "หลักสูตร ผู้ฝึกสอนกีฬาระดับชาติ",
         รุ่นที่: "รุ่นที่ 1/2568",
-        เลขที่วุฒิบัตร: "กกท.-ผฝ.68/099",
         วันที่สำเร็จการอบรม: "2025-03-20",
         สถานะ: "active",
       },
@@ -48,7 +47,6 @@ export function BulkImportModal({ onClose, onImport }: BulkImportModalProps) {
         "ปี พ.ศ. ที่อบรม": 2568,
         ชื่อหลักสูตร: "หลักสูตร ผู้ตัดสินกีฬาอาชีพ",
         รุ่นที่: "รุ่นที่ 1/2568",
-        เลขที่วุฒิบัตร: "กกท.-ผต.68/055",
         วันที่สำเร็จการอบรม: "2025-04-15",
         สถานะ: "active",
       },
@@ -309,7 +307,6 @@ export function BulkImportModal({ onClose, onImport }: BulkImportModalProps) {
                       <th className="py-2 px-3">ชนิดกีฬา</th>
                       <th className="py-2 px-3">ปี พ.ศ.</th>
                       <th className="py-2 px-3">หลักสูตร</th>
-                      <th className="py-2 px-3">เลขที่วุฒิบัตร</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -321,7 +318,6 @@ export function BulkImportModal({ onClose, onImport }: BulkImportModalProps) {
                         <td className="py-2 px-3 text-gray-600">{r.sportsType}</td>
                         <td className="py-2 px-3 font-bold text-[#16265E]">{r.yearBE}</td>
                         <td className="py-2 px-3 text-gray-700 max-w-xs truncate">{r.courseTitle}</td>
-                        <td className="py-2 px-3 text-gray-600">{r.certNo || "-"}</td>
                       </tr>
                     ))}
                   </tbody>
