@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePendingCount } from "@/lib/applications-store";
 
-export type AdminNavKey = "dashboard" | "courses" | "review" | "settings";
+export type AdminNavKey = "dashboard" | "courses" | "review" | "alumni" | "settings";
 
 const navItems: {
   key: AdminNavKey;
@@ -15,6 +15,7 @@ const navItems: {
   { key: "dashboard", label: "แดชบอร์ด", href: "/admin" },
   { key: "courses", label: "จัดการหลักสูตร", href: "/admin/courses" },
   { key: "review", label: "ตรวจสอบคุณสมบัติ", href: "/admin/review" },
+  { key: "alumni", label: "ทำเนียบ & ประเมิน", href: "/alumni" },
   { key: "settings", label: "ตั้งค่าระบบ", href: "/admin/settings" },
 ];
 
@@ -101,9 +102,26 @@ function SettingsIcon() {
   );
 }
 
+function AlumniIcon() {
+  return (
+    <svg
+      className="h-3.5 w-3.5 shrink-0"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      <path strokeWidth="1.8" d="M12 14l9-5-9-5-9 5 9 5z" />
+      <path strokeWidth="1.8" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+      <path strokeLinecap="round" strokeWidth="1.8" d="M21 12v6" />
+    </svg>
+  );
+}
+
 function NavIcon({ itemKey }: { itemKey: (typeof navItems)[number]["key"] }) {
   if (itemKey === "courses") return <CalendarIcon />;
   if (itemKey === "review") return <DocumentIcon />;
+  if (itemKey === "alumni") return <AlumniIcon />;
   if (itemKey === "settings") return <SettingsIcon />;
   return null;
 }

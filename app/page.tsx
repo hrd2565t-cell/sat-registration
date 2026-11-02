@@ -53,6 +53,13 @@ function CourseCatalogContent() {
         rightSlot={
           <div className="flex items-center gap-3">
             <Link
+              href="/alumni"
+              className="whitespace-nowrap rounded-md border border-blue-200 bg-blue-50/70 px-3.5 py-2 text-[13px] font-semibold text-[#16265E] transition-colors hover:bg-blue-100"
+              title="ทำเนียบผู้ผ่านการอบรมย้อนหลัง และแดชบอร์ดประเมินโครงการ"
+            >
+              🏅 ทำเนียบบุคลากร & ประเมินผล
+            </Link>
+            <Link
               href="/status"
               className="whitespace-nowrap rounded-md border border-[#d1d5db] bg-white px-4 py-2 text-[13px] font-semibold text-[#374151] transition-colors hover:bg-[#f8fafc]"
             >

@@ -59,6 +59,13 @@ function StatusHeader() {
       rightSlot={
         <div className="flex items-center gap-2 sm:gap-3">
           <Link
+            href="/alumni"
+            className={`${navLinkClass} border border-blue-200 bg-white text-[#16265E] hover:bg-blue-50`}
+            title="ทำเนียบผู้ผ่านการอบรมย้อนหลัง และแดชบอร์ดประเมินโครงการ"
+          >
+            🏅 ทำเนียบ & ประเมินผล
+          </Link>
+          <Link
             href="/status"
             aria-current="page"
             className={`${navLinkClass} bg-[#0b3c92] text-white hover:bg-[#09327a]`}

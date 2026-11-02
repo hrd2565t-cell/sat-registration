@@ -5,10 +5,11 @@ import path from "node:path";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { courses, sportsEvents, timelineSettings } = body as {
+    const { courses, sportsEvents, timelineSettings, alumni } = body as {
       courses?: unknown[];
       sportsEvents?: unknown[];
       timelineSettings?: Record<string, unknown>;
+      alumni?: unknown[];
     };
 
     const dataDir = path.join(process.cwd(), "data");
@@ -16,6 +17,7 @@ export async function POST(request: Request) {
 
     let coursesCount = 0;
     let sportsEventsCount = 0;
+    let alumniCount = 0;
 
     if (Array.isArray(courses)) {
       const coursesPath = path.join(dataDir, "courses.json");
@@ -94,6 +96,16 @@ export async function POST(request: Request) {
       sportsEventsCount = sportsEvents.length;
     }
 
+    if (Array.isArray(alumni)) {
+      const alumniPath = path.join(dataDir, "alumni.json");
+      await fs.writeFile(
+        alumniPath,
+        JSON.stringify(alumni, null, 2) + "\n",
+        "utf-8"
+      );
+      alumniCount = alumni.length;
+    }
+
     if (timelineSettings && typeof timelineSettings === "object") {
       const settingsPath = path.join(dataDir, "timeline-settings.json");
       await fs.writeFile(
@@ -107,6 +119,7 @@ export async function POST(request: Request) {
       ok: true,
       coursesCount,
       sportsEventsCount,
+      alumniCount,
       savedAt: new Date().toISOString(),
     });
   } catch (error) {
