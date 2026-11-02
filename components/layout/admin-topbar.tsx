@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { logoutAdmin } from "@/lib/admin-auth";
 
 interface AdminTopbarProps {
@@ -46,6 +47,19 @@ export function AdminTopbar({
       </div>
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        <Link
+          href="/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-[4px] border border-[#d1d5db] bg-white px-2 text-[10.5px] font-medium text-[#374151] shadow-xs transition-colors hover:bg-[#f9fafb] hover:text-[#111827]"
+          title="เปิดดูหน้าเว็บรับสมัครในมุมมองผู้สมัคร"
+        >
+          <svg className="h-3 w-3 text-[#4b5563]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+          <span className="hidden sm:inline">ดูหน้าเว็บผู้สมัคร</span>
+        </Link>
+
         <div className="flex items-center gap-1.5">
           <svg
             className="h-3.5 w-3.5 shrink-0 text-[#4b5563]"

@@ -14,8 +14,14 @@ export function ApplicantsDirectory({
 }) {
   const { applications } = useApplications();
   const pending = applications.filter((item) => item.status === "pending").length;
+  const actionRequired = applications.filter(
+    (item) => item.status === "action_required"
+  ).length;
   const approved = applications.filter(
     (item) => item.status === "approved"
+  ).length;
+  const reserve = applications.filter(
+    (item) => item.status === "reserve"
   ).length;
   const rejected = applications.filter(
     (item) => item.status === "rejected"
@@ -37,14 +43,28 @@ export function ApplicantsDirectory({
       tone: "warning" as const,
     },
     {
-      label: "อนุมัติแล้ว",
+      label: "ขอเอกสารเพิ่ม",
+      value: String(actionRequired),
+      href: "/admin/applicants?status=action_required",
+      status: "action_required",
+      tone: "warning" as const,
+    },
+    {
+      label: "ผ่านคุณสมบัติ (ตัวจริง)",
       value: String(approved),
       href: "/admin/applicants?status=approved",
       status: "approved",
       tone: "success" as const,
     },
     {
-      label: "ไม่ผ่าน",
+      label: "บัญชีสำรอง",
+      value: String(reserve),
+      href: "/admin/applicants?status=reserve",
+      status: "reserve",
+      tone: "info" as const,
+    },
+    {
+      label: "ไม่ผ่านคุณสมบัติ",
       value: String(rejected),
       href: "/admin/applicants?status=rejected",
       status: "rejected",
@@ -54,7 +74,7 @@ export function ApplicantsDirectory({
 
   return (
     <div className="mx-auto w-full max-w-[1440px]">
-      <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6 sm:gap-3">
         {cards.map((card) => {
           const active = initialStatus === card.status;
           return (

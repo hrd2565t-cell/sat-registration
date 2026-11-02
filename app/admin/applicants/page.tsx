@@ -2,7 +2,14 @@ import { AdminShell } from "@/components/layout/admin-shell";
 import { ApplicantsDirectory } from "@/components/admin/applicants-directory";
 import { adminCourseOptions, adminUser } from "@/lib/admin-data";
 
-const statusValues = ["all", "pending", "approved", "rejected"] as const;
+const statusValues = [
+  "all",
+  "pending",
+  "action_required",
+  "approved",
+  "reserve",
+  "rejected",
+] as const;
 
 export const instant = false;
 
