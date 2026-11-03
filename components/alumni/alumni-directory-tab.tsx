@@ -40,6 +40,84 @@ export function AlumniDirectoryTab({
   // Group into clean unique personnel (deduplicated profiles)
   const uniquePersons = useMemo(() => groupTraineesByPerson(trainees), [trainees]);
 
+  // Statistics per year BE (course count and trainee count)
+  const yearStatsMap = useMemo(() => {
+    const map = new Map<number, { courseCount: number; traineeCount: number }>();
+    for (const y of PAST_YEARS_BE) {
+      const list = trainees.filter((t) => t.yearBE === y);
+      const uniqueCourses = new Set(list.map((t) => t.courseTitle));
+      map.set(y, {
+        courseCount: uniqueCourses.size,
+        traineeCount: list.length,
+      });
+    }
+    return map;
+  }, [trainees]);
+
+  // Dynamic courses list based on selectedYear (Cascading Course Filter)
+  const availableCourses = useMemo(() => {
+    const source = selectedYear === "all"
+      ? trainees
+      : trainees.filter((t) => t.yearBE === Number(selectedYear));
+
+    const countMap = new Map<string, number>();
+    for (const t of source) {
+      countMap.set(t.courseTitle, (countMap.get(t.courseTitle) || 0) + 1);
+    }
+
+    if (selectedYear === "all") {
+      STANDARD_COURSES.forEach((c) => {
+        if (!countMap.has(c)) {
+          countMap.set(c, 0);
+        }
+      });
+    }
+
+    return Array.from(countMap.entries())
+      .map(([title, count]) => ({ title, count }))
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return a.title.localeCompare(b.title, "th");
+      });
+  }, [trainees, selectedYear]);
+
+  // Total trainees in currently selected year
+  const totalInSelectedYear = useMemo(() => {
+    if (selectedYear === "all") return trainees.length;
+    return trainees.filter((t) => t.yearBE === Number(selectedYear)).length;
+  }, [trainees, selectedYear]);
+
+  // Handle year change with auto-reset for course filter
+  const handleYearChange = (newYear: string) => {
+    setSelectedYear(newYear);
+    setCurrentPage(1);
+
+    if (newYear !== "all" && selectedCourse !== "all") {
+      const exists = trainees.some(
+        (t) => t.yearBE === Number(newYear) && t.courseTitle === selectedCourse
+      );
+      if (!exists) {
+        setSelectedCourse("all");
+      }
+    }
+  };
+
+  const hasActiveFilters =
+    search.trim() !== "" ||
+    selectedYear !== "all" ||
+    selectedCourse !== "all" ||
+    selectedGroup !== "all" ||
+    selectedStatus !== "all";
+
+  const handleResetFilters = () => {
+    setSearch("");
+    setSelectedYear("all");
+    setSelectedCourse("all");
+    setSelectedGroup("all");
+    setSelectedStatus("all");
+    setCurrentPage(1);
+  };
+
   // 1. Filtered for Person View (1 row per unique individual)
   const filteredPersons = useMemo(() => {
     return uniquePersons.filter((p) => {
@@ -56,17 +134,24 @@ export function AlumniDirectoryTab({
         }
       }
 
-      if (selectedYear !== "all") {
+      if (selectedYear !== "all" && selectedCourse !== "all") {
         const yNum = Number(selectedYear);
-        if (!p.courses.some((c) => c.yearBE === yNum)) return false;
+        if (!p.courses.some((c) => c.yearBE === yNum && c.courseTitle === selectedCourse)) {
+          return false;
+        }
+      } else {
+        if (selectedYear !== "all") {
+          const yNum = Number(selectedYear);
+          if (!p.courses.some((c) => c.yearBE === yNum)) return false;
+        }
+
+        if (selectedCourse !== "all") {
+          if (!p.courses.some((c) => c.courseTitle === selectedCourse)) return false;
+        }
       }
 
       if (selectedGroup !== "all" && p.affiliationGroup !== selectedGroup) {
         return false;
-      }
-
-      if (selectedCourse !== "all") {
-        if (!p.courses.some((c) => c.courseTitle === selectedCourse)) return false;
       }
 
       if (selectedStatus !== "all" && p.status !== selectedStatus) {
@@ -289,92 +374,129 @@ export function AlumniDirectoryTab({
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-gray-100 text-xs">
-          {/* Group Filter (4 main groups) */}
-          <div>
-            <label className="block text-[11px] font-semibold text-gray-500 mb-1">
-              กลุ่มหน่วยงาน
-            </label>
-            <select
-              value={selectedGroup}
-              onChange={(e) => {
-                setSelectedGroup(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
-            >
-              <option value="all">ทุกกลุ่มหน่วยงาน (4 กลุ่ม)</option>
-              {AFFILIATION_GROUPS.map((g) => (
-                <option key={g} value={g}>
-                  {g}
-                </option>
-              ))}
-            </select>
+        {/* Filters Header & Reset */}
+        <div className="pt-2 border-t border-gray-100 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-gray-700 flex items-center gap-1.5">
+              <span>🎯</span>
+              <span>ตัวกรองการค้นหา</span>
+              {selectedYear !== "all" && (
+                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-[#16265E]">
+                  พ.ศ. {selectedYear} ({availableCourses.length} หลักสูตร • {totalInSelectedYear} คน)
+                </span>
+              )}
+            </span>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 hover:text-rose-800 transition-colors cursor-pointer"
+                title="ล้างการตั้งค่าตัวกรองทั้งหมด"
+              >
+                <span>✕</span>
+                <span>ล้างตัวกรองทั้งหมด</span>
+              </button>
+            )}
           </div>
 
-          {/* Course Filter */}
-          <div>
-            <label className="block text-[11px] font-semibold text-gray-500 mb-1">
-              หลักสูตรอบรม (17 หลักสูตร)
-            </label>
-            <select
-              value={selectedCourse}
-              onChange={(e) => {
-                setSelectedCourse(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
-            >
-              <option value="all">ทุกหลักสูตร</option>
-              {STANDARD_COURSES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+            {/* 1. Year Filter (First column, drives Course filter) */}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+                ปี พ.ศ. ที่อบรม
+              </label>
+              <select
+                value={selectedYear}
+                onChange={(e) => handleYearChange(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
+              >
+                <option value="all">ทุกปี พ.ศ. (2547 - 2569 • 17 หลักสูตร)</option>
+                {PAST_YEARS_BE.map((y) => {
+                  const stat = yearStatsMap.get(y);
+                  const info = stat && stat.traineeCount > 0
+                    ? ` (${stat.courseCount} หลักสูตร • ${stat.traineeCount} คน)`
+                    : " (ไม่มีการจัดอบรม)";
+                  return (
+                    <option key={y} value={y}>
+                      พ.ศ. {y}{info}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
 
-          {/* Year Filter */}
-          <div>
-            <label className="block text-[11px] font-semibold text-gray-500 mb-1">
-              ปี พ.ศ. ที่อบรม
-            </label>
-            <select
-              value={selectedYear}
-              onChange={(e) => {
-                setSelectedYear(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
-            >
-              <option value="all">ทุกปี พ.ศ. (2547 - 2569)</option>
-              {PAST_YEARS_BE.map((y) => (
-                <option key={y} value={y}>
-                  พ.ศ. {y}
+            {/* 2. Course Filter (Cascading based on selectedYear) */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-semibold text-gray-600">
+                  หลักสูตรอบรม
+                </label>
+                <span className="text-[10px] text-gray-500 font-medium">
+                  {selectedYear !== "all" ? `${availableCourses.length} หลักสูตร` : "17 หลักสูตร"}
+                </span>
+              </div>
+              <select
+                value={selectedCourse}
+                onChange={(e) => {
+                  setSelectedCourse(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
+              >
+                <option value="all">
+                  {selectedYear !== "all"
+                    ? `ทุกหลักสูตรในปี ${selectedYear} (${availableCourses.length} หลักสูตร • ${totalInSelectedYear} คน)`
+                    : "ทุกหลักสูตร (17 หลักสูตร)"}
                 </option>
-              ))}
-            </select>
-          </div>
+                {availableCourses.map((c) => (
+                  <option key={c.title} value={c.title}>
+                    {c.title} ({c.count} คน)
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          {/* Status Filter */}
-          <div>
-            <label className="block text-[11px] font-semibold text-gray-500 mb-1">
-              สถานะการปฏิบัติหน้าที่
-            </label>
-            <select
-              value={selectedStatus}
-              onChange={(e) => {
-                setSelectedStatus(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
-            >
-              <option value="all">ทุกสถานะ</option>
-              <option value="active">🟢 ปฏิบัติหน้าที่ต่อเนื่อง (Active)</option>
-              <option value="pending_verification">⏳ รอตรวจสอบ (Pending)</option>
-              <option value="inactive">⚪ ยังไม่มีประวัติรอบปี (Inactive)</option>
-            </select>
+            {/* 3. Affiliation Group Filter */}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+                กลุ่มหน่วยงาน
+              </label>
+              <select
+                value={selectedGroup}
+                onChange={(e) => {
+                  setSelectedGroup(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
+              >
+                <option value="all">ทุกกลุ่มหน่วยงาน (4 กลุ่ม)</option>
+                {AFFILIATION_GROUPS.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 4. Duty Status Filter */}
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+                สถานะการปฏิบัติหน้าที่
+              </label>
+              <select
+                value={selectedStatus}
+                onChange={(e) => {
+                  setSelectedStatus(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
+              >
+                <option value="all">ทุกสถานะ</option>
+                <option value="active">🟢 ปฏิบัติหน้าที่ต่อเนื่อง (Active)</option>
+                <option value="pending_verification">⏳ รอตรวจสอบ (Pending)</option>
+                <option value="inactive">⚪ ยังไม่มีประวัติรอบปี (Inactive)</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>

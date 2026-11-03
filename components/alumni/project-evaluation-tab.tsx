@@ -21,6 +21,19 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
   const [matrixYearFilter, setMatrixYearFilter] = useState<string>("all");
   const [matrixCategoryFilter, setMatrixCategoryFilter] = useState<string>("all");
 
+  const yearStatsMap = useMemo(() => {
+    const map = new Map<number, { courseCount: number; traineeCount: number }>();
+    for (const y of PAST_YEARS_BE) {
+      const list = trainees.filter((t) => t.yearBE === y);
+      const uniqueCourses = new Set(list.map((t) => t.courseTitle));
+      map.set(y, {
+        courseCount: uniqueCourses.size,
+        traineeCount: list.length,
+      });
+    }
+    return map;
+  }, [trainees]);
+
   const matrixData = useMemo(() => {
     const rawMatrix = computeCourseAffiliationMatrix(
       trainees,
@@ -360,12 +373,18 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
                 onChange={(e) => setMatrixYearFilter(e.target.value)}
                 className="rounded-lg border border-gray-300 bg-white p-1.5 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
               >
-                <option value="all">ทุกปี พ.ศ. (2547 - 2569)</option>
-                {PAST_YEARS_BE.map((y) => (
-                  <option key={y} value={y}>
-                    พ.ศ. {y}
-                  </option>
-                ))}
+                <option value="all">ทุกปี พ.ศ. (2547 - 2569 • 17 หลักสูตร)</option>
+                {PAST_YEARS_BE.map((y) => {
+                  const stat = yearStatsMap.get(y);
+                  const info = stat && stat.traineeCount > 0
+                    ? ` (${stat.courseCount} หลักสูตร • ${stat.traineeCount} คน)`
+                    : " (ไม่มีจัดอบรม)";
+                  return (
+                    <option key={y} value={y}>
+                      พ.ศ. {y}{info}
+                    </option>
+                  );
+                })}
               </select>
             </div>
           </div>
