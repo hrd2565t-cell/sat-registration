@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import type { HistoricalTrainee, QualitativeHighlight } from "@/lib/alumni-store";
 import {
   computeEvaluationStats,
@@ -10,6 +10,7 @@ import {
   updateCourseCategory,
   saveCourseTarget,
   getTargetForCourse,
+  onStoreChange,
   PAST_YEARS_BE,
   KNOWLEDGE_DIMENSIONS,
   AFFILIATION_GROUPS,
@@ -37,6 +38,14 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
   // Target Editing State
   const [editingTargetCourse, setEditingTargetCourse] = useState<string | null>(null);
   const [editingTargetValue, setEditingTargetValue] = useState<number>(40);
+  const [targetRevision, setTargetRevision] = useState<number>(0);
+
+  // Subscribe to store/target updates so matrix updates reactively without page refresh
+  useEffect(() => {
+    return onStoreChange(() => {
+      setTargetRevision((prev) => prev + 1);
+    });
+  }, []);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -132,6 +141,7 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
       editingTargetValue,
       matrixYearFilter === "all" ? "all" : Number(matrixYearFilter)
     );
+    setTargetRevision((prev) => prev + 1);
     setEditingTargetCourse(null);
     showToast(`✅ บันทึกค่าเป้าหมายหลักสูตร "${courseTitle}" เป็น ${editingTargetValue} คน สำเร็จ`);
   };
@@ -198,7 +208,7 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
     );
     if (matrixCategoryFilter === "all") return rawMatrix;
     return rawMatrix.filter((r) => r.category === matrixCategoryFilter);
-  }, [trainees, matrixYearFilter, matrixCategoryFilter]);
+  }, [trainees, matrixYearFilter, matrixCategoryFilter, targetRevision]);
 
   // Totals for matrix footer
   const matrixTotals = useMemo(() => {

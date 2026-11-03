@@ -140,6 +140,13 @@ function emit() {
   listeners.forEach((listener) => listener());
 }
 
+export function onStoreChange(callback: () => void): () => void {
+  listeners.add(callback);
+  return () => {
+    listeners.delete(callback);
+  };
+}
+
 function persist() {
   if (typeof window === "undefined") return;
   try {
@@ -1084,28 +1091,45 @@ const DEFAULT_TARGETS_MAP: Record<string, number> = {
   "การพัฒนาบุคลากรกีฬาสู่นักบริหารจัดการองค์กรกีฬาเพื่อความยั่งยืน": 30,
 };
 
+let targetsCache: Record<string, number> | null = null;
+
 export function getCustomCourseTargets(): Record<string, number> {
+  if (targetsCache !== null) return targetsCache;
   if (typeof window === "undefined") return DEFAULT_TARGETS_MAP;
   try {
     const raw = window.localStorage.getItem(TARGETS_STORAGE_KEY);
-    if (!raw) return DEFAULT_TARGETS_MAP;
+    if (!raw) {
+      const initial = { ...DEFAULT_TARGETS_MAP };
+      targetsCache = initial;
+      return initial;
+    }
     const parsed = JSON.parse(raw);
-    return { ...DEFAULT_TARGETS_MAP, ...parsed };
+    const merged: Record<string, number> = { ...DEFAULT_TARGETS_MAP, ...parsed };
+    targetsCache = merged;
+    return merged;
   } catch {
-    return DEFAULT_TARGETS_MAP;
+    const fallback = { ...DEFAULT_TARGETS_MAP };
+    targetsCache = fallback;
+    return fallback;
   }
 }
 
 export function saveCourseTarget(courseTitle: string, target: number, yearBE?: number | "all"): void {
   if (typeof window === "undefined") return;
   try {
-    const current = getCustomCourseTargets();
+    const current = { ...getCustomCourseTargets() };
     const key = yearBE && yearBE !== "all" ? `${courseTitle}_${yearBE}` : courseTitle;
     current[key] = target;
     if (yearBE === "all" || !yearBE) {
       current[courseTitle] = target;
     }
+    targetsCache = current;
     window.localStorage.setItem(TARGETS_STORAGE_KEY, JSON.stringify(current));
+
+    state = {
+      ...state,
+      revision: state.revision + 1,
+    };
     emit(); // Notify UI to recompute matrix
   } catch {
     // Ignore
