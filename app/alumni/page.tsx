@@ -13,6 +13,7 @@ import { PersonnelPassportModal } from "@/components/alumni/personnel-passport-m
 import { DigitalPassModal } from "@/components/alumni/digital-pass-modal";
 import { DutyRecordModal } from "@/components/alumni/duty-record-modal";
 import { BulkImportModal } from "@/components/alumni/bulk-import-modal";
+import { AddTraineeModal } from "@/components/alumni/add-trainee-modal";
 
 export default function AlumniPage() {
   return (
@@ -38,6 +39,7 @@ function AlumniContent() {
   const [digitalPassIdCard, setDigitalPassIdCard] = useState<string | null>(null);
   const [dutyTargetTrainee, setDutyTargetTrainee] = useState<HistoricalTrainee | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isAddTraineeOpen, setIsAddTraineeOpen] = useState(false);
 
   // Smart unified search (Name, ID Card, or Cert No)
   const [quickVerifyId, setQuickVerifyId] = useState("");
@@ -316,6 +318,7 @@ function AlumniContent() {
             onOpenDutyRecord={(t) => setDutyTargetTrainee(t)}
             onOpenDigitalPass={(idCard) => setDigitalPassIdCard(idCard)}
             onOpenImport={() => setIsImportOpen(true)}
+            onOpenAddTrainee={() => setIsAddTraineeOpen(true)}
             isAdmin={isAdmin}
           />
         )}
@@ -389,6 +392,18 @@ function AlumniContent() {
           onImport={(items) => {
             importTrainees(items);
           }}
+          trainees={trainees}
+        />
+      )}
+
+      {/* 4. Add Single Trainee Modal */}
+      {isAddTraineeOpen && (
+        <AddTraineeModal
+          onClose={() => setIsAddTraineeOpen(false)}
+          onSuccess={(newTrainee) => {
+            setPassportIdCard(newTrainee.idCard);
+          }}
+          trainees={trainees}
         />
       )}
     </div>

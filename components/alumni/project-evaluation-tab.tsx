@@ -6,6 +6,8 @@ import {
   computeEvaluationStats,
   computeCourseAffiliationMatrix,
   updateCourseCategory,
+  saveCourseTarget,
+  getTargetForCourse,
   PAST_YEARS_BE,
   KNOWLEDGE_DIMENSIONS,
   AFFILIATION_GROUPS,
@@ -29,13 +31,22 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
   const [editCategorySelect, setEditCategorySelect] = useState<string>("ผู้บริหารกีฬา");
   const [customCategoryInput, setCustomCategoryInput] = useState<string>("");
   const [isCustomMode, setIsCustomMode] = useState<boolean>(false);
+
+  // Target Editing State
+  const [editingTargetCourse, setEditingTargetCourse] = useState<string | null>(null);
+  const [editingTargetValue, setEditingTargetValue] = useState<number>(40);
+
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Admin PIN Unlock Dialog State
   const [showPinPrompt, setShowPinPrompt] = useState<boolean>(false);
   const [pinInput, setPinInput] = useState<string>("");
   const [pinError, setPinError] = useState<string>("");
-  const [pendingEditCourse, setPendingEditCourse] = useState<{ courseTitle: string; category: string } | null>(null);
+  const [pendingAction, setPendingAction] = useState<
+    | { type: "category"; courseTitle: string; category: string }
+    | { type: "target"; courseTitle: string; target: number }
+    | null
+  >(null);
 
   // Dynamic categories from actual trainee data
   const allCategories = useMemo(() => {
@@ -53,7 +64,7 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
 
   const handleStartEdit = (courseTitle: string, currentCategory: string) => {
     if (!isAdmin) {
-      setPendingEditCourse({ courseTitle, category: currentCategory });
+      setPendingAction({ type: "category", courseTitle, category: currentCategory });
       setShowPinPrompt(true);
       setPinInput("");
       setPinError("");
@@ -90,23 +101,58 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
     setIsCustomMode(false);
   };
 
+  const handleStartEditTarget = (courseTitle: string, currentTarget: number) => {
+    if (!isAdmin) {
+      setPendingAction({ type: "target", courseTitle, target: currentTarget });
+      setShowPinPrompt(true);
+      setPinInput("");
+      setPinError("");
+      return;
+    }
+
+    setEditingTargetCourse(courseTitle);
+    setEditingTargetValue(currentTarget);
+  };
+
+  const handleSaveTarget = (courseTitle: string) => {
+    if (editingTargetValue <= 0) {
+      alert("กรุณาระบุค่าเป้าหมายที่มากกว่า 0");
+      return;
+    }
+
+    saveCourseTarget(
+      courseTitle,
+      editingTargetValue,
+      matrixYearFilter === "all" ? "all" : Number(matrixYearFilter)
+    );
+    setEditingTargetCourse(null);
+    showToast(`✅ บันทึกค่าเป้าหมายหลักสูตร "${courseTitle}" เป็น ${editingTargetValue} คน สำเร็จ`);
+  };
+
+  const handleCancelEditTarget = () => {
+    setEditingTargetCourse(null);
+  };
+
   const handleUnlockPin = (e: React.FormEvent) => {
     e.preventDefault();
     if (loginAdmin(pinInput.trim())) {
       setShowPinPrompt(false);
       setPinError("");
-      if (pendingEditCourse) {
-        setEditingCourseTitle(pendingEditCourse.courseTitle);
-        if (["ผู้บริหารกีฬา", "ผู้ฝึกสอนกีฬา", "อื่นๆ"].includes(pendingEditCourse.category)) {
-          setEditCategorySelect(pendingEditCourse.category);
+      if (pendingAction?.type === "category") {
+        setEditingCourseTitle(pendingAction.courseTitle);
+        if (["ผู้บริหารกีฬา", "ผู้ฝึกสอนกีฬา", "อื่นๆ"].includes(pendingAction.category)) {
+          setEditCategorySelect(pendingAction.category);
           setIsCustomMode(false);
         } else {
           setEditCategorySelect("__custom__");
           setIsCustomMode(true);
-          setCustomCategoryInput(pendingEditCourse.category);
+          setCustomCategoryInput(pendingAction.category);
         }
-        setPendingEditCourse(null);
+      } else if (pendingAction?.type === "target") {
+        setEditingTargetCourse(pendingAction.courseTitle);
+        setEditingTargetValue(pendingAction.target);
       }
+      setPendingAction(null);
     } else {
       setPinError("รหัส PIN ไม่ถูกต้อง (รหัสเริ่มต้น: 336699)");
     }
@@ -149,12 +195,13 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
 
   // Totals for matrix footer
   const matrixTotals = useMemo(() => {
-    const totals: Record<string, number> = {
+    const totals = {
       "สมาคมกีฬาแห่งประเทศไทย": 0,
       "การกีฬาแห่งประเทศไทย": 0,
       "สมาคมกีฬาแห่งจังหวัด": 0,
       "หน่วยงานภายนอก": 0,
       grandTotal: 0,
+      grandTarget: 0,
     };
     matrixData.forEach((row) => {
       totals["สมาคมกีฬาแห่งประเทศไทย"] += row.groups["สมาคมกีฬาแห่งประเทศไทย"] || 0;
@@ -162,9 +209,72 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
       totals["สมาคมกีฬาแห่งจังหวัด"] += row.groups["สมาคมกีฬาแห่งจังหวัด"] || 0;
       totals["หน่วยงานภายนอก"] += row.groups["หน่วยงานภายนอก"] || 0;
       totals.grandTotal += row.total;
+      totals.grandTarget += row.target;
     });
     return totals;
   }, [matrixData]);
+
+  const overallAchievementRate = useMemo(() => {
+    if (matrixTotals.grandTarget === 0) return 0;
+    return Math.round((matrixTotals.grandTotal / matrixTotals.grandTarget) * 1000) / 10;
+  }, [matrixTotals]);
+
+  // Export Excel specifically for this Matrix Table
+  const handleExportMatrixTableExcel = () => {
+    const workbook = XLSX.utils.book_new();
+
+    const exportRows: Record<string, string | number>[] = matrixData.map((row, idx) => ({
+      ลำดับ: idx + 1,
+      ชื่อหลักสูตร: row.courseTitle,
+      ประเภทหลักสูตร: row.category,
+      "ค่าเป้าหมาย (คน)": row.target,
+      "สมาคมกีฬาแห่งประเทศไทย (คน)": row.groups["สมาคมกีฬาแห่งประเทศไทย"] || 0,
+      "การกีฬาแห่งประเทศไทย (คน)": row.groups["การกีฬาแห่งประเทศไทย"] || 0,
+      "สมาคมกีฬาแห่งจังหวัด (คน)": row.groups["สมาคมกีฬาแห่งจังหวัด"] || 0,
+      "หน่วยงานภายนอก (คน)": row.groups["หน่วยงานภายนอก"] || 0,
+      "รวมผ่านการอบรมจริง (คน)": row.total,
+      "ร้อยละการบรรลุเป้าหมาย (%)": `${row.achievementRate}%`,
+      ผลการประเมินเทียบเป้าหมาย:
+        row.targetStatus === "achieved"
+          ? "บรรลุเป้าหมาย (100% ขึ้นไป)"
+          : row.targetStatus === "near"
+          ? "ใกล้เคียงเป้าหมาย (80-99%)"
+          : "ต่ำกว่าเป้าหมาย (ต่ำกว่า 80%)",
+    }));
+
+    // Add Summary Row
+    exportRows.push({
+      ลำดับ: "",
+      ชื่อหลักสูตร: "รวมทั้งสิ้นทุกหลักสูตร",
+      ประเภทหลักสูตร: "-",
+      "ค่าเป้าหมาย (คน)": matrixTotals.grandTarget,
+      "สมาคมกีฬาแห่งประเทศไทย (คน)": matrixTotals["สมาคมกีฬาแห่งประเทศไทย"],
+      "การกีฬาแห่งประเทศไทย (คน)": matrixTotals["การกีฬาแห่งประเทศไทย"],
+      "สมาคมกีฬาแห่งจังหวัด (คน)": matrixTotals["สมาคมกีฬาแห่งจังหวัด"],
+      "หน่วยงานภายนอก (คน)": matrixTotals["หน่วยงานภายนอก"],
+      "รวมผ่านการอบรมจริง (คน)": matrixTotals.grandTotal,
+      "ร้อยละการบรรลุเป้าหมาย (%)": `${overallAchievementRate}%`,
+      ผลการประเมินเทียบเป้าหมาย:
+        overallAchievementRate >= 100
+          ? "บรรลุเป้าหมายภาพรวม"
+          : overallAchievementRate >= 80
+          ? "ใกล้เคียงเป้าหมายภาพรวม"
+          : "ต่ำกว่าเป้าหมายภาพรวม",
+    });
+
+    const ws = XLSX.utils.json_to_sheet(exportRows);
+    XLSX.utils.book_append_sheet(workbook, ws, "รายงานเมทริกซ์และเป้าหมาย");
+
+    const yearLabel = matrixYearFilter === "all" ? "AllYears" : `Y${matrixYearFilter}`;
+    XLSX.writeFile(
+      workbook,
+      `SAT_Course_Affiliation_Target_Report_${yearLabel}_${new Date().toISOString().split("T")[0]}.xlsx`
+    );
+  };
+
+  const handlePrintMatrixReport = () => {
+    window.print();
+  };
 
   const handleExportEvaluationReport = () => {
     // 1. Summary sheet
@@ -452,46 +562,70 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
             </p>
           </div>
 
-          {/* Filters for Matrix */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            {/* Category Filter */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-gray-500 text-[11px] font-semibold">ประเภท:</span>
-              <select
-                value={matrixCategoryFilter}
-                onChange={(e) => setMatrixCategoryFilter(e.target.value)}
-                className="rounded-lg border border-gray-300 bg-white p-1.5 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
-              >
-                <option value="all">ทุกสายวิชาชีพ ({allCategories.length} กลุ่ม)</option>
-                {allCategories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+          {/* Filters and Actions for Matrix */}
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs w-full lg:w-auto">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Category Filter */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-500 text-[11px] font-semibold">ประเภท:</span>
+                <select
+                  value={matrixCategoryFilter}
+                  onChange={(e) => setMatrixCategoryFilter(e.target.value)}
+                  className="rounded-lg border border-gray-300 bg-white p-1.5 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
+                >
+                  <option value="all">ทุกสายวิชาชีพ ({allCategories.length} กลุ่ม)</option>
+                  {allCategories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Year Filter */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-500 text-[11px] font-semibold">ปีงบประมาณ:</span>
+                <select
+                  value={matrixYearFilter}
+                  onChange={(e) => setMatrixYearFilter(e.target.value)}
+                  className="rounded-lg border border-gray-300 bg-white p-1.5 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
+                >
+                  <option value="all">ทุกปี พ.ศ. (2547 - 2569 • 17 หลักสูตร)</option>
+                  {PAST_YEARS_BE.map((y) => {
+                    const stat = yearStatsMap.get(y);
+                    const info = stat && stat.traineeCount > 0
+                      ? ` (${stat.courseCount} หลักสูตร • ${stat.traineeCount} คน)`
+                      : " (ไม่มีจัดอบรม)";
+                    return (
+                      <option key={y} value={y}>
+                        พ.ศ. {y}{info}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
             </div>
 
-            {/* Year Filter */}
+            {/* Export Buttons for this specific table */}
             <div className="flex items-center gap-1.5">
-              <span className="text-gray-500 text-[11px] font-semibold">ปีงบประมาณ:</span>
-              <select
-                value={matrixYearFilter}
-                onChange={(e) => setMatrixYearFilter(e.target.value)}
-                className="rounded-lg border border-gray-300 bg-white p-1.5 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
+              <button
+                type="button"
+                onClick={handleExportMatrixTableExcel}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 shadow-2xs hover:bg-emerald-100 transition-colors cursor-pointer"
+                title="ดาวน์โหลดตารางเมทริกซ์และเป้าหมายนี้เป็นไฟล์ Excel (.xlsx)"
               >
-                <option value="all">ทุกปี พ.ศ. (2547 - 2569 • 17 หลักสูตร)</option>
-                {PAST_YEARS_BE.map((y) => {
-                  const stat = yearStatsMap.get(y);
-                  const info = stat && stat.traineeCount > 0
-                    ? ` (${stat.courseCount} หลักสูตร • ${stat.traineeCount} คน)`
-                    : " (ไม่มีจัดอบรม)";
-                  return (
-                    <option key={y} value={y}>
-                      พ.ศ. {y}{info}
-                    </option>
-                  );
-                })}
-              </select>
+                <span>📊</span>
+                <span>ออกรายงาน Excel</span>
+              </button>
+              <button
+                type="button"
+                onClick={handlePrintMatrixReport}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 transition-colors cursor-pointer"
+                title="สั่งพิมพ์รายงานหน้านี้ (Print / Save as PDF)"
+              >
+                <span>🖨️</span>
+                <span>พิมพ์รายงาน / PDF</span>
+              </button>
             </div>
           </div>
         </div>
@@ -528,22 +662,31 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                     </span>
                   </div>
                 </th>
-                <th className="py-3 px-3 text-center font-bold bg-blue-900/70 border-l border-blue-800 min-w-[120px]">
+                <th className="py-3 px-3 text-center font-bold bg-blue-900/70 border-l border-blue-800 min-w-[110px]">
                   สมาคมกีฬาแห่งประเทศไทย
                 </th>
-                <th className="py-3 px-3 text-center font-bold bg-purple-900/70 border-l border-blue-800 min-w-[110px]">
+                <th className="py-3 px-3 text-center font-bold bg-purple-900/70 border-l border-blue-800 min-w-[105px]">
                   การกีฬาแห่งประเทศไทย
                 </th>
-                <th className="py-3 px-3 text-center font-bold bg-amber-900/70 border-l border-blue-800 min-w-[110px]">
+                <th className="py-3 px-3 text-center font-bold bg-amber-900/70 border-l border-blue-800 min-w-[105px]">
                   สมาคมกีฬาแห่งจังหวัด
                 </th>
                 <th className="py-3 px-3 text-center font-bold bg-emerald-900/70 border-l border-blue-800 min-w-[100px]">
                   หน่วยงานภายนอก
                 </th>
-                <th className="py-3 px-3 text-center font-black text-amber-300 border-l border-blue-800 min-w-[90px]">
-                  รวม (คน)
+                <th className="py-3 px-3 text-center font-bold bg-indigo-950 border-l border-blue-800 min-w-[125px]">
+                  <div className="flex items-center justify-center gap-1">
+                    <span>ค่าเป้าหมาย (คน)</span>
+                    <span className="text-[10px] font-normal text-indigo-300">✎</span>
+                  </div>
                 </th>
-                <th className="py-3 px-3 text-center font-bold min-w-[180px] border-l border-blue-800">
+                <th className="py-3 px-3 text-center font-black text-amber-300 border-l border-blue-800 min-w-[95px]">
+                  ผ่านจริง (คน)
+                </th>
+                <th className="py-3 px-3 text-center font-bold bg-sky-950 border-l border-blue-800 min-w-[125px]">
+                  % บรรลุเป้าหมาย
+                </th>
+                <th className="py-3 px-3 text-center font-bold min-w-[170px] border-l border-blue-800">
                   สัดส่วนกลุ่มหน่วยงาน (Distribution)
                 </th>
               </tr>
@@ -686,9 +829,83 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                       )}
                     </td>
 
-                    {/* รวมทั้งหมด */}
-                    <td className="py-2.5 px-3 text-center border-l border-gray-200 font-black text-[#16265E] bg-gray-50/50">
+                    {/* ค่าเป้าหมาย (คน) */}
+                    <td className="py-2.5 px-3 text-center border-l border-gray-100 bg-indigo-50/20">
+                      {editingTargetCourse === row.courseTitle ? (
+                        <div className="flex items-center justify-center gap-1">
+                          <input
+                            type="number"
+                            min="1"
+                            value={editingTargetValue}
+                            onChange={(e) => setEditingTargetValue(Number(e.target.value))}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleSaveTarget(row.courseTitle);
+                              if (e.key === "Escape") handleCancelEditTarget();
+                            }}
+                            className="w-16 rounded-md border border-[#16265E] bg-white p-1 text-center text-xs font-bold text-gray-900 focus:outline-hidden"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveTarget(row.courseTitle)}
+                            className="rounded-md bg-emerald-600 px-1.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700 cursor-pointer"
+                            title="บันทึกเป้าหมาย (Enter)"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelEditTarget}
+                            className="rounded-md bg-gray-200 px-1.5 py-1 text-[11px] font-bold text-gray-700 hover:bg-gray-300 cursor-pointer"
+                            title="ยกเลิก (Esc)"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-1.5 group">
+                          <span className="font-bold text-indigo-950 font-mono">
+                            {row.target.toLocaleString()}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditTarget(row.courseTitle, row.target)}
+                            className="opacity-60 group-hover:opacity-100 hover:bg-indigo-100 text-indigo-700 h-5 w-5 rounded flex items-center justify-center transition-all cursor-pointer text-xs"
+                            title="คลิกเพื่อแก้ไขค่าเป้าหมายหลักสูตรนี้"
+                          >
+                            ✎
+                          </button>
+                        </div>
+                      )}
+                    </td>
+
+                    {/* รวมผ่านจริง (คน) */}
+                    <td className="py-2.5 px-3 text-center border-l border-gray-200 font-black text-[#16265E] bg-amber-50/30 font-mono">
                       {row.total.toLocaleString()}
+                    </td>
+
+                    {/* % บรรลุเป้าหมาย */}
+                    <td className="py-2.5 px-3 text-center border-l border-gray-100 bg-sky-50/20">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="font-extrabold text-xs text-gray-900 font-mono">
+                          {row.achievementRate}%
+                        </span>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.2 text-[9px] font-bold ${
+                            row.targetStatus === "achieved"
+                              ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                              : row.targetStatus === "near"
+                              ? "bg-amber-100 text-amber-800 border border-amber-200"
+                              : "bg-rose-100 text-rose-800 border border-rose-200"
+                          }`}
+                        >
+                          {row.targetStatus === "achieved"
+                            ? "🟢 บรรลุเป้า"
+                            : row.targetStatus === "near"
+                            ? "🟡 ใกล้เคียง"
+                            : "🔴 ต่ำกว่าเป้า"}
+                        </span>
+                      </div>
                     </td>
 
                     {/* Stacked bar visualization */}
@@ -747,8 +964,31 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                 <td className="py-3 px-3 text-center font-black text-emerald-900 border-l border-gray-200">
                   {matrixTotals["หน่วยงานภายนอก"].toLocaleString()} คน
                 </td>
-                <td className="py-3 px-3 text-center font-black text-[#16265E] border-l border-gray-200 bg-amber-50">
+                <td className="py-3 px-3 text-center font-black text-indigo-950 border-l border-gray-200 bg-indigo-50/50">
+                  {matrixTotals.grandTarget.toLocaleString()} คน
+                </td>
+                <td className="py-3 px-3 text-center font-black text-[#16265E] border-l border-gray-200 bg-amber-50/50">
                   {matrixTotals.grandTotal.toLocaleString()} คน
+                </td>
+                <td className="py-3 px-3 text-center font-black text-sky-900 border-l border-gray-200 bg-sky-50/50">
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span>{overallAchievementRate}%</span>
+                    <span
+                      className={`rounded-full px-2 py-0.2 text-[9px] font-bold ${
+                        overallAchievementRate >= 100
+                          ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                          : overallAchievementRate >= 80
+                          ? "bg-amber-100 text-amber-800 border border-amber-200"
+                          : "bg-rose-100 text-rose-800 border border-rose-200"
+                      }`}
+                    >
+                      {overallAchievementRate >= 100
+                        ? "🟢 บรรลุเป้า"
+                        : overallAchievementRate >= 80
+                        ? "🟡 ใกล้เคียง"
+                        : "🔴 ต่ำกว่าเป้า"}
+                    </span>
+                  </div>
                 </td>
                 <td className="py-3 px-3 border-l border-gray-200">
                   <div className="flex items-center justify-center gap-2 text-[10.5px] font-normal text-gray-500">
@@ -1162,7 +1402,7 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                   type="button"
                   onClick={() => {
                     setShowPinPrompt(false);
-                    setPendingEditCourse(null);
+                    setPendingAction(null);
                   }}
                   className="rounded-xl border border-gray-300 px-3.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 cursor-pointer"
                 >

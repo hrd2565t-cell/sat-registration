@@ -17,6 +17,7 @@ interface AlumniDirectoryTabProps {
   onOpenDutyRecord: (trainee: HistoricalTrainee) => void;
   onOpenDigitalPass?: (idCard: string) => void;
   onOpenImport: () => void;
+  onOpenAddTrainee?: () => void;
   isAdmin?: boolean;
 }
 
@@ -26,6 +27,7 @@ export function AlumniDirectoryTab({
   onOpenDutyRecord,
   onOpenDigitalPass,
   onOpenImport,
+  onOpenAddTrainee,
   isAdmin = false,
 }: AlumniDirectoryTabProps) {
   const [search, setSearch] = useState("");
@@ -351,15 +353,26 @@ export function AlumniDirectoryTab({
             </div>
 
             {isAdmin && (
-              <button
-                type="button"
-                onClick={onOpenImport}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-800 shadow-xs hover:bg-emerald-100 transition-colors cursor-pointer"
-                title="นำเข้าไฟล์ Excel ผู้ผ่านการอบรมย้อนหลัง"
-              >
-                <span>📥</span>
-                <span>นำเข้า Excel</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={onOpenAddTrainee}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#16265E] px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#111e4a] transition-colors cursor-pointer"
+                  title="เพิ่มข้อมูลบุคลากรและประวัติการอบรมรายบุคคล"
+                >
+                  <span>➕</span>
+                  <span>เพิ่มบุคลากร</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenImport}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-800 shadow-xs hover:bg-emerald-100 transition-colors cursor-pointer"
+                  title="นำเข้าไฟล์ Excel ผู้ผ่านการอบรมย้อนหลัง (พร้อมระบบ Smart Preview ตรวจสอบความซ้ำซ้อน)"
+                >
+                  <span>📥</span>
+                  <span>นำเข้า Excel</span>
+                </button>
+              </>
             )}
 
             <button

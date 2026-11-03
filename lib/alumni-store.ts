@@ -211,8 +211,11 @@ export function useAlumniStore() {
 
 export function addTrainee(input: Omit<HistoricalTrainee, "id" | "createdAt" | "updatedAt" | "duties">): HistoricalTrainee {
   const now = new Date().toISOString();
+  const finalPersonnelId = input.personnelId || getNextPersonnelId(state.trainees);
   const newTrainee: HistoricalTrainee = {
     ...input,
+    personnelId: finalPersonnelId,
+    idCard: input.idCard || finalPersonnelId,
     id: `trn-custom-${Date.now()}`,
     duties: [],
     createdAt: now,
@@ -997,12 +1000,149 @@ export function computeCourseTimelineData(trainees: HistoricalTrainee[]): Course
   });
 }
 
+const TARGETS_STORAGE_KEY = "sat-course-targets-v1";
+
+// Default targets per standard course
+const DEFAULT_TARGETS_MAP: Record<string, number> = {
+  TSLP: 40,
+  Olympic: 50,
+  ICSM: 40,
+  ICSC: 40,
+  GGE: 40,
+  SSCC: 35,
+  "National classifier": 25,
+  "HCDP-ICSM": 35,
+  "HCDP-ICSC": 35,
+  PSAAD: 35,
+  "TSL-ISPEP": 30,
+  "PSAAD-ISPEP": 30,
+  PSCE: 30,
+  "Lv.1": 30,
+  Bnc: 30,
+  Switzerland: 30,
+  "การพัฒนาบุคลากรกีฬาสู่นักบริหารจัดการองค์กรกีฬาเพื่อความยั่งยืน": 30,
+};
+
+export function getCustomCourseTargets(): Record<string, number> {
+  if (typeof window === "undefined") return DEFAULT_TARGETS_MAP;
+  try {
+    const raw = window.localStorage.getItem(TARGETS_STORAGE_KEY);
+    if (!raw) return DEFAULT_TARGETS_MAP;
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_TARGETS_MAP, ...parsed };
+  } catch {
+    return DEFAULT_TARGETS_MAP;
+  }
+}
+
+export function saveCourseTarget(courseTitle: string, target: number, yearBE?: number | "all"): void {
+  if (typeof window === "undefined") return;
+  try {
+    const current = getCustomCourseTargets();
+    const key = yearBE && yearBE !== "all" ? `${courseTitle}_${yearBE}` : courseTitle;
+    current[key] = target;
+    if (yearBE === "all" || !yearBE) {
+      current[courseTitle] = target;
+    }
+    window.localStorage.setItem(TARGETS_STORAGE_KEY, JSON.stringify(current));
+    emit(); // Notify UI to recompute matrix
+  } catch {
+    // Ignore
+  }
+}
+
+export function getTargetForCourse(courseTitle: string, yearBE?: number | "all"): number {
+  const map = getCustomCourseTargets();
+  if (yearBE && yearBE !== "all") {
+    const specificKey = `${courseTitle}_${yearBE}`;
+    if (map[specificKey] !== undefined) return map[specificKey];
+  }
+  if (map[courseTitle] !== undefined) return map[courseTitle];
+  return 40; // Default if not found
+}
+
+/**
+ * Calculate the highest existing USR-2026-XXXX sequence number and return the next available ID
+ */
+export function getNextPersonnelId(trainees: HistoricalTrainee[]): string {
+  let maxNum = 1913; // Base from dataset
+  for (const t of trainees) {
+    const pId = t.personnelId || t.idCard || "";
+    if (pId.startsWith("USR-2026-")) {
+      const numPart = parseInt(pId.replace("USR-2026-", ""), 10);
+      if (!isNaN(numPart) && numPart > maxNum) {
+        maxNum = numPart;
+      }
+    }
+  }
+  return `USR-2026-${String(maxNum + 1).padStart(4, "0")}`;
+}
+
+/**
+ * Generate a sequence of N new unique USR-2026-XXXX IDs
+ */
+export function generateNextPersonnelIds(trainees: HistoricalTrainee[], count: number): string[] {
+  let maxNum = 1913;
+  for (const t of trainees) {
+    const pId = t.personnelId || t.idCard || "";
+    if (pId.startsWith("USR-2026-")) {
+      const numPart = parseInt(pId.replace("USR-2026-", ""), 10);
+      if (!isNaN(numPart) && numPart > maxNum) {
+        maxNum = numPart;
+      }
+    }
+  }
+
+  const ids: string[] = [];
+  for (let i = 1; i <= count; i++) {
+    ids.push(`USR-2026-${String(maxNum + i).padStart(4, "0")}`);
+  }
+  return ids;
+}
+
+/**
+ * Clean Thai name for matching: strips common honorific prefixes, extra spaces, and lowercase
+ */
+export function normalizeNameForMatching(name: string): string {
+  return name
+    .trim()
+    .replace(/^(นาย|นางสาว|นาง|ดร\.|นาวาเอก|นาวาโท|นาวาตรี|เรือเอก|ร\.ต\.อ\.|พ\.จ\.ต\.|ส\.อ\.|ผศ\.|รศ\.|ศ\.|พลเอก|พลโท|พลตรี)\s*/, "")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+/**
+ * Check if a person already exists in the system by name or ID
+ */
+export function findExistingTrainee(
+  trainees: HistoricalTrainee[],
+  name: string,
+  idCardOrPersonnelId?: string
+): HistoricalTrainee | undefined {
+  const cleanId = (idCardOrPersonnelId || "").trim();
+  if (cleanId && cleanId.startsWith("USR-2026-")) {
+    const foundById = trainees.find((t) => t.personnelId === cleanId);
+    if (foundById) return foundById;
+  }
+
+  const normTarget = normalizeNameForMatching(name);
+  if (!normTarget) return undefined;
+
+  return trainees.find((t) => {
+    const normT = normalizeNameForMatching(t.name);
+    return normT === normTarget;
+  });
+}
+
 export interface CourseMatrixRow {
   courseTitle: string;
   category: string;
   groups: Record<string, number>;
   total: number;
   percentByGroup: Record<string, number>;
+  target: number;
+  achievementRate: number;
+  targetStatus: "achieved" | "near" | "under";
 }
 
 export function computeCourseAffiliationMatrix(
@@ -1043,12 +1183,19 @@ export function computeCourseAffiliationMatrix(
       percentByGroup[g] = val.total > 0 ? Math.round((count / val.total) * 100) : 0;
     }
 
+    const target = getTargetForCourse(title, yearFilter);
+    const achievementRate = target > 0 ? Math.round((val.total / target) * 1000) / 10 : 0;
+    const targetStatus = achievementRate >= 100 ? "achieved" : achievementRate >= 80 ? "near" : "under";
+
     result.push({
       courseTitle: title,
       category: val.category,
       groups: val.groups,
       total: val.total,
       percentByGroup,
+      target,
+      achievementRate,
+      targetStatus,
     });
   }
 
