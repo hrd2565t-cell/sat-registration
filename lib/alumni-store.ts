@@ -117,10 +117,10 @@ export const STANDARD_COURSES = [
   "การพัฒนาบุคลากรกีฬาสู่นักบริหารจัดการองค์กรกีฬาเพื่อความยั่งยืน",
 ] as const;
 
-// 2,732 authentic historical training records (1,913 unique personnel) from official SAT Excel files
+// 2,732 authentic historical training records (1,891 unique personnel after deduplication) from official SAT Excel files
 export const SEED_TRAINEES: HistoricalTrainee[] = rawRealTrainees as HistoricalTrainee[];
 
-const STORAGE_KEY = "sat-alumni-real-v2";
+const STORAGE_KEY = "sat-alumni-real-v3";
 
 interface AlumniState {
   trainees: HistoricalTrainee[];
@@ -792,4 +792,245 @@ export function computeEvaluationStats(trainees: HistoricalTrainee[]): Evaluatio
     totalRatingsCount,
     qualitativeHighlights,
   };
+}
+
+export interface UniquePersonTrainee {
+  personnelId: string;
+  name: string;
+  prefix?: string;
+  affiliation: string;
+  affiliationGroup?: string;
+  sportsType: string;
+  latestYearBE: number;
+  firstYearBE: number;
+  courses: {
+    courseTitle: string;
+    courseCategory?: string;
+    yearBE: number;
+    batch: string;
+    passedDate: string;
+    recordId: string;
+  }[];
+  totalCourses: number;
+  totalDuties: number;
+  status: "active" | "inactive" | "pending_verification";
+  duties: DutyRecord[];
+  records: HistoricalTrainee[];
+}
+
+export function groupTraineesByPerson(trainees: HistoricalTrainee[]): UniquePersonTrainee[] {
+  const map = new Map<string, HistoricalTrainee[]>();
+
+  for (const t of trainees) {
+    const key = t.personnelId || (t.idCard && t.idCard.length === 13 ? t.idCard : normalizeThaiName(t.name));
+    if (!map.has(key)) {
+      map.set(key, []);
+    }
+    map.get(key)!.push(t);
+  }
+
+  const result: UniquePersonTrainee[] = [];
+
+  for (const [, records] of map.entries()) {
+    const sorted = [...records].sort((a, b) => b.yearBE - a.yearBE);
+    const primary = sorted[0];
+
+    const courses = sorted.map((r) => ({
+      courseTitle: r.courseTitle,
+      courseCategory: r.courseCategory,
+      yearBE: r.yearBE,
+      batch: r.batch,
+      passedDate: r.passedDate,
+      recordId: r.id,
+    }));
+
+    const dutiesMap = new Map<string, DutyRecord>();
+    for (const r of sorted) {
+      for (const d of r.duties) {
+        dutiesMap.set(d.id, d);
+      }
+    }
+    const allDuties = Array.from(dutiesMap.values()).sort(
+      (a, b) => Date.parse(b.startDate || b.createdAt) - Date.parse(a.startDate || a.createdAt)
+    );
+
+    const hasActive = sorted.some((r) => r.status === "active") || allDuties.length > 0;
+    const hasPending = sorted.some((r) => r.status === "pending_verification");
+
+    const status: "active" | "inactive" | "pending_verification" = hasActive
+      ? "active"
+      : hasPending
+      ? "pending_verification"
+      : "inactive";
+
+    const years = sorted.map((r) => r.yearBE);
+    const latestYearBE = Math.max(...years);
+    const firstYearBE = Math.min(...years);
+
+    result.push({
+      personnelId: primary.personnelId || primary.idCard,
+      name: primary.name,
+      prefix: primary.prefix,
+      affiliation: primary.affiliation,
+      affiliationGroup: primary.affiliationGroup,
+      sportsType: primary.sportsType,
+      latestYearBE,
+      firstYearBE,
+      courses,
+      totalCourses: sorted.length,
+      totalDuties: allDuties.length,
+      status,
+      duties: allDuties,
+      records: sorted,
+    });
+  }
+
+  return result.sort((a, b) => b.latestYearBE - a.latestYearBE || a.name.localeCompare(b.name, "th"));
+}
+
+export interface CourseTimelineItem {
+  courseTitle: string;
+  category: string;
+  years: number[];
+  firstYear: number;
+  lastYear: number;
+  totalYearsCount: number;
+  totalTrainees: number;
+  traineesByYear: Record<number, number>;
+  byGroup: Record<string, number>;
+  isActiveRecent: boolean;
+  trainees: HistoricalTrainee[];
+}
+
+export function computeCourseTimelineData(trainees: HistoricalTrainee[]): CourseTimelineItem[] {
+  const map = new Map<string, HistoricalTrainee[]>();
+
+  for (const t of trainees) {
+    if (!map.has(t.courseTitle)) {
+      map.set(t.courseTitle, []);
+    }
+    map.get(t.courseTitle)!.push(t);
+  }
+
+  const result: CourseTimelineItem[] = [];
+
+  for (const [title, list] of map.entries()) {
+    const yearsSet = new Set(list.map((item) => item.yearBE));
+    const sortedYears = Array.from(yearsSet).sort((a, b) => a - b);
+    const category = list[0]?.courseCategory || "อื่นๆ";
+
+    const traineesByYear: Record<number, number> = {};
+    const byGroup: Record<string, number> = {
+      "สมาคมกีฬาแห่งประเทศไทย": 0,
+      "การกีฬาแห่งประเทศไทย": 0,
+      "สมาคมกีฬาแห่งจังหวัด": 0,
+      "หน่วยงานภายนอก": 0,
+    };
+
+    for (const item of list) {
+      traineesByYear[item.yearBE] = (traineesByYear[item.yearBE] || 0) + 1;
+      const g = item.affiliationGroup || "หน่วยงานภายนอก";
+      byGroup[g] = (byGroup[g] || 0) + 1;
+    }
+
+    const firstYear = sortedYears[0] || 2547;
+    const lastYear = sortedYears[sortedYears.length - 1] || 2569;
+    const isActiveRecent = lastYear >= 2566;
+
+    result.push({
+      courseTitle: title,
+      category,
+      years: sortedYears,
+      firstYear,
+      lastYear,
+      totalYearsCount: sortedYears.length,
+      totalTrainees: list.length,
+      traineesByYear,
+      byGroup,
+      isActiveRecent,
+      trainees: list,
+    });
+  }
+
+  const catPriority: Record<string, number> = {
+    "ผู้บริหารกีฬา": 1,
+    "ผู้ฝึกสอนกีฬา": 2,
+    "อื่นๆ": 3,
+  };
+
+  return result.sort((a, b) => {
+    const pA = catPriority[a.category] || 99;
+    const pB = catPriority[b.category] || 99;
+    if (pA !== pB) return pA - pB;
+    return b.totalTrainees - a.totalTrainees;
+  });
+}
+
+export interface CourseMatrixRow {
+  courseTitle: string;
+  category: string;
+  groups: Record<string, number>;
+  total: number;
+  percentByGroup: Record<string, number>;
+}
+
+export function computeCourseAffiliationMatrix(
+  trainees: HistoricalTrainee[],
+  yearFilter?: number | "all"
+): CourseMatrixRow[] {
+  const filtered = yearFilter && yearFilter !== "all"
+    ? trainees.filter((t) => t.yearBE === Number(yearFilter))
+    : trainees;
+
+  const map = new Map<string, { category: string; groups: Record<string, number>; total: number }>();
+
+  for (const t of filtered) {
+    if (!map.has(t.courseTitle)) {
+      map.set(t.courseTitle, {
+        category: t.courseCategory || "อื่นๆ",
+        groups: {
+          "สมาคมกีฬาแห่งประเทศไทย": 0,
+          "การกีฬาแห่งประเทศไทย": 0,
+          "สมาคมกีฬาแห่งจังหวัด": 0,
+          "หน่วยงานภายนอก": 0,
+        },
+        total: 0,
+      });
+    }
+
+    const row = map.get(t.courseTitle)!;
+    const g = t.affiliationGroup || "หน่วยงานภายนอก";
+    row.groups[g] = (row.groups[g] || 0) + 1;
+    row.total += 1;
+  }
+
+  const result: CourseMatrixRow[] = [];
+
+  for (const [title, val] of map.entries()) {
+    const percentByGroup: Record<string, number> = {};
+    for (const [g, count] of Object.entries(val.groups)) {
+      percentByGroup[g] = val.total > 0 ? Math.round((count / val.total) * 100) : 0;
+    }
+
+    result.push({
+      courseTitle: title,
+      category: val.category,
+      groups: val.groups,
+      total: val.total,
+      percentByGroup,
+    });
+  }
+
+  const catPriority: Record<string, number> = {
+    "ผู้บริหารกีฬา": 1,
+    "ผู้ฝึกสอนกีฬา": 2,
+    "อื่นๆ": 3,
+  };
+
+  return result.sort((a, b) => {
+    const pA = catPriority[a.category] || 99;
+    const pB = catPriority[b.category] || 99;
+    if (pA !== pB) return pA - pB;
+    return b.total - a.total;
+  });
 }

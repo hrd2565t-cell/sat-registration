@@ -2,7 +2,13 @@
 
 import { useState, useMemo } from "react";
 import type { HistoricalTrainee, QualitativeHighlight } from "@/lib/alumni-store";
-import { computeEvaluationStats, PAST_YEARS_BE, KNOWLEDGE_DIMENSIONS } from "@/lib/alumni-store";
+import {
+  computeEvaluationStats,
+  computeCourseAffiliationMatrix,
+  PAST_YEARS_BE,
+  KNOWLEDGE_DIMENSIONS,
+  AFFILIATION_GROUPS,
+} from "@/lib/alumni-store";
 import * as XLSX from "xlsx";
 
 interface ProjectEvaluationTabProps {
@@ -12,11 +18,42 @@ interface ProjectEvaluationTabProps {
 export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
   const stats = useMemo(() => computeEvaluationStats(trainees), [trainees]);
 
+  const [matrixYearFilter, setMatrixYearFilter] = useState<string>("all");
+  const [matrixCategoryFilter, setMatrixCategoryFilter] = useState<string>("all");
+
+  const matrixData = useMemo(() => {
+    const rawMatrix = computeCourseAffiliationMatrix(
+      trainees,
+      matrixYearFilter === "all" ? "all" : Number(matrixYearFilter)
+    );
+    if (matrixCategoryFilter === "all") return rawMatrix;
+    return rawMatrix.filter((r) => r.category === matrixCategoryFilter);
+  }, [trainees, matrixYearFilter, matrixCategoryFilter]);
+
+  // Totals for matrix footer
+  const matrixTotals = useMemo(() => {
+    const totals: Record<string, number> = {
+      "สมาคมกีฬาแห่งประเทศไทย": 0,
+      "การกีฬาแห่งประเทศไทย": 0,
+      "สมาคมกีฬาแห่งจังหวัด": 0,
+      "หน่วยงานภายนอก": 0,
+      grandTotal: 0,
+    };
+    matrixData.forEach((row) => {
+      totals["สมาคมกีฬาแห่งประเทศไทย"] += row.groups["สมาคมกีฬาแห่งประเทศไทย"] || 0;
+      totals["การกีฬาแห่งประเทศไทย"] += row.groups["การกีฬาแห่งประเทศไทย"] || 0;
+      totals["สมาคมกีฬาแห่งจังหวัด"] += row.groups["สมาคมกีฬาแห่งจังหวัด"] || 0;
+      totals["หน่วยงานภายนอก"] += row.groups["หน่วยงานภายนอก"] || 0;
+      totals.grandTotal += row.total;
+    });
+    return totals;
+  }, [matrixData]);
+
   const handleExportEvaluationReport = () => {
     // 1. Summary sheet
     const summarySheetData = [
       { ตัวชี้วัด: "จำนวนประวัติการอบรมทั้งหมด (รายการ)", ค่าสถิติ: stats.totalTrainees },
-      { ตัวชี้วัด: "จำนวนบุคลากรเดี่ยวในระบบ (คน)", ค่าสถิติ: stats.uniquePersonnelCount },
+      { ตัวชี้วัด: "จำนวนบุคลากรเดี่ยวแท้จริงในระบบ (คน)", ค่าสถิติ: stats.uniquePersonnelCount },
       { ตัวชี้วัด: "บุคลากรที่ยังปฏิบัติหน้าที่ต่อเนื่อง (Active)", ค่าสถิติ: stats.activeCount },
       { ตัวชี้วัด: "อัตราการนำความรู้ไปปฏิบัติหน้าที่จริง (%)", ค่าสถิติ: `${stats.activeRatePercent}%` },
       { ตัวชี้วัด: "บุคลากรที่รอตรวจสอบการทำหน้าที่ (Pending)", ค่าสถิติ: stats.pendingCount },
@@ -35,7 +72,24 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
       "อัตรา Active (%)": `${g.count > 0 ? Math.round((g.activeCount / g.count) * 100) : 0}%`,
     }));
 
-    // 3. By Course Category sheet
+    // 3. Course x Affiliation Matrix Sheet
+    const fullMatrix = computeCourseAffiliationMatrix(trainees, "all");
+    const matrixSheetData = fullMatrix.map((row, idx) => ({
+      ลำดับ: idx + 1,
+      ชื่อหลักสูตร: row.courseTitle,
+      ประเภทหลักสูตร: row.category,
+      "สมาคมกีฬาแห่งประเทศไทย (คน)": row.groups["สมาคมกีฬาแห่งประเทศไทย"] || 0,
+      "สัดส่วน สมาคมกีฬาฯ (%)": `${row.percentByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0}%`,
+      "การกีฬาแห่งประเทศไทย (คน)": row.groups["การกีฬาแห่งประเทศไทย"] || 0,
+      "สัดส่วน กกท. (%)": `${row.percentByGroup["การกีฬาแห่งประเทศไทย"] || 0}%`,
+      "สมาคมกีฬาแห่งจังหวัด (คน)": row.groups["สมาคมกีฬาแห่งจังหวัด"] || 0,
+      "สัดส่วน สมาคมจังหวัด (%)": `${row.percentByGroup["สมาคมกีฬาแห่งจังหวัด"] || 0}%`,
+      "หน่วยงานภายนอก (คน)": row.groups["หน่วยงานภายนอก"] || 0,
+      "สัดส่วน ภายนอก (%)": `${row.percentByGroup["หน่วยงานภายนอก"] || 0}%`,
+      "รวมทั้งหมด (คน)": row.total,
+    }));
+
+    // 4. By Course Category sheet
     const categorySheetData = stats.byCourseCategory.map((c, idx) => ({
       ลำดับ: idx + 1,
       ประเภทหลักสูตร: c.name,
@@ -45,7 +99,7 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
       "อัตรา Active (%)": `${c.count > 0 ? Math.round((c.activeCount / c.count) * 100) : 0}%`,
     }));
 
-    // 4. By Course sheet (17 courses)
+    // 5. By Course sheet (17 courses)
     const courseSheetData = stats.byCourse.map((c, idx) => ({
       ลำดับ: idx + 1,
       ชื่อหลักสูตร: c.name,
@@ -54,7 +108,7 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
       "อัตราการนำไปใช้จริง (Active %)": `${c.activeRate}%`,
     }));
 
-    // 5. Knowledge Transfer & Applied Knowledge sheet (Kirkpatrick Level 3)
+    // 6. Knowledge Transfer & Applied Knowledge sheet (Kirkpatrick Level 3)
     const knowledgeSheetData = stats.qualitativeHighlights.map((q, idx) => ({
       ลำดับ: idx + 1,
       ชื่อบุคลากร: q.traineeName,
@@ -72,15 +126,17 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
     const workbook = XLSX.utils.book_new();
     const s1 = XLSX.utils.json_to_sheet(summarySheetData);
     const s2 = XLSX.utils.json_to_sheet(groupSheetData);
-    const s3 = XLSX.utils.json_to_sheet(categorySheetData);
-    const s4 = XLSX.utils.json_to_sheet(courseSheetData);
-    const s5 = XLSX.utils.json_to_sheet(knowledgeSheetData);
+    const s3 = XLSX.utils.json_to_sheet(matrixSheetData);
+    const s4 = XLSX.utils.json_to_sheet(categorySheetData);
+    const s5 = XLSX.utils.json_to_sheet(courseSheetData);
+    const s6 = XLSX.utils.json_to_sheet(knowledgeSheetData);
 
     XLSX.utils.book_append_sheet(workbook, s1, "สรุปภาพรวมโครงการ");
     XLSX.utils.book_append_sheet(workbook, s2, "จำแนกตามกลุ่มหน่วยงาน");
-    XLSX.utils.book_append_sheet(workbook, s3, "จำแนกตามประเภทหลักสูตร");
-    XLSX.utils.book_append_sheet(workbook, s4, "ประสิทธิผลรายหลักสูตร");
-    XLSX.utils.book_append_sheet(workbook, s5, "การนำความรู้ไปใช้จริง");
+    XLSX.utils.book_append_sheet(workbook, s3, "เมทริกซ์หลักสูตรแยกกลุ่ม");
+    XLSX.utils.book_append_sheet(workbook, s4, "จำแนกตามประเภทหลักสูตร");
+    XLSX.utils.book_append_sheet(workbook, s5, "ประสิทธิผลรายหลักสูตร");
+    XLSX.utils.book_append_sheet(workbook, s6, "การนำความรู้ไปใช้จริง");
 
     XLSX.writeFile(
       workbook,
@@ -105,7 +161,6 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Find maximum trainees in a single year for bar scaling
   const maxTraineeYear = useMemo(() => {
     return Math.max(...Object.values(stats.traineesByYear), 1);
   }, [stats.traineesByYear]);
@@ -131,7 +186,7 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
               แดชบอร์ดการประเมินผลโครงการพัฒนาบุคลากรกีฬา
             </h2>
             <p className="mt-1 text-xs sm:text-sm text-blue-100/80">
-              วิเคราะห์ความคุ้มค่าและผลสัมฤทธิ์ของการจัดอบรม จากฐานข้อมูลจริง 2,732 รายการ (1,913 บุคลากรเดี่ยว)
+              วิเคราะห์ความคุ้มค่าและผลสัมฤทธิ์ของการจัดอบรม จากฐานข้อมูลจริง 2,732 รายการ (1,891 บุคลากรเดี่ยวแท้จริง)
             </p>
           </div>
 
@@ -142,7 +197,7 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
               className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-[#16265E] shadow-sm hover:bg-blue-50 transition-colors cursor-pointer"
             >
               <span>📊</span>
-              <span>ส่งออกรายงานประเมินผล (Excel 5 แผ่น)</span>
+              <span>ส่งออกรายงานประเมินผล (Excel 6 แผ่น)</span>
             </button>
           </div>
         </div>
@@ -159,7 +214,7 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
             {stats.totalTrainees.toLocaleString()}
           </p>
           <p className="mt-1 text-xs text-gray-500">
-            บุคลากรเดี่ยว: <strong className="text-[#16265E] font-bold">{stats.uniquePersonnelCount.toLocaleString()}</strong> ท่าน
+            บุคลากรเดี่ยวแท้จริง: <strong className="text-[#16265E] font-bold">{stats.uniquePersonnelCount.toLocaleString()}</strong> ท่าน
           </p>
         </div>
 
@@ -222,7 +277,6 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
           </div>
         </div>
 
-        {/* Scrollable multi-year chart */}
         <div className="overflow-x-auto pb-2">
           <div className="flex items-end gap-2.5 min-w-[760px] pt-4 h-48 px-2">
             {PAST_YEARS_BE.slice()
@@ -237,7 +291,6 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
                     key={year}
                     className="flex-1 flex flex-col items-center group relative cursor-pointer"
                   >
-                    {/* Tooltip on hover */}
                     <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-900 text-white text-[10px] rounded-md px-2 py-1 pointer-events-none whitespace-nowrap z-10 shadow-md">
                       พ.ศ. {year}: {traineeCount} คน {dutyCount > 0 ? `(${dutyCount} หน้าที่)` : ""}
                     </div>
@@ -260,6 +313,241 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
                 );
               })}
           </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* SECTION: รายงานผลหลักสูตร แยกจำนวนคนตามกลุ่มหน่วยงาน (Course x Affiliation Matrix) */}
+      {/* ========================================================================= */}
+      <div className="rounded-2xl border border-blue-200 bg-white p-5 sm:p-6 shadow-xs space-y-5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="rounded-md bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-[#16265E]">
+                รายงานเจาะลึกกลุ่มเป้าหมาย (Cross-Tabulation Matrix)
+              </span>
+            </div>
+            <h3 className="mt-1.5 text-lg font-black text-[#16265E]">
+              🏛️ รายงานผลหลักสูตร แยกจำนวนคนตามกลุ่มหน่วยงาน
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              แสดงภาพกว้างของแต่ละหลักสูตรว่ามีกลุ่มหน่วยงานใดเข้ามาฝึกอบรม พร้อมสัดส่วนการกระจายตัว
+            </p>
+          </div>
+
+          {/* Filters for Matrix */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {/* Category Filter */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-gray-500 text-[11px] font-semibold">ประเภท:</span>
+              <select
+                value={matrixCategoryFilter}
+                onChange={(e) => setMatrixCategoryFilter(e.target.value)}
+                className="rounded-lg border border-gray-300 bg-white p-1.5 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
+              >
+                <option value="all">ทุกสายวิชาชีพ</option>
+                <option value="ผู้บริหารกีฬา">ผู้บริหารกีฬา</option>
+                <option value="ผู้ฝึกสอนกีฬา">ผู้ฝึกสอนกีฬา</option>
+                <option value="อื่นๆ">อื่นๆ</option>
+              </select>
+            </div>
+
+            {/* Year Filter */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-gray-500 text-[11px] font-semibold">ปีงบประมาณ:</span>
+              <select
+                value={matrixYearFilter}
+                onChange={(e) => setMatrixYearFilter(e.target.value)}
+                className="rounded-lg border border-gray-300 bg-white p-1.5 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
+              >
+                <option value="all">ทุกปี พ.ศ. (2547 - 2569)</option>
+                {PAST_YEARS_BE.map((y) => (
+                  <option key={y} value={y}>
+                    พ.ศ. {y}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Matrix Table */}
+        <div className="overflow-x-auto rounded-xl border border-gray-200">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead className="bg-[#16265E] text-white">
+              <tr>
+                <th className="py-3 px-3.5 font-bold">#</th>
+                <th className="py-3 px-3.5 font-bold min-w-[170px]">ชื่อหลักสูตร</th>
+                <th className="py-3 px-2 font-bold min-w-[90px]">ประเภท</th>
+                <th className="py-3 px-3 text-center font-bold bg-blue-900/70 border-l border-blue-800 min-w-[120px]">
+                  สมาคมกีฬาแห่งประเทศไทย
+                </th>
+                <th className="py-3 px-3 text-center font-bold bg-purple-900/70 border-l border-blue-800 min-w-[110px]">
+                  การกีฬาแห่งประเทศไทย
+                </th>
+                <th className="py-3 px-3 text-center font-bold bg-amber-900/70 border-l border-blue-800 min-w-[110px]">
+                  สมาคมกีฬาแห่งจังหวัด
+                </th>
+                <th className="py-3 px-3 text-center font-bold bg-emerald-900/70 border-l border-blue-800 min-w-[100px]">
+                  หน่วยงานภายนอก
+                </th>
+                <th className="py-3 px-3 text-center font-black text-amber-300 border-l border-blue-800 min-w-[90px]">
+                  รวม (คน)
+                </th>
+                <th className="py-3 px-3 text-center font-bold min-w-[180px] border-l border-blue-800">
+                  สัดส่วนกลุ่มหน่วยงาน (Distribution)
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {matrixData.map((row, idx) => {
+                const satThaiCount = row.groups["สมาคมกีฬาแห่งประเทศไทย"] || 0;
+                const satGovCount = row.groups["การกีฬาแห่งประเทศไทย"] || 0;
+                const provCount = row.groups["สมาคมกีฬาแห่งจังหวัด"] || 0;
+                const outCount = row.groups["หน่วยงานภายนอก"] || 0;
+
+                const satThaiPct = row.percentByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0;
+                const satGovPct = row.percentByGroup["การกีฬาแห่งประเทศไทย"] || 0;
+                const provPct = row.percentByGroup["สมาคมกีฬาแห่งจังหวัด"] || 0;
+                const outPct = row.percentByGroup["หน่วยงานภายนอก"] || 0;
+
+                return (
+                  <tr key={row.courseTitle} className="hover:bg-blue-50/40 transition-colors">
+                    <td className="py-2.5 px-3.5 text-gray-400 font-mono">{idx + 1}</td>
+                    <td className="py-2.5 px-3.5 font-bold text-[#16265E]">{row.courseTitle}</td>
+                    <td className="py-2.5 px-2">
+                      <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-700">
+                        {row.category}
+                      </span>
+                    </td>
+
+                    {/* สมาคมกีฬาแห่งประเทศไทย */}
+                    <td className="py-2.5 px-3 text-center border-l border-gray-100">
+                      {satThaiCount > 0 ? (
+                        <span className="font-bold text-blue-800">
+                          {satThaiCount} <span className="text-[10px] text-gray-400 font-normal">({satThaiPct}%)</span>
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">-</span>
+                      )}
+                    </td>
+
+                    {/* การกีฬาแห่งประเทศไทย */}
+                    <td className="py-2.5 px-3 text-center border-l border-gray-100">
+                      {satGovCount > 0 ? (
+                        <span className="font-bold text-purple-800">
+                          {satGovCount} <span className="text-[10px] text-gray-400 font-normal">({satGovPct}%)</span>
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">-</span>
+                      )}
+                    </td>
+
+                    {/* สมาคมกีฬาแห่งจังหวัด */}
+                    <td className="py-2.5 px-3 text-center border-l border-gray-100">
+                      {provCount > 0 ? (
+                        <span className="font-bold text-amber-800">
+                          {provCount} <span className="text-[10px] text-gray-400 font-normal">({provPct}%)</span>
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">-</span>
+                      )}
+                    </td>
+
+                    {/* หน่วยงานภายนอก */}
+                    <td className="py-2.5 px-3 text-center border-l border-gray-100">
+                      {outCount > 0 ? (
+                        <span className="font-bold text-emerald-800">
+                          {outCount} <span className="text-[10px] text-gray-400 font-normal">({outPct}%)</span>
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">-</span>
+                      )}
+                    </td>
+
+                    {/* รวมทั้งหมด */}
+                    <td className="py-2.5 px-3 text-center border-l border-gray-200 font-black text-[#16265E] bg-gray-50/50">
+                      {row.total.toLocaleString()}
+                    </td>
+
+                    {/* Stacked bar visualization */}
+                    <td className="py-2.5 px-3 border-l border-gray-100">
+                      <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden flex shadow-2xs">
+                        {satThaiPct > 0 && (
+                          <div
+                            className="bg-blue-600 h-full"
+                            style={{ width: `${satThaiPct}%` }}
+                            title={`สมาคมกีฬาแห่งประเทศไทย: ${satThaiCount} คน (${satThaiPct}%)`}
+                          />
+                        )}
+                        {satGovPct > 0 && (
+                          <div
+                            className="bg-purple-600 h-full"
+                            style={{ width: `${satGovPct}%` }}
+                            title={`กกท.: ${satGovCount} คน (${satGovPct}%)`}
+                          />
+                        )}
+                        {provPct > 0 && (
+                          <div
+                            className="bg-amber-500 h-full"
+                            style={{ width: `${provPct}%` }}
+                            title={`สมาคมกีฬาจังหวัด: ${provCount} คน (${provPct}%)`}
+                          />
+                        )}
+                        {outPct > 0 && (
+                          <div
+                            className="bg-emerald-500 h-full"
+                            style={{ width: `${outPct}%` }}
+                            title={`หน่วยงานภายนอก: ${outCount} คน (${outPct}%)`}
+                          />
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+
+            {/* Total Footer Row */}
+            <tfoot className="bg-gray-100 font-black text-gray-900 border-t-2 border-gray-300 text-xs">
+              <tr>
+                <td colSpan={3} className="py-3 px-3.5 text-right font-extrabold text-[#16265E]">
+                  รวมทั้งสิ้นทุกหลักสูตร:
+                </td>
+                <td className="py-3 px-3 text-center font-black text-blue-900 border-l border-gray-200">
+                  {matrixTotals["สมาคมกีฬาแห่งประเทศไทย"].toLocaleString()} คน
+                </td>
+                <td className="py-3 px-3 text-center font-black text-purple-900 border-l border-gray-200">
+                  {matrixTotals["การกีฬาแห่งประเทศไทย"].toLocaleString()} คน
+                </td>
+                <td className="py-3 px-3 text-center font-black text-amber-900 border-l border-gray-200">
+                  {matrixTotals["สมาคมกีฬาแห่งจังหวัด"].toLocaleString()} คน
+                </td>
+                <td className="py-3 px-3 text-center font-black text-emerald-900 border-l border-gray-200">
+                  {matrixTotals["หน่วยงานภายนอก"].toLocaleString()} คน
+                </td>
+                <td className="py-3 px-3 text-center font-black text-[#16265E] border-l border-gray-200 bg-amber-50">
+                  {matrixTotals.grandTotal.toLocaleString()} คน
+                </td>
+                <td className="py-3 px-3 border-l border-gray-200">
+                  <div className="flex items-center justify-center gap-2 text-[10.5px] font-normal text-gray-500">
+                    <span className="flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-xs bg-blue-600" /> สมาคมฯ
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-xs bg-purple-600" /> กกท.
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-xs bg-amber-500" /> จังหวัด
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-xs bg-emerald-500" /> ภายนอก
+                    </span>
+                  </div>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
       </div>
 
@@ -393,7 +681,6 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
 
         {/* 2 Sub-blocks: Dimensions breakdown + Impact Rating summary */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left 1 col: Impact Index Card */}
           <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/70 via-blue-50/40 to-white p-5 flex flex-col justify-between shadow-2xs">
             <div>
               <span className="text-xs font-bold text-indigo-900">ดัชนีประสิทธิผลการถ่ายทอดความรู้</span>
@@ -426,7 +713,6 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
             </div>
           </div>
 
-          {/* Right 2 cols: 5 Knowledge Dimensions breakdown */}
           <div className="lg:col-span-2 rounded-2xl border border-gray-100 bg-gray-50/70 p-5 space-y-3 shadow-2xs">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-bold text-[#16265E]">
@@ -472,7 +758,6 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
               </p>
             </div>
 
-            {/* Filter buttons */}
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
               <button
                 type="button"

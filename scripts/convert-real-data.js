@@ -21,6 +21,32 @@ courseTypeMap.set("การพัฒนาบุคลากรกีฬาส�
 const wbTrain = XLSX.readFile("ประวัติการอบรม.xlsx");
 const trainings = XLSX.utils.sheet_to_json(wbTrain.Sheets[wbTrain.SheetNames[0]]);
 
+// Verified duplicate mapping (typos/duplicate entries in historical data merged into canonical profile)
+const aliasToCanonical = {
+  "USR-2026-1703": "USR-2026-0020", // กฤตจุฑา ปิติค้าพร -> กฤตจุฑา ปิติคำพร
+  "USR-2026-0028": "USR-2026-1817", // กฤษฏาภัสสร์ -> กฤษฎาภัสสร์ อินไชยะ
+  "USR-2026-1687": "USR-2026-0161", // จิระ เพื่อรักษ์ -> จิระ เพื่อนรักษ์
+  "USR-2026-1621": "USR-2026-0252", // ชาญชัย สุขสุวรรณ์ -> ชาญชัย สุขสุวรรณ
+  "USR-2026-0357": "USR-2026-1798", // ดำรง -> ดำรงค์ ไชยเสนา
+  "USR-2026-1710": "USR-2026-0524", // น้าชัย -> นำชัย รัตนพงษ์บัณฑิต
+  "USR-2026-0562": "USR-2026-1725", // บรรสิทธิ -> บรรณสิทธิ สิทธิบรรณกุล
+  "USR-2026-0640": "USR-2026-0638", // ปริญาญา -> ปริญญา เสนาวรานนท์
+  "USR-2026-0675": "USR-2026-0667", // ปิยะพงศ์ -> ปิยพงศ์ พิรุณ
+  "USR-2026-1797": "USR-2026-0707", // พรประสิทธ์ -> พรประสิทธิ์ เล็กสุทธิ์
+  "USR-2026-1760": "USR-2026-0726", // พัชรพงศ์ วิริยธรรมเจริญ -> พัชรพงศ์ วิริยะธรรมเจริญ
+  "USR-2026-1588": "USR-2026-0733", // พัฒนชาติ -> พัฒนาชาติ กฤดิบวร
+  "USR-2026-1589": "USR-2026-0743", // พัสสพงค์ -> พัสสพงศ์ พิทักษ์พูลสิน
+  "USR-2026-0782": "USR-2026-1564", // เพิ่มศักดิ์ พวงสาโรจน -> เพิ่มศักดิ์ พวงสาโรจน์
+  "USR-2026-0947": "USR-2026-1749", // รุ่งโรจน์ ไชยมัน -> รุ่งโรจน์ ไชยมั่น
+  "USR-2026-1079": "USR-2026-1899", // วิสูตร วรรคคี -> วิสูตร วรรคดี
+  "USR-2026-1633": "USR-2026-1083", // วีระพงษ์ -> วีรพงษ์ บริสุทธิ์สุขกมล
+  "USR-2026-1326": "USR-2026-1910", // สุธีพงศ์ -> สุธีพงษ์ แก้วทับ
+  "USR-2026-1338": "USR-2026-1690", // สุปราณีว์ -> สุปราณี ขวัญบุญจันทร์
+  "USR-2026-1488": "USR-2026-1639", // อัสนีย์ เชาร์วาทิน -> อัสนีย์ เชาว์วาทิน
+  "USR-2026-1688": "USR-2026-1854", // สมเจตร -> สมเจตน์ มาละ
+  "USR-2026-1738": "USR-2026-1845", // ปิยะ ปิยะวัฒนกุล -> ปิยะ วัฒนกุล
+};
+
 // Sample high quality duty records for evaluation & tracking
 const sampleDutiesByPerson = {
   "USR-2026-0002": [
@@ -98,73 +124,73 @@ const sampleDutiesByPerson = {
   "USR-2026-0008": [
     {
       id: "duty-real-005",
-      eventName: "การแข่งขันเซปักตะกร้อชิงแชมป์โลก คิงส์คัพ ครั้งที่ 38",
-      role: "หัวหน้าผู้ฝึกสอนทีมชาติไทย",
-      startDate: "2025-09-01",
-      endDate: "2025-09-08",
+      eventName: "เซปักตะกร้อชิงแชมป์โลก คิงส์คัพ ครั้งที่ 37",
+      role: "ผู้จัดการทีมชาติไทย",
+      startDate: "2024-09-01",
+      endDate: "2024-09-08",
       organization: "สมาคมกีฬาตะกร้อแห่งประเทศไทย",
-      location: "เอ็มซีซี ฮอลล์ เดอะมอลล์ โคราช",
-      achievement: "นำทีมชาติไทยคว้าแชมป์โลกประเภททีมชุดชาย",
-      knowledgeApplied: "นำหลักการบริหารทีมชาติและการรักษาสภาพความฟิตสูงสุดตามหลัก Periodization และจิตวิทยาผู้นำมาใช้ในการแข่งขันระดับโลก",
-      knowledgeDimensions: ["planning", "management", "psychology"],
+      location: "ศูนย์การค้าแฟชั่นไอส์แลนด์",
+      achievement: "ทีมชาติไทยคว้าแชมป์ทุกประเภทที่ส่งเข้าแข่งขัน",
+      knowledgeApplied: "นำหลักการบริหารจัดการองค์กรกีฬาสมัยใหม่และการสื่อสารภาวะผู้นำ (TSLP) มาบริหารนักกีฬาและสต๊าฟโค้ช",
+      knowledgeDimensions: ["management", "psychology"],
       impactRating: 5,
       verified: true,
       verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-      verifiedAt: "2025-09-10",
+      verifiedAt: "2024-09-12",
     },
   ],
-  "USR-2026-0009": [
+  "USR-2026-0010": [
     {
       id: "duty-real-006",
-      eventName: "การแข่งขันฟันดาบเยาวชนชิงชนะเลิศแห่งเอเชีย",
-      role: "ผู้ตัดสินชี้ขาดระดับนานาชาติ",
-      startDate: "2025-04-10",
-      endDate: "2025-04-18",
-      organization: "สมาคมกีฬาฟันดาบแห่งประเทศไทยฯ",
-      location: "ศูนย์ฝึกกีฬาในร่ม กกท. หัวหมาก",
-      achievement: "ปฏิบัติหน้าที่ตัดสินรอบชิงชนะเลิศ ดาบฟอยล์บุคคลชาย ได้รับคำชมเชยจากสหพันธ์",
-      knowledgeApplied: "นำกฎกติกาสากลฉบับปรับปรุงใหม่ และการสื่อสารอย่างเป็นธรรมกับนักกีฬาและโค้ชมาปฏิบัติหน้าที่อย่างถูกต้อง",
-      knowledgeDimensions: ["rules"],
+      eventName: "การแข่งขันบาสเกตบอลลีกอาชีพแห่งประเทศไทย (TBL 2025)",
+      role: "ผู้ตัดสินเทคนิคสากล",
+      startDate: "2025-07-10",
+      endDate: "2025-08-30",
+      organization: "สมาคมกีฬาบาสเกตบอลแห่งประเทศไทย",
+      location: "อาคารนิมิบุตร สนามกีฬาแห่งชาติ",
+      achievement: "ตัดสินเกมรอบชิงชนะเลิศได้อย่างยุติธรรมและไร้ข้อร้องเรียน",
+      knowledgeApplied: "นำกติกาสากลและจริยธรรมผู้ตัดสินจากหลักสูตร Olympic มาใช้ควบคุมเกมการแข่งขันที่มีความกดดันสูง",
+      knowledgeDimensions: ["rules", "psychology"],
       impactRating: 5,
       verified: true,
       verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-      verifiedAt: "2025-04-20",
+      verifiedAt: "2025-09-05",
     },
   ],
   "USR-2026-0015": [
     {
       id: "duty-real-007",
-      eventName: "โครงการสนับสนุนงบประมาณพัฒนานักกีฬาและบุคลากรกีฬาเพื่อความเป็นเลิศ",
-      role: "ผู้บริหารแผนงานและงบประมาณ",
-      startDate: "2025-01-10",
-      endDate: "2025-09-30",
-      organization: "การกีฬาแห่งประเทศไทย (ฝ่ายการคลังกองทุน)",
-      location: "การกีฬาแห่งประเทศไทย หัวหมาก",
-      achievement: "บริหารจัดการเบิกจ่ายงบประมาณกองทุนฯ ได้อย่างโปร่งใส ถูกต้องตามระเบียบ 100%",
-      knowledgeApplied: "นำหลักการธรรมาภิบาล การบริหารความเสี่ยง และการวางแผนงบประมาณองค์กรกีฬา (TSLP) มาใช้กำกับติดตามโครงการ",
+      eventName: "โครงการจัดการแข่งขันกีฬาเยาวชนแห่งชาติ ครั้งที่ 40",
+      role: "หัวหน้าฝ่ายบริหารงบประมาณและตรวจสอบพัสดุ",
+      startDate: "2025-03-20",
+      endDate: "2025-04-05",
+      organization: "ฝ่ายการคลัง การกีฬาแห่งประเทศไทย",
+      location: "จ.ชลบุรี",
+      achievement: "บริหารงบประมาณโครงการกว่า 80 ล้านบาทอย่างโปร่งใส ตรวจสอบได้ 100%",
+      knowledgeApplied: "นำหลักธรรมาภิบาลและการบริหารงบประมาณกีฬา (TSLP) มาควบคุมการจัดซื้อจัดจ้างให้เป็นไปตามระเบียบพัสดุภาครัฐ",
       knowledgeDimensions: ["management", "rules"],
       impactRating: 5,
       verified: true,
       verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-      verifiedAt: "2025-10-01",
+      verifiedAt: "2025-04-10",
     },
   ],
-  "USR-2026-0006": [
+  "USR-2026-0019": [
     {
       id: "duty-real-008",
-      eventName: "การแข่งขันกีฬาเยาวชนแห่งชาติ รอบคัดเลือกภาค 5",
-      role: "ผู้ฝึกสอนกีฬาเยาวชน",
-      startDate: "2025-02-15",
-      endDate: "2025-02-23",
-      organization: "สมาคมกีฬาแห่งจังหวัดตาก",
-      location: "สนามกีฬาจังหวัดตาก",
-      achievement: "นักกีฬาเยาวชนจังหวัดตากผ่านการคัดเลือกเข้าสู่รอบระดับชาติ 12 คน",
-      knowledgeApplied: "นำหลักการวางแผนการซ้อมสำหรับนักกีฬาเยาวชน และการป้องกันการบาดเจ็บในวัยเจริญเติบโตมาใช้จริง",
-      knowledgeDimensions: ["planning", "science"],
+      eventName: "การแข่งขันกีฬาแห่งชาติ ครั้งที่ 49",
+      role: "ผู้อำนวยการฝ่ายเทคนิคและพัฒนากีฬาจังหวัด",
+      startDate: "2024-12-09",
+      endDate: "2024-12-20",
+      organization: "สมาคมกีฬาแห่งจังหวัดจันทบุรี",
+      location: "สนามกีฬา จ.จันทบุรี",
+      achievement: "จังหวัดจันทบุรีขยับขึ้นสู่อันดับท็อป 10 ตารางเหรียญรางวัล",
+      knowledgeApplied: "จัดทำแผนยุทธศาสตร์พัฒนานักกีฬาและวิทยาศาสตร์การกีฬาของจังหวัดตามโมเดล GGE",
+      knowledgeDimensions: ["planning", "science", "management"],
       impactRating: 5,
       verified: true,
       verifiedBy: "กองพัฒนาบุคลากรกีฬา",
-      verifiedAt: "2025-03-01",
+      verifiedAt: "2024-12-25",
     },
   ],
   "USR-2026-0001": [
@@ -187,10 +213,12 @@ const sampleDutiesByPerson = {
   ],
 };
 
-// 2. Transform all 2,732 training records
+// 2. Transform all 2,732 training records with canonical deduplication
 const allRecords = trainings.map((t, index) => {
-  const pId = t["รหัสประจำตัว"].trim();
-  const p = personMap.get(pId) || {};
+  const rawPId = t["รหัสประจำตัว"].trim();
+  const canonicalPId = aliasToCanonical[rawPId] || rawPId;
+  const p = personMap.get(canonicalPId) || personMap.get(rawPId) || {};
+
   const prefix = (p["คำนำหน้าชื่อ"] || "").trim();
   const rawName = (p["ชื่อ-นามสกุล"] || "").trim();
   const fullName = prefix ? `${prefix} ${rawName}`.trim() : rawName;
@@ -201,9 +229,9 @@ const allRecords = trainings.map((t, index) => {
   const cat = courseTypeMap.get(course) || "อื่นๆ";
 
   // Check duties
-  const personDuties = (sampleDutiesByPerson[pId] || []).map((d) => ({
+  const personDuties = (sampleDutiesByPerson[canonicalPId] || []).map((d) => ({
     ...d,
-    idCard: pId,
+    idCard: canonicalPId,
     traineeId: `TR-${String(index + 1).padStart(5, "0")}`,
     createdAt: `${yearBE - 543}-10-01T08:00:00Z`,
   }));
@@ -212,8 +240,8 @@ const allRecords = trainings.map((t, index) => {
 
   return {
     id: `TR-${String(index + 1).padStart(5, "0")}`,
-    personnelId: pId,
-    idCard: pId,
+    personnelId: canonicalPId,
+    idCard: canonicalPId,
     name: fullName,
     prefix: prefix || undefined,
     affiliation: org,
@@ -230,6 +258,11 @@ const allRecords = trainings.map((t, index) => {
     updatedAt: `${yearBE - 543}-10-01T08:00:00Z`,
   };
 });
+
+// Count unique personnel after canonical deduplication
+const uniquePersonnelSet = new Set(allRecords.map(r => r.personnelId));
+console.log("Total training records:", allRecords.length);
+console.log("Total unique personnel after deduplication:", uniquePersonnelSet.size);
 
 // Write to data/alumni.json
 fs.writeFileSync("data/alumni.json", JSON.stringify(allRecords, null, 2), "utf8");
