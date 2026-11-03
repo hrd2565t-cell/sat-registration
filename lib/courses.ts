@@ -10,10 +10,10 @@ export interface TargetGroupQuotas {
 
 export const TARGET_GROUPS = [
   { key: "sat", label: "การกีฬาแห่งประเทศไทย" },
+  { key: "nsdf", label: "กองทุนพัฒนาการกีฬาแห่งชาติ" },
   { key: "nationalAssoc", label: "สมาคมกีฬาแห่งประเทศไทย" },
   { key: "provincialAssoc", label: "สมาคมกีฬาแห่งจังหวัด" },
-  { key: "nsdf", label: "กองทุนพัฒนาการกีฬาแห่งชาติ" },
-  { key: "external", label: "หน่วยงานภายนอก / บุคคลทั่วไป" },
+  { key: "external", label: "หน่วยงานภายนอก" },
 ] as const;
 
 export type TargetGroupKey = (typeof TARGET_GROUPS)[number]["key"];

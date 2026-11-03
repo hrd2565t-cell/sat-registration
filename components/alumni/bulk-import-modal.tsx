@@ -7,6 +7,8 @@ import {
   findExistingTrainee,
   generateNextPersonnelIds,
   getNextPersonnelId,
+  AFFILIATION_GROUPS,
+  inferAffiliationGroup,
 } from "@/lib/alumni-store";
 
 export interface ParsedImportRow extends Omit<
@@ -117,8 +119,8 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
 
           const fullName = prefix && !rawName.startsWith(prefix) ? `${prefix} ${rawName}` : rawName;
 
-          const group = String(
-            row["กลุ่มหน่วยงาน"] ?? row["กลุ่ม"] ?? row["affiliationGroup"] ?? "หน่วยงานภายนอก"
+          const rawGroup = String(
+            row["กลุ่มหน่วยงาน"] ?? row["กลุ่ม"] ?? row["affiliationGroup"] ?? ""
           ).trim();
 
           const org = String(
@@ -127,8 +129,12 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
               row["สังกัด"] ??
               row["หน่วยงาน"] ??
               row["affiliation"] ??
-              group
+              rawGroup
           ).trim();
+
+          const group = rawGroup && AFFILIATION_GROUPS.includes(rawGroup as any)
+            ? rawGroup
+            : inferAffiliationGroup(rawGroup || org);
 
           const course = String(
             row["ชื่อหลักสูตร"] ?? row["หลักสูตร"] ?? row["courseTitle"] ?? "หลักสูตรพัฒนาบุคลากรกีฬา"

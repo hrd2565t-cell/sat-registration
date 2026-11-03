@@ -45,7 +45,7 @@ export function AlumniDirectoryTab({
 
   // Inline Quick Edit Group State
   const [editingGroupPersonId, setEditingGroupPersonId] = useState<string | null>(null);
-  const [editingGroupValue, setEditingGroupValue] = useState<string>("สมาคมกีฬาแห่งประเทศไทย");
+  const [editingGroupValue, setEditingGroupValue] = useState<string>("การกีฬาแห่งประเทศไทย");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Admin PIN Unlock Dialog State
@@ -325,10 +325,12 @@ export function AlumniDirectoryTab({
 
   const getGroupBadgeClass = (group?: string) => {
     switch (group) {
-      case "สมาคมกีฬาแห่งประเทศไทย":
-        return "bg-blue-50 text-blue-700 border-blue-200";
       case "การกีฬาแห่งประเทศไทย":
         return "bg-purple-50 text-purple-700 border-purple-200";
+      case "กองทุนพัฒนาการกีฬาแห่งชาติ":
+        return "bg-sky-50 text-sky-800 border-sky-300";
+      case "สมาคมกีฬาแห่งประเทศไทย":
+        return "bg-blue-50 text-blue-700 border-blue-200";
       case "สมาคมกีฬาแห่งจังหวัด":
         return "bg-amber-50 text-amber-800 border-amber-200";
       case "หน่วยงานภายนอก":
@@ -540,7 +542,7 @@ export function AlumniDirectoryTab({
                 }}
                 className="w-full rounded-lg border border-gray-300 bg-white p-2 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
               >
-                <option value="all">ทุกกลุ่มหน่วยงาน (4 กลุ่ม)</option>
+                <option value="all">ทุกกลุ่มหน่วยงาน (5 กลุ่ม)</option>
                 {AFFILIATION_GROUPS.map((g) => (
                   <option key={g} value={g}>
                     {g}
@@ -685,13 +687,25 @@ export function AlumniDirectoryTab({
                               {p.name.replace(/^(นาย|นางสาว|นาง|ดร\.|นาวาเอก|นาวาโท|นาวาตรี|เรือเอก|ร\.ต\.อ\.|พ\.จ\.ต\.|ส\.อ\.)\s*/, "").slice(0, 2)}
                             </div>
                             <div>
-                              <button
-                                type="button"
-                                onClick={() => onOpenPassport(p.personnelId)}
-                                className="font-bold text-[#16265E] hover:underline text-left cursor-pointer"
-                              >
-                                {p.name}
-                              </button>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenPassport(p.personnelId)}
+                                  className="font-bold text-[#16265E] hover:underline text-left cursor-pointer"
+                                >
+                                  {p.name}
+                                </button>
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenPassport(p.personnelId)}
+                                    className="text-gray-400 hover:text-[#16265E] text-xs p-0.5 rounded cursor-pointer transition-colors"
+                                    title="แก้ไขข้อมูลบุคลากร (Admin)"
+                                  >
+                                    ✏️
+                                  </button>
+                                )}
+                              </div>
                               <p className="text-[11px] text-gray-500 font-mono">
                                 รหัส {p.personnelId}
                               </p>
@@ -893,13 +907,25 @@ export function AlumniDirectoryTab({
                               {t.name.replace(/^(นาย|นางสาว|นาง|ดร\.|นาวาเอก|นาวาโท|นาวาตรี|เรือเอก|ร\.ต\.อ\.|พ\.จ\.ต\.|ส\.อ\.)\s*/, "").slice(0, 2)}
                             </div>
                             <div>
-                              <button
-                                type="button"
-                                onClick={() => onOpenPassport(identifier)}
-                                className="font-bold text-[#16265E] hover:underline text-left cursor-pointer"
-                              >
-                                {t.name}
-                              </button>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenPassport(identifier)}
+                                  className="font-bold text-[#16265E] hover:underline text-left cursor-pointer"
+                                >
+                                  {t.name}
+                                </button>
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenPassport(identifier)}
+                                    className="text-gray-400 hover:text-[#16265E] text-xs p-0.5 rounded cursor-pointer transition-colors"
+                                    title="แก้ไขข้อมูลบุคลากร (Admin)"
+                                  >
+                                    ✏️
+                                  </button>
+                                )}
+                              </div>
                               <p className="text-[11px] text-gray-500 font-mono">
                                 {t.personnelId ? `รหัส ${t.personnelId}` : identifier}
                               </p>

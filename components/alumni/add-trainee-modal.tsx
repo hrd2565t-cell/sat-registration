@@ -21,7 +21,7 @@ export function AddTraineeModal({ onClose, onSuccess, trainees }: AddTraineeModa
   const [prefix, setPrefix] = useState("นาย");
   const [customPrefix, setCustomPrefix] = useState("");
   const [name, setName] = useState("");
-  const [affiliationGroup, setAffiliationGroup] = useState<string>("สมาคมกีฬาแห่งประเทศไทย");
+  const [affiliationGroup, setAffiliationGroup] = useState<string>("การกีฬาแห่งประเทศไทย");
   const [affiliation, setAffiliation] = useState("");
   const [selectedCourse, setSelectedCourse] = useState<string>("GGE");
   const [customCourse, setCustomCourse] = useState("");

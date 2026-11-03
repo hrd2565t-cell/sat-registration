@@ -213,16 +213,18 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
   // Totals for matrix footer
   const matrixTotals = useMemo(() => {
     const totals = {
-      "สมาคมกีฬาแห่งประเทศไทย": 0,
       "การกีฬาแห่งประเทศไทย": 0,
+      "กองทุนพัฒนาการกีฬาแห่งชาติ": 0,
+      "สมาคมกีฬาแห่งประเทศไทย": 0,
       "สมาคมกีฬาแห่งจังหวัด": 0,
       "หน่วยงานภายนอก": 0,
       grandTotal: 0,
       grandTarget: 0,
     };
     matrixData.forEach((row) => {
-      totals["สมาคมกีฬาแห่งประเทศไทย"] += row.groups["สมาคมกีฬาแห่งประเทศไทย"] || 0;
       totals["การกีฬาแห่งประเทศไทย"] += row.groups["การกีฬาแห่งประเทศไทย"] || 0;
+      totals["กองทุนพัฒนาการกีฬาแห่งชาติ"] += row.groups["กองทุนพัฒนาการกีฬาแห่งชาติ"] || 0;
+      totals["สมาคมกีฬาแห่งประเทศไทย"] += row.groups["สมาคมกีฬาแห่งประเทศไทย"] || 0;
       totals["สมาคมกีฬาแห่งจังหวัด"] += row.groups["สมาคมกีฬาแห่งจังหวัด"] || 0;
       totals["หน่วยงานภายนอก"] += row.groups["หน่วยงานภายนอก"] || 0;
       totals.grandTotal += row.total;
@@ -245,8 +247,9 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
       ชื่อหลักสูตร: row.courseTitle,
       ประเภทหลักสูตร: row.category,
       "ค่าเป้าหมาย (คน)": row.target,
-      "สมาคมกีฬาแห่งประเทศไทย (คน)": row.groups["สมาคมกีฬาแห่งประเทศไทย"] || 0,
       "การกีฬาแห่งประเทศไทย (คน)": row.groups["การกีฬาแห่งประเทศไทย"] || 0,
+      "กองทุนพัฒนาการกีฬาแห่งชาติ (คน)": row.groups["กองทุนพัฒนาการกีฬาแห่งชาติ"] || 0,
+      "สมาคมกีฬาแห่งประเทศไทย (คน)": row.groups["สมาคมกีฬาแห่งประเทศไทย"] || 0,
       "สมาคมกีฬาแห่งจังหวัด (คน)": row.groups["สมาคมกีฬาแห่งจังหวัด"] || 0,
       "หน่วยงานภายนอก (คน)": row.groups["หน่วยงานภายนอก"] || 0,
       "รวมผ่านการอบรมจริง (คน)": row.total,
@@ -265,8 +268,9 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
       ชื่อหลักสูตร: "รวมทั้งสิ้นทุกหลักสูตร",
       ประเภทหลักสูตร: "-",
       "ค่าเป้าหมาย (คน)": matrixTotals.grandTarget,
-      "สมาคมกีฬาแห่งประเทศไทย (คน)": matrixTotals["สมาคมกีฬาแห่งประเทศไทย"],
       "การกีฬาแห่งประเทศไทย (คน)": matrixTotals["การกีฬาแห่งประเทศไทย"],
+      "กองทุนพัฒนาการกีฬาแห่งชาติ (คน)": matrixTotals["กองทุนพัฒนาการกีฬาแห่งชาติ"],
+      "สมาคมกีฬาแห่งประเทศไทย (คน)": matrixTotals["สมาคมกีฬาแห่งประเทศไทย"],
       "สมาคมกีฬาแห่งจังหวัด (คน)": matrixTotals["สมาคมกีฬาแห่งจังหวัด"],
       "หน่วยงานภายนอก (คน)": matrixTotals["หน่วยงานภายนอก"],
       "รวมผ่านการอบรมจริง (คน)": matrixTotals.grandTotal,
@@ -332,8 +336,9 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
       "การอบรมซ้ำในปี (คน-ครั้ง)": row.duplicateEnrollments,
       "บุคลากรหน้าใหม่ (คน)": row.newTrainees,
       "สัดส่วนหน้าใหม่ (%)": `${row.newPercentage}%`,
-      "หน้าใหม่ - สมาคมกีฬาฯ": row.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0,
       "หน้าใหม่ - กกท.": row.newByGroup["การกีฬาแห่งประเทศไทย"] || 0,
+      "หน้าใหม่ - กองทุนกีฬาฯ": row.newByGroup["กองทุนพัฒนาการกีฬาแห่งชาติ"] || 0,
+      "หน้าใหม่ - สมาคมกีฬาฯ": row.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0,
       "หน้าใหม่ - สมาคมกีฬาจังหวัด": row.newByGroup["สมาคมกีฬาแห่งจังหวัด"] || 0,
       "หน้าใหม่ - หน่วยงานภายนอก": row.newByGroup["หน่วยงานภายนอก"] || 0,
       "บุคลากรเดิมต่อยอด (คน)": row.returningTrainees,
@@ -352,8 +357,9 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
       "การอบรมซ้ำในปี (คน-ครั้ง)": totalRecordsAll - uniqueAll,
       "บุคลากรหน้าใหม่ (คน)": newAll,
       "สัดส่วนหน้าใหม่ (%)": "100%",
-      "หน้าใหม่ - สมาคมกีฬาฯ": annualCohorts.reduce((a, c) => a + (c.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0), 0),
       "หน้าใหม่ - กกท.": annualCohorts.reduce((a, c) => a + (c.newByGroup["การกีฬาแห่งประเทศไทย"] || 0), 0),
+      "หน้าใหม่ - กองทุนกีฬาฯ": annualCohorts.reduce((a, c) => a + (c.newByGroup["กองทุนพัฒนาการกีฬาแห่งชาติ"] || 0), 0),
+      "หน้าใหม่ - สมาคมกีฬาฯ": annualCohorts.reduce((a, c) => a + (c.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0), 0),
       "หน้าใหม่ - สมาคมกีฬาจังหวัด": annualCohorts.reduce((a, c) => a + (c.newByGroup["สมาคมกีฬาแห่งจังหวัด"] || 0), 0),
       "หน้าใหม่ - หน่วยงานภายนอก": annualCohorts.reduce((a, c) => a + (c.newByGroup["หน่วยงานภายนอก"] || 0), 0),
       "บุคลากรเดิมต่อยอด (คน)": totalRecordsAll - newAll,
@@ -887,22 +893,26 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
             <div className="rounded-xl border border-gray-200 bg-white p-3.5 shadow-2xs flex flex-col justify-between">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-gray-700">🏛️ สังกัดของบุคลากรหน้าใหม่</span>
-                <span className="text-[10px] text-gray-500 font-medium">4 กลุ่มหน่วยงาน</span>
+                <span className="text-[10px] text-gray-500 font-medium">5 กลุ่มหน่วยงาน</span>
               </div>
-              <div className="grid grid-cols-2 gap-1.5 mt-2 text-[10.5px]">
-                <div className="rounded-md bg-blue-50/90 p-1 px-1.5 border border-blue-100">
-                  <div className="text-gray-500 text-[10px] truncate">สมาคมกีฬาฯ</div>
-                  <div className="font-bold text-blue-700">{currentCohortSummary.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0} คน</div>
-                </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mt-2 text-[10.5px]">
                 <div className="rounded-md bg-purple-50/90 p-1 px-1.5 border border-purple-100">
                   <div className="text-gray-500 text-[10px] truncate">กกท.</div>
                   <div className="font-bold text-purple-700">{currentCohortSummary.newByGroup["การกีฬาแห่งประเทศไทย"] || 0} คน</div>
+                </div>
+                <div className="rounded-md bg-sky-50/90 p-1 px-1.5 border border-sky-100">
+                  <div className="text-gray-500 text-[10px] truncate">กองทุนกีฬาฯ</div>
+                  <div className="font-bold text-sky-700">{currentCohortSummary.newByGroup["กองทุนพัฒนาการกีฬาแห่งชาติ"] || 0} คน</div>
+                </div>
+                <div className="rounded-md bg-blue-50/90 p-1 px-1.5 border border-blue-100">
+                  <div className="text-gray-500 text-[10px] truncate">สมาคมกีฬาฯ</div>
+                  <div className="font-bold text-blue-700">{currentCohortSummary.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0} คน</div>
                 </div>
                 <div className="rounded-md bg-amber-50/90 p-1 px-1.5 border border-amber-100">
                   <div className="text-gray-500 text-[10px] truncate">สมาคม จ.</div>
                   <div className="font-bold text-amber-700">{currentCohortSummary.newByGroup["สมาคมกีฬาแห่งจังหวัด"] || 0} คน</div>
                 </div>
-                <div className="rounded-md bg-emerald-50/90 p-1 px-1.5 border border-emerald-100">
+                <div className="rounded-md bg-emerald-50/90 p-1 px-1.5 border border-emerald-100 col-span-2 sm:col-span-1">
                   <div className="text-gray-500 text-[10px] truncate">หน่วยภายนอก</div>
                   <div className="font-bold text-emerald-700">{currentCohortSummary.newByGroup["หน่วยงานภายนอก"] || 0} คน</div>
                 </div>
@@ -910,14 +920,19 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
               {/* Distribution Mini Progress Bar */}
               <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden flex mt-2 shadow-inner">
                 <div
-                  style={{ width: `${currentCohortSummary.newCount > 0 ? ((currentCohortSummary.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0) / currentCohortSummary.newCount) * 100 : 0}%` }}
-                  className="bg-blue-600 transition-all"
-                  title={`สมาคมกีฬาแห่งประเทศไทย: ${currentCohortSummary.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0} คน`}
-                />
-                <div
                   style={{ width: `${currentCohortSummary.newCount > 0 ? ((currentCohortSummary.newByGroup["การกีฬาแห่งประเทศไทย"] || 0) / currentCohortSummary.newCount) * 100 : 0}%` }}
                   className="bg-purple-600 transition-all"
                   title={`การกีฬาแห่งประเทศไทย: ${currentCohortSummary.newByGroup["การกีฬาแห่งประเทศไทย"] || 0} คน`}
+                />
+                <div
+                  style={{ width: `${currentCohortSummary.newCount > 0 ? ((currentCohortSummary.newByGroup["กองทุนพัฒนาการกีฬาแห่งชาติ"] || 0) / currentCohortSummary.newCount) * 100 : 0}%` }}
+                  className="bg-sky-600 transition-all"
+                  title={`กองทุนพัฒนาการกีฬาแห่งชาติ: ${currentCohortSummary.newByGroup["กองทุนพัฒนาการกีฬาแห่งชาติ"] || 0} คน`}
+                />
+                <div
+                  style={{ width: `${currentCohortSummary.newCount > 0 ? ((currentCohortSummary.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0) / currentCohortSummary.newCount) * 100 : 0}%` }}
+                  className="bg-blue-600 transition-all"
+                  title={`สมาคมกีฬาแห่งประเทศไทย: ${currentCohortSummary.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0} คน`}
                 />
                 <div
                   style={{ width: `${currentCohortSummary.newCount > 0 ? ((currentCohortSummary.newByGroup["สมาคมกีฬาแห่งจังหวัด"] || 0) / currentCohortSummary.newCount) * 100 : 0}%` }}
@@ -949,11 +964,14 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                     </span>
                   </div>
                 </th>
-                <th className="py-3 px-3 text-center font-bold bg-blue-900/70 border-l border-blue-800 min-w-[110px]">
-                  สมาคมกีฬาแห่งประเทศไทย
-                </th>
                 <th className="py-3 px-3 text-center font-bold bg-purple-900/70 border-l border-blue-800 min-w-[105px]">
                   การกีฬาแห่งประเทศไทย
+                </th>
+                <th className="py-3 px-3 text-center font-bold bg-sky-900/70 border-l border-blue-800 min-w-[115px]">
+                  กองทุนพัฒนาการกีฬาแห่งชาติ
+                </th>
+                <th className="py-3 px-3 text-center font-bold bg-blue-900/70 border-l border-blue-800 min-w-[110px]">
+                  สมาคมกีฬาแห่งประเทศไทย
                 </th>
                 <th className="py-3 px-3 text-center font-bold bg-amber-900/70 border-l border-blue-800 min-w-[105px]">
                   สมาคมกีฬาแห่งจังหวัด
@@ -980,13 +998,15 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
             </thead>
             <tbody className="divide-y divide-gray-100">
               {matrixData.map((row, idx) => {
-                const satThaiCount = row.groups["สมาคมกีฬาแห่งประเทศไทย"] || 0;
                 const satGovCount = row.groups["การกีฬาแห่งประเทศไทย"] || 0;
+                const nsdfCount = row.groups["กองทุนพัฒนาการกีฬาแห่งชาติ"] || 0;
+                const satThaiCount = row.groups["สมาคมกีฬาแห่งประเทศไทย"] || 0;
                 const provCount = row.groups["สมาคมกีฬาแห่งจังหวัด"] || 0;
                 const outCount = row.groups["หน่วยงานภายนอก"] || 0;
 
-                const satThaiPct = row.percentByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0;
                 const satGovPct = row.percentByGroup["การกีฬาแห่งประเทศไทย"] || 0;
+                const nsdfPct = row.percentByGroup["กองทุนพัฒนาการกีฬาแห่งชาติ"] || 0;
+                const satThaiPct = row.percentByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0;
                 const provPct = row.percentByGroup["สมาคมกีฬาแห่งจังหวัด"] || 0;
                 const outPct = row.percentByGroup["หน่วยงานภายนอก"] || 0;
 
@@ -1072,22 +1092,33 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                       )}
                     </td>
 
-                    {/* สมาคมกีฬาแห่งประเทศไทย */}
+                    {/* การกีฬาแห่งประเทศไทย */}
                     <td className="py-2.5 px-3 text-center border-l border-gray-100">
-                      {satThaiCount > 0 ? (
-                        <span className="font-bold text-blue-800">
-                          {satThaiCount} <span className="text-[10px] text-gray-400 font-normal">({satThaiPct}%)</span>
+                      {satGovCount > 0 ? (
+                        <span className="font-bold text-purple-800">
+                          {satGovCount} <span className="text-[10px] text-gray-400 font-normal">({satGovPct}%)</span>
                         </span>
                       ) : (
                         <span className="text-gray-300">-</span>
                       )}
                     </td>
 
-                    {/* การกีฬาแห่งประเทศไทย */}
+                    {/* กองทุนพัฒนาการกีฬาแห่งชาติ */}
+                    <td className="py-2.5 px-3 text-center border-l border-gray-100 bg-sky-50/20">
+                      {nsdfCount > 0 ? (
+                        <span className="font-bold text-sky-800">
+                          {nsdfCount} <span className="text-[10px] text-gray-400 font-normal">({nsdfPct}%)</span>
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">-</span>
+                      )}
+                    </td>
+
+                    {/* สมาคมกีฬาแห่งประเทศไทย */}
                     <td className="py-2.5 px-3 text-center border-l border-gray-100">
-                      {satGovCount > 0 ? (
-                        <span className="font-bold text-purple-800">
-                          {satGovCount} <span className="text-[10px] text-gray-400 font-normal">({satGovPct}%)</span>
+                      {satThaiCount > 0 ? (
+                        <span className="font-bold text-blue-800">
+                          {satThaiCount} <span className="text-[10px] text-gray-400 font-normal">({satThaiPct}%)</span>
                         </span>
                       ) : (
                         <span className="text-gray-300">-</span>
@@ -1198,18 +1229,25 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                     {/* Stacked bar visualization */}
                     <td className="py-2.5 px-3 border-l border-gray-100">
                       <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden flex shadow-2xs">
-                        {satThaiPct > 0 && (
-                          <div
-                            className="bg-blue-600 h-full"
-                            style={{ width: `${satThaiPct}%` }}
-                            title={`สมาคมกีฬาแห่งประเทศไทย: ${satThaiCount} คน (${satThaiPct}%)`}
-                          />
-                        )}
                         {satGovPct > 0 && (
                           <div
                             className="bg-purple-600 h-full"
                             style={{ width: `${satGovPct}%` }}
                             title={`กกท.: ${satGovCount} คน (${satGovPct}%)`}
+                          />
+                        )}
+                        {nsdfPct > 0 && (
+                          <div
+                            className="bg-sky-600 h-full"
+                            style={{ width: `${nsdfPct}%` }}
+                            title={`กองทุนพัฒนาการกีฬาแห่งชาติ: ${nsdfCount} คน (${nsdfPct}%)`}
+                          />
+                        )}
+                        {satThaiPct > 0 && (
+                          <div
+                            className="bg-blue-600 h-full"
+                            style={{ width: `${satThaiPct}%` }}
+                            title={`สมาคมกีฬาแห่งประเทศไทย: ${satThaiCount} คน (${satThaiPct}%)`}
                           />
                         )}
                         {provPct > 0 && (
@@ -1239,11 +1277,14 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                 <td colSpan={3} className="py-3 px-3.5 text-right font-extrabold text-[#16265E]">
                   รวมทั้งสิ้นทุกหลักสูตร:
                 </td>
-                <td className="py-3 px-3 text-center font-black text-blue-900 border-l border-gray-200">
-                  {matrixTotals["สมาคมกีฬาแห่งประเทศไทย"].toLocaleString()} คน
-                </td>
                 <td className="py-3 px-3 text-center font-black text-purple-900 border-l border-gray-200">
                   {matrixTotals["การกีฬาแห่งประเทศไทย"].toLocaleString()} คน
+                </td>
+                <td className="py-3 px-3 text-center font-black text-sky-900 border-l border-gray-200 bg-sky-50/40">
+                  {matrixTotals["กองทุนพัฒนาการกีฬาแห่งชาติ"].toLocaleString()} คน
+                </td>
+                <td className="py-3 px-3 text-center font-black text-blue-900 border-l border-gray-200">
+                  {matrixTotals["สมาคมกีฬาแห่งประเทศไทย"].toLocaleString()} คน
                 </td>
                 <td className="py-3 px-3 text-center font-black text-amber-900 border-l border-gray-200">
                   {matrixTotals["สมาคมกีฬาแห่งจังหวัด"].toLocaleString()} คน
@@ -1280,10 +1321,13 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                 <td className="py-3 px-3 border-l border-gray-200">
                   <div className="flex items-center justify-center gap-2 text-[10.5px] font-normal text-gray-500">
                     <span className="flex items-center gap-1">
-                      <span className="h-2 w-2 rounded-xs bg-blue-600" /> สมาคมฯ
+                      <span className="h-2 w-2 rounded-xs bg-purple-600" /> กกท.
                     </span>
                     <span className="flex items-center gap-1">
-                      <span className="h-2 w-2 rounded-xs bg-purple-600" /> กกท.
+                      <span className="h-2 w-2 rounded-xs bg-sky-600" /> กองทุนฯ
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-xs bg-blue-600" /> สมาคมฯ
                     </span>
                     <span className="flex items-center gap-1">
                       <span className="h-2 w-2 rounded-xs bg-amber-500" /> จังหวัด
@@ -1472,11 +1516,14 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                     {/* Affiliation Mini badges for new trainees */}
                     <td className="py-2.5 px-3 border-l border-gray-100">
                       <div className="flex items-center justify-center gap-1.5 text-[10px]">
-                        <span className="rounded bg-blue-50 px-1.5 py-0.5 text-blue-700 border border-blue-200" title="สมาคมกีฬาแห่งประเทศไทย">
-                          ส.{cohort.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0}
-                        </span>
                         <span className="rounded bg-purple-50 px-1.5 py-0.5 text-purple-700 border border-purple-200" title="การกีฬาแห่งประเทศไทย">
                           กกท.{cohort.newByGroup["การกีฬาแห่งประเทศไทย"] || 0}
+                        </span>
+                        <span className="rounded bg-sky-50 px-1.5 py-0.5 text-sky-700 border border-sky-200" title="กองทุนพัฒนาการกีฬาแห่งชาติ">
+                          กองทุน.{cohort.newByGroup["กองทุนพัฒนาการกีฬาแห่งชาติ"] || 0}
+                        </span>
+                        <span className="rounded bg-blue-50 px-1.5 py-0.5 text-blue-700 border border-blue-200" title="สมาคมกีฬาแห่งประเทศไทย">
+                          ส.{cohort.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0}
                         </span>
                         <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-700 border border-amber-200" title="สมาคมกีฬาแห่งจังหวัด">
                           จ.{cohort.newByGroup["สมาคมกีฬาแห่งจังหวัด"] || 0}

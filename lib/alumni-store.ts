@@ -45,6 +45,8 @@ export interface HistoricalTrainee {
   idCard: string; // 13 digits unique citizen id or personnelId fallback
   name: string;
   prefix?: string;
+  firstName?: string;
+  lastName?: string;
   gender?: "male" | "female";
   phone?: string;
   email?: string;
@@ -66,15 +68,27 @@ export interface HistoricalTrainee {
 }
 
 export const AFFILIATION_GROUPS = [
-  "สมาคมกีฬาแห่งประเทศไทย",
   "การกีฬาแห่งประเทศไทย",
+  "กองทุนพัฒนาการกีฬาแห่งชาติ",
+  "สมาคมกีฬาแห่งประเทศไทย",
   "สมาคมกีฬาแห่งจังหวัด",
   "หน่วยงานภายนอก",
 ] as const;
 
+export function inferAffiliationGroup(orgName: string): (typeof AFFILIATION_GROUPS)[number] {
+  const clean = (orgName || "").trim();
+  if (!clean) return "หน่วยงานภายนอก";
+  if (clean.includes("กองทุน")) return "กองทุนพัฒนาการกีฬาแห่งชาติ";
+  if (clean.includes("สมาคมกีฬาแห่งจังหวัด") || clean.includes("สมาคมกีฬาจังหวัด")) return "สมาคมกีฬาแห่งจังหวัด";
+  if (clean.includes("สมาคมกีฬาแห่งประเทศไทย")) return "สมาคมกีฬาแห่งประเทศไทย";
+  if (clean.includes("การกีฬาแห่งประเทศไทย") || clean.includes("กกท") || clean.includes("กกท.")) return "การกีฬาแห่งประเทศไทย";
+  return "หน่วยงานภายนอก";
+}
+
 export const SPORTS_TYPES = [
-  "สมาคมกีฬาแห่งประเทศไทย",
   "การกีฬาแห่งประเทศไทย",
+  "กองทุนพัฒนาการกีฬาแห่งชาติ",
+  "สมาคมกีฬาแห่งประเทศไทย",
   "สมาคมกีฬาแห่งจังหวัด",
   "หน่วยงานภายนอก",
   "ฟุตบอล",
@@ -120,7 +134,7 @@ export const STANDARD_COURSES = [
 // 2,732 authentic historical training records (1,891 unique personnel after deduplication) from official SAT Excel files
 export const SEED_TRAINEES: HistoricalTrainee[] = rawRealTrainees as HistoricalTrainee[];
 
-const STORAGE_KEY = "sat-alumni-real-v3";
+const STORAGE_KEY = "sat-alumni-real-v4";
 
 interface AlumniState {
   trainees: HistoricalTrainee[];
@@ -168,12 +182,24 @@ function hydrate() {
   hydrateStarted = true;
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    // Check v4 first, fallback to v3
+    let raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      raw = window.localStorage.getItem("sat-alumni-real-v3");
+    }
     if (!raw) return;
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
+      // Auto-migrate any existing records with "กองทุน" to "กองทุนพัฒนาการกีฬาแห่งชาติ"
+      const migrated = parsed.map((t: HistoricalTrainee) => {
+        if ((t.affiliation && t.affiliation.includes("กองทุน")) && t.affiliationGroup !== "กองทุนพัฒนาการกีฬาแห่งชาติ") {
+          return { ...t, affiliationGroup: "กองทุนพัฒนาการกีฬาแห่งชาติ" };
+        }
+        return t;
+      });
+
       state = {
-        trainees: parsed,
+        trainees: migrated,
         revision: state.revision + 1,
       };
       emit();
@@ -210,6 +236,7 @@ export function useAlumniStore() {
     importTrainees,
     updateCourseCategory,
     updatePersonAffiliation,
+    updatePersonProfile,
     addDutyRecord,
     verifyDutyRecord,
     deleteDutyRecord,
@@ -326,18 +353,28 @@ export function updateCourseCategory(courseTitle: string, newCategory: string): 
   return updatedCount;
 }
 
+export interface UpdatePersonProfileInput {
+  prefix?: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  affiliationGroup?: string;
+  affiliation?: string;
+  personnelId?: string;
+  idCard?: string;
+  status?: "active" | "inactive" | "pending_verification";
+}
+
 /**
- * Updates affiliationGroup (and optionally affiliation name) for a person across all their historical courses.
- * Matches by personnelId, idCard, direct ID, or normalized name.
+ * Updates full person profile (prefix, name, affiliation, group, ID, status)
+ * across all their historical courses matching by personnelId, idCard, direct ID, or normalized name.
  */
-export function updatePersonAffiliation(
+export function updatePersonProfile(
   identifier: string,
-  newGroup: string,
-  newAffiliationName?: string
+  updates: UpdatePersonProfileInput
 ): number {
   const cleanId = (identifier || "").trim();
-  const cleanGroup = newGroup.trim();
-  if (!cleanId || !cleanGroup) return 0;
+  if (!cleanId) return 0;
 
   const now = new Date().toISOString();
   let updatedCount = 0;
@@ -355,6 +392,20 @@ export function updatePersonAffiliation(
   const targetIdCard = target?.idCard?.replace(/\D/g, "");
   const targetNormName = target ? normalizeNameForMatching(target.name) : normalizeNameForMatching(cleanId);
 
+  // Compute final name if prefix or name updated
+  let finalName = updates.name !== undefined ? updates.name.trim() : undefined;
+  if (!finalName && (updates.firstName || updates.lastName)) {
+    const fn = (updates.firstName || "").trim();
+    const ln = (updates.lastName || "").trim();
+    const pref = (updates.prefix !== undefined ? updates.prefix : target?.prefix || "").trim();
+    finalName = `${pref ? pref + " " : ""}${fn} ${ln}`.trim();
+  } else if (finalName && updates.prefix) {
+    const pref = updates.prefix.trim();
+    if (!finalName.startsWith(pref)) {
+      finalName = `${pref} ${finalName}`.trim();
+    }
+  }
+
   const nextList = state.trainees.map((t) => {
     const isPIdMatch = targetPId && t.personnelId && t.personnelId.toLowerCase() === targetPId;
     const isIdCardMatch = targetIdCard && targetIdCard.length === 13 && t.idCard && t.idCard.replace(/\D/g, "") === targetIdCard;
@@ -365,9 +416,16 @@ export function updatePersonAffiliation(
       updatedCount++;
       return {
         ...t,
-        affiliationGroup: cleanGroup,
-        affiliation: newAffiliationName !== undefined && newAffiliationName.trim() ? newAffiliationName.trim() : t.affiliation,
-        sportsType: newAffiliationName !== undefined && newAffiliationName.trim() ? newAffiliationName.trim() : t.sportsType,
+        name: finalName || t.name,
+        prefix: updates.prefix !== undefined ? updates.prefix.trim() : t.prefix,
+        firstName: updates.firstName !== undefined ? updates.firstName.trim() : t.firstName,
+        lastName: updates.lastName !== undefined ? updates.lastName.trim() : t.lastName,
+        affiliationGroup: updates.affiliationGroup !== undefined && updates.affiliationGroup.trim() ? updates.affiliationGroup.trim() : t.affiliationGroup,
+        affiliation: updates.affiliation !== undefined && updates.affiliation.trim() ? updates.affiliation.trim() : t.affiliation,
+        sportsType: updates.affiliation !== undefined && updates.affiliation.trim() ? updates.affiliation.trim() : t.sportsType,
+        personnelId: updates.personnelId !== undefined && updates.personnelId.trim() ? updates.personnelId.trim() : t.personnelId,
+        idCard: updates.idCard !== undefined && updates.idCard.trim() ? updates.idCard.trim() : t.idCard,
+        status: updates.status || t.status,
         updatedAt: now,
       };
     }
@@ -384,6 +442,21 @@ export function updatePersonAffiliation(
   }
 
   return updatedCount;
+}
+
+/**
+ * Updates affiliationGroup (and optionally affiliation name) for a person across all their historical courses.
+ * Matches by personnelId, idCard, direct ID, or normalized name.
+ */
+export function updatePersonAffiliation(
+  identifier: string,
+  newGroup: string,
+  newAffiliationName?: string
+): number {
+  return updatePersonProfile(identifier, {
+    affiliationGroup: newGroup,
+    affiliation: newAffiliationName,
+  });
 }
 
 export function addDutyRecord(
@@ -1023,8 +1096,9 @@ export function computeCourseTimelineData(trainees: HistoricalTrainee[]): Course
 
     const traineesByYear: Record<number, number> = {};
     const byGroup: Record<string, number> = {
-      "สมาคมกีฬาแห่งประเทศไทย": 0,
       "การกีฬาแห่งประเทศไทย": 0,
+      "กองทุนพัฒนาการกีฬาแห่งชาติ": 0,
+      "สมาคมกีฬาแห่งประเทศไทย": 0,
       "สมาคมกีฬาแห่งจังหวัด": 0,
       "หน่วยงานภายนอก": 0,
     };
@@ -1245,8 +1319,9 @@ export function computeCourseAffiliationMatrix(
       map.set(t.courseTitle, {
         category: t.courseCategory || "อื่นๆ",
         groups: {
-          "สมาคมกีฬาแห่งประเทศไทย": 0,
           "การกีฬาแห่งประเทศไทย": 0,
+          "กองทุนพัฒนาการกีฬาแห่งชาติ": 0,
+          "สมาคมกีฬาแห่งประเทศไทย": 0,
           "สมาคมกีฬาแห่งจังหวัด": 0,
           "หน่วยงานภายนอก": 0,
         },
@@ -1382,14 +1457,16 @@ export function computeAnnualCohortStats(trainees: HistoricalTrainee[]): AnnualC
     let newCount = 0;
     let returningCount = 0;
     const newByGroup: Record<string, number> = {
-      "สมาคมกีฬาแห่งประเทศไทย": 0,
       "การกีฬาแห่งประเทศไทย": 0,
+      "กองทุนพัฒนาการกีฬาแห่งชาติ": 0,
+      "สมาคมกีฬาแห่งประเทศไทย": 0,
       "สมาคมกีฬาแห่งจังหวัด": 0,
       "หน่วยงานภายนอก": 0,
     };
     const returningByGroup: Record<string, number> = {
-      "สมาคมกีฬาแห่งประเทศไทย": 0,
       "การกีฬาแห่งประเทศไทย": 0,
+      "กองทุนพัฒนาการกีฬาแห่งชาติ": 0,
+      "สมาคมกีฬาแห่งประเทศไทย": 0,
       "สมาคมกีฬาแห่งจังหวัด": 0,
       "หน่วยงานภายนอก": 0,
     };
@@ -1467,14 +1544,16 @@ export function computeYearCohortSummary(
   const returningPersonsList: TraineeCohortPerson[] = [];
 
   const newByGroup: Record<string, number> = {
-    "สมาคมกีฬาแห่งประเทศไทย": 0,
     "การกีฬาแห่งประเทศไทย": 0,
+    "กองทุนพัฒนาการกีฬาแห่งชาติ": 0,
+    "สมาคมกีฬาแห่งประเทศไทย": 0,
     "สมาคมกีฬาแห่งจังหวัด": 0,
     "หน่วยงานภายนอก": 0,
   };
   const returningByGroup: Record<string, number> = {
-    "สมาคมกีฬาแห่งประเทศไทย": 0,
     "การกีฬาแห่งประเทศไทย": 0,
+    "กองทุนพัฒนาการกีฬาแห่งชาติ": 0,
+    "สมาคมกีฬาแห่งประเทศไทย": 0,
     "สมาคมกีฬาแห่งจังหวัด": 0,
     "หน่วยงานภายนอก": 0,
   };

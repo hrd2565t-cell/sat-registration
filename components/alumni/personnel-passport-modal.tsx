@@ -6,6 +6,7 @@ import {
   type DutyRecord,
   getTraineePassport,
   KNOWLEDGE_DIMENSIONS,
+  updatePersonProfile,
   updatePersonAffiliation,
   AFFILIATION_GROUPS,
 } from "@/lib/alumni-store";
@@ -34,9 +35,15 @@ export function PersonnelPassportModal({
 }: PersonnelPassportModalProps) {
   const passport = getTraineePassport(idCard, allTrainees);
   const [activeTab, setActiveTab] = useState<"certs" | "duties">("certs");
-  const [isEditingAffiliation, setIsEditingAffiliation] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editPrefix, setEditPrefix] = useState<string>("");
+  const [editName, setEditName] = useState<string>("");
   const [editGroup, setEditGroup] = useState<string>("");
   const [editAffiliationName, setEditAffiliationName] = useState<string>("");
+  const [editPersonnelId, setEditPersonnelId] = useState<string>("");
+  const [editIdCard, setEditIdCard] = useState<string>("");
+  const [editStatus, setEditStatus] = useState<"active" | "inactive" | "pending_verification">("active");
+
   const [showPinPrompt, setShowPinPrompt] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
@@ -49,7 +56,7 @@ export function PersonnelPassportModal({
     isActive: false,
   };
 
-  const handleStartEditAffiliation = () => {
+  const handleStartEditProfile = () => {
     if (!isAdmin) {
       setShowPinPrompt(true);
       setPinInput("");
@@ -57,21 +64,52 @@ export function PersonnelPassportModal({
       return;
     }
     if (primary) {
-      setEditGroup(primary.affiliationGroup || "หน่วยงานภายนอก");
+      const match = primary.name.match(
+        /^(นาย|นางสาว|นาง|ดร\.|นาวาเอก|นาวาโท|นาวาตรี|เรือเอก|พ\.ต\.อ\.|ร\.ต\.อ\.|พ\.จ\.ต\.|ส\.อ\.|ว่าที่ ร\.ต\.|ว่าที่ร้อยตรี)\s*(.*)$/
+      );
+      const detectedPrefix = primary.prefix || (match ? match[1] : "");
+      const detectedName = match
+        ? match[2]
+        : primary.prefix
+        ? primary.name.replace(new RegExp(`^${primary.prefix}\\s*`), "")
+        : primary.name;
+
+      setEditPrefix(detectedPrefix);
+      setEditName(detectedName.trim());
+      setEditGroup(primary.affiliationGroup || AFFILIATION_GROUPS[0]);
       setEditAffiliationName(primary.affiliation || "");
-      setIsEditingAffiliation(true);
+      setEditPersonnelId(primary.personnelId || "");
+      setEditIdCard(primary.idCard || "");
+      setEditStatus(primary.status || "active");
+      setIsEditingProfile(true);
     }
   };
 
-  const handleSaveAffiliation = () => {
+  const handleSaveProfile = () => {
+    if (!primary) return;
     if (!editAffiliationName.trim()) {
-      alert("กรุณาระบุชื่อสมาคมหรือหน่วยงาน");
+      alert("กรุณาระบุชื่อสมาคมหรือสังกัดหน่วยงาน");
       return;
     }
+    const cleanFull = editPrefix ? `${editPrefix.trim()} ${editName.trim()}`.trim() : editName.trim();
+    if (!cleanFull) {
+      alert("กรุณาระบุชื่อ-นามสกุล");
+      return;
+    }
+
     const targetKey = primary.personnelId || primary.idCard || primary.id;
-    const count = updatePersonAffiliation(targetKey, editGroup, editAffiliationName.trim());
-    setIsEditingAffiliation(false);
-    setToastMessage(`✅ อัปเดตข้อมูลสังกัดเรียบร้อยแล้ว (${count} รายการ)`);
+    const count = updatePersonProfile(targetKey, {
+      prefix: editPrefix.trim(),
+      name: cleanFull,
+      affiliationGroup: editGroup,
+      affiliation: editAffiliationName.trim(),
+      personnelId: editPersonnelId.trim(),
+      idCard: editIdCard.trim() || undefined,
+      status: editStatus,
+    });
+
+    setIsEditingProfile(false);
+    setToastMessage(`✓ บันทึกข้อมูลบุคลากรเรียบร้อยแล้ว (อัปเดตทุกหลักสูตร ${count} รายการ)`);
     setTimeout(() => setToastMessage(null), 3500);
   };
 
@@ -80,11 +118,7 @@ export function PersonnelPassportModal({
     if (loginAdmin(pinInput.trim())) {
       setShowPinPrompt(false);
       setPinError("");
-      if (primary) {
-        setEditGroup(primary.affiliationGroup || "หน่วยงานภายนอก");
-        setEditAffiliationName(primary.affiliation || "");
-        setIsEditingAffiliation(true);
-      }
+      handleStartEditProfile();
     } else {
       setPinError("รหัส PIN ไม่ถูกต้อง (รหัสเริ่มต้น: 336699)");
     }
@@ -185,12 +219,12 @@ export function PersonnelPassportModal({
                 {primary.phone && <span>📞 {primary.phone}</span>}
                 <button
                   type="button"
-                  onClick={handleStartEditAffiliation}
-                  className="inline-flex items-center gap-1 rounded-md bg-white/15 hover:bg-white/25 text-amber-200 hover:text-amber-100 px-2 py-0.5 text-[11px] font-bold border border-white/20 transition-all cursor-pointer shadow-xs"
-                  title="แก้ไขกลุ่มหน่วยงานและสังกัด (Admin)"
+                  onClick={handleStartEditProfile}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-[#1e1b4b] px-3 py-1 text-xs font-bold border border-amber-300/60 transition-all cursor-pointer shadow-md"
+                  title="แก้ไขข้อมูลบุคลากร คำนำหน้า ชื่อ-สกุล สังกัด กลุ่มหน่วยงาน (Admin)"
                 >
-                  <span>✎</span>
-                  <span>แก้ไขสังกัด</span>
+                  <span>✏️</span>
+                  <span>แก้ไขข้อมูลบุคลากร (Admin)</span>
                 </button>
               </div>
 
@@ -201,20 +235,68 @@ export function PersonnelPassportModal({
                 </div>
               )}
 
-              {/* Inline Edit Affiliation Form */}
-              {isEditingAffiliation && (
-                <div className="mt-3 rounded-xl bg-white/10 p-3.5 border border-white/25 backdrop-blur-md space-y-2.5 animate-in fade-in-50 duration-150">
-                  <div className="flex items-center justify-between text-xs font-bold text-amber-300">
-                    <span>🏢 แก้ไขกลุ่มหน่วยงานและสังกัด (Admin)</span>
+              {/* Inline Edit Profile Form */}
+              {isEditingProfile && (
+                <div className="mt-3 rounded-2xl bg-black/40 p-4 border border-white/20 backdrop-blur-md space-y-3.5 animate-in fade-in-50 duration-150">
+                  <div className="flex items-center justify-between text-xs font-bold text-amber-300 border-b border-white/10 pb-2">
+                    <span className="flex items-center gap-1.5">
+                      <span>✏️</span>
+                      <span>แก้ไขข้อมูลบุคลากร (Admin)</span>
+                    </span>
                     <span className="text-[10.5px] text-blue-200 font-normal">
                       จะอัปเดตทุกหลักสูตรของบุคคลนี้ ({records.length} รายการ)
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                    {/* Prefix */}
                     <div>
                       <label className="text-[11px] text-blue-200 font-semibold block mb-1">
-                        กลุ่มหน่วยงาน (4 กลุ่มหลัก):
+                        คำนำหน้าชื่อ:
+                      </label>
+                      <input
+                        type="text"
+                        value={editPrefix}
+                        onChange={(e) => setEditPrefix(e.target.value)}
+                        placeholder="เช่น นาย, นางสาว, ดร."
+                        list="prefix-options"
+                        className="w-full rounded-lg bg-white text-gray-900 p-2 text-xs font-semibold focus:outline-hidden"
+                      />
+                      <datalist id="prefix-options">
+                        <option value="นาย" />
+                        <option value="นางสาว" />
+                        <option value="นาง" />
+                        <option value="ดร." />
+                        <option value="นาวาเอก" />
+                        <option value="นาวาโท" />
+                        <option value="นาวาตรี" />
+                        <option value="เรือเอก" />
+                        <option value="พ.ต.อ." />
+                        <option value="ร.ต.อ." />
+                        <option value="พ.จ.ต." />
+                        <option value="ส.อ." />
+                        <option value="ว่าที่ ร.ต." />
+                      </datalist>
+                    </div>
+
+                    {/* Name */}
+                    <div className="sm:col-span-2">
+                      <label className="text-[11px] text-blue-200 font-semibold block mb-1">
+                        ชื่อ - นามสกุล:
+                      </label>
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        placeholder="ชื่อและนามสกุล"
+                        className="w-full rounded-lg bg-white text-gray-900 p-2 text-xs font-semibold focus:outline-hidden"
+                      />
+                    </div>
+
+                    {/* Group */}
+                    <div>
+                      <label className="text-[11px] text-blue-200 font-semibold block mb-1">
+                        กลุ่มหน่วยงาน (5 กลุ่มหลัก):
                       </label>
                       <select
                         value={editGroup}
@@ -229,7 +311,8 @@ export function PersonnelPassportModal({
                       </select>
                     </div>
 
-                    <div>
+                    {/* Affiliation name */}
+                    <div className="sm:col-span-2">
                       <label className="text-[11px] text-blue-200 font-semibold block mb-1">
                         ชื่อสมาคม / สังกัด / หน่วยงาน:
                       </label>
@@ -241,22 +324,67 @@ export function PersonnelPassportModal({
                         className="w-full rounded-lg bg-white text-gray-900 p-2 text-xs font-semibold focus:outline-hidden"
                       />
                     </div>
+
+                    {/* Personnel ID */}
+                    <div>
+                      <label className="text-[11px] text-blue-200 font-semibold block mb-1">
+                        รหัสประจำตัวบุคลากร:
+                      </label>
+                      <input
+                        type="text"
+                        value={editPersonnelId}
+                        onChange={(e) => setEditPersonnelId(e.target.value)}
+                        placeholder="เช่น USR-2026-0001"
+                        className="w-full rounded-lg bg-white text-gray-900 p-2 text-xs font-mono font-semibold focus:outline-hidden"
+                      />
+                    </div>
+
+                    {/* ID Card */}
+                    <div>
+                      <label className="text-[11px] text-blue-200 font-semibold block mb-1">
+                        เลขบัตรประจำตัวประชาชน:
+                      </label>
+                      <input
+                        type="text"
+                        value={editIdCard}
+                        onChange={(e) => setEditIdCard(e.target.value)}
+                        placeholder="เลข 13 หลัก"
+                        className="w-full rounded-lg bg-white text-gray-900 p-2 text-xs font-mono font-semibold focus:outline-hidden"
+                      />
+                    </div>
+
+                    {/* Status */}
+                    <div>
+                      <label className="text-[11px] text-blue-200 font-semibold block mb-1">
+                        สถานะการทำหน้าที่:
+                      </label>
+                      <select
+                        value={editStatus}
+                        onChange={(e) => setEditStatus(e.target.value as any)}
+                        className="w-full rounded-lg bg-white text-gray-900 p-2 text-xs font-semibold focus:outline-hidden"
+                      >
+                        <option value="active">🟢 Active (ทำหน้าที่ต่อเนื่อง)</option>
+                        <option value="pending_verification">🟡 รอตรวจสอบ</option>
+                        <option value="inactive">⚪ Inactive (ยังไม่มีบันทึก)</option>
+                      </select>
+                    </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-2 pt-1">
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
                     <button
                       type="button"
-                      onClick={() => setIsEditingAffiliation(false)}
-                      className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20 cursor-pointer"
+                      onClick={() => setIsEditingProfile(false)}
+                      className="rounded-lg bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white hover:bg-white/20 cursor-pointer"
                     >
                       ยกเลิก
                     </button>
                     <button
                       type="button"
-                      onClick={handleSaveAffiliation}
-                      className="rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-emerald-500 shadow-xs cursor-pointer"
+                      onClick={handleSaveProfile}
+                      className="rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-emerald-500 shadow-md cursor-pointer flex items-center gap-1.5"
                     >
-                      ✓ บันทึกข้อมูล
+                      <span>✓</span>
+                      <span>บันทึกข้อมูลบุคลากร</span>
                     </button>
                   </div>
                 </div>
@@ -518,12 +646,12 @@ export function PersonnelPassportModal({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={handleStartEditAffiliation}
+              onClick={handleStartEditProfile}
               className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-900 shadow-xs hover:bg-amber-100 transition-colors cursor-pointer"
-              title="แก้ไขกลุ่มหน่วยงานและสังกัด (Admin)"
+              title="แก้ไขข้อมูลบุคลากร คำนำหน้า ชื่อ-สกุล สังกัด กลุ่มหน่วยงาน (Admin)"
             >
-              <span>🏢</span>
-              <span>แก้ไขสังกัด</span>
+              <span>✏️</span>
+              <span>แก้ไขข้อมูลบุคลากร</span>
             </button>
             {onOpenDigitalPass && (
               <button
