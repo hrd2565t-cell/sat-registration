@@ -18,6 +18,7 @@ interface PersonnelPassportModalProps {
   onAddDuty: (trainee: HistoricalTrainee) => void;
   onVerifyDuty?: (dutyId: string) => void;
   onOpenDigitalPass?: (idCard: string) => void;
+  onDeleteTrainee?: (id: string) => void;
   isAdmin?: boolean;
 }
 
@@ -28,6 +29,7 @@ export function PersonnelPassportModal({
   onAddDuty,
   onVerifyDuty,
   onOpenDigitalPass,
+  onDeleteTrainee,
   isAdmin = false,
 }: PersonnelPassportModalProps) {
   const passport = getTraineePassport(idCard, allTrainees);
@@ -337,9 +339,30 @@ export function PersonnelPassportModal({
                         <p className="text-xs text-gray-500">{cert.batch} · ประจำปี พ.ศ. {cert.yearBE}</p>
                       </div>
                     </div>
-                    <span className="inline-flex self-start sm:self-auto items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200">
-                      ✓ ผ่านการอบรม
-                    </span>
+                    <div className="flex items-center gap-2 self-start sm:self-auto">
+                      <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200">
+                        ✓ ผ่านการอบรม
+                      </span>
+                      {isAdmin && onDeleteTrainee && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `ต้องการลบประวัติวุฒิบัตรหลักสูตร "${cert.courseTitle}" (รุ่นปี ${cert.yearBE}) ของ ${primary?.name} ออกจากระบบใช่หรือไม่?\n\n* ข้อมูลจะถูกลบออกจากระบบทันที`
+                              )
+                            ) {
+                              onDeleteTrainee(cert.id);
+                              setToastMessage(`ลบหลักสูตร "${cert.courseTitle}" เรียบร้อยแล้ว`);
+                            }
+                          }}
+                          className="rounded-lg bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 border border-rose-200 transition-colors cursor-pointer"
+                          title="ลบวุฒิบัตรหลักสูตรนี้ (Admin)"
+                        >
+                          🗑️ ลบ
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-gray-600">

@@ -30,6 +30,7 @@ function AlumniContent() {
     addDutyRecord,
     verifyDutyRecord,
     deleteDutyRecord,
+    deleteTrainee,
     importTrainees,
     resetAlumniData,
   } = useAlumniStore();
@@ -319,6 +320,7 @@ function AlumniContent() {
             onOpenDigitalPass={(idCard) => setDigitalPassIdCard(idCard)}
             onOpenImport={() => setIsImportOpen(true)}
             onOpenAddTrainee={() => setIsAddTraineeOpen(true)}
+            onDeleteTrainee={(id) => deleteTrainee(id)}
             isAdmin={isAdmin}
           />
         )}
@@ -360,6 +362,7 @@ function AlumniContent() {
           }}
           onVerifyDuty={(dutyId) => verifyDutyRecord(dutyId)}
           onOpenDigitalPass={(idCard) => setDigitalPassIdCard(idCard)}
+          onDeleteTrainee={(id) => deleteTrainee(id)}
           isAdmin={isAdmin}
         />
       )}

@@ -20,6 +20,7 @@ interface AlumniDirectoryTabProps {
   onOpenDigitalPass?: (idCard: string) => void;
   onOpenImport: () => void;
   onOpenAddTrainee?: () => void;
+  onDeleteTrainee?: (id: string) => void;
   isAdmin?: boolean;
 }
 
@@ -30,6 +31,7 @@ export function AlumniDirectoryTab({
   onOpenDigitalPass,
   onOpenImport,
   onOpenAddTrainee,
+  onDeleteTrainee,
   isAdmin = false,
 }: AlumniDirectoryTabProps) {
   const [search, setSearch] = useState("");
@@ -39,7 +41,7 @@ export function AlumniDirectoryTab({
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"person" | "record">("person");
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(50);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   // Inline Quick Edit Group State
   const [editingGroupPersonId, setEditingGroupPersonId] = useState<string | null>(null);
@@ -1023,6 +1025,25 @@ export function AlumniDirectoryTab({
                             >
                               + บันทึกงาน
                             </button>
+                            {isAdmin && onDeleteTrainee && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (
+                                    window.confirm(
+                                      `ต้องการลบรายการของ "${t.name}" หลักสูตร "${t.courseTitle}" (รหัส ${t.id}) ออกจากระบบใช่หรือไม่?\n\n* ข้อมูลจะถูกลบออกจากฐานข้อมูลทันที`
+                                    )
+                                  ) {
+                                    onDeleteTrainee(t.id);
+                                    setToastMessage(`ลบรายการของ "${t.name}" (${t.courseTitle}) เรียบร้อยแล้ว`);
+                                  }
+                                }}
+                                className="rounded-lg bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-100 border border-rose-200 transition-colors cursor-pointer"
+                                title="ลบรายการวุฒิบัตรนี้ (Admin)"
+                              >
+                                🗑️ ลบ
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1035,7 +1056,7 @@ export function AlumniDirectoryTab({
         </div>
 
         {/* Pagination Bar */}
-        {activeItemsCount > pageSize && (
+        {(activeItemsCount > pageSize || activeItemsCount > 10) && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-gray-100 px-4 py-3 bg-gray-50/70 text-xs">
             <div className="flex items-center gap-2 text-gray-600">
               <span>แสดงแถวต่อหน้า:</span>
@@ -1045,8 +1066,9 @@ export function AlumniDirectoryTab({
                   setPageSize(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700"
+                className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 font-semibold"
               >
+                <option value={10}>10 รายชื่อ</option>
                 <option value={25}>25</option>
                 <option value={50}>50</option>
                 <option value={100}>100</option>
