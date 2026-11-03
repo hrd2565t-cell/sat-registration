@@ -5,21 +5,125 @@ import type { HistoricalTrainee, QualitativeHighlight } from "@/lib/alumni-store
 import {
   computeEvaluationStats,
   computeCourseAffiliationMatrix,
+  updateCourseCategory,
   PAST_YEARS_BE,
   KNOWLEDGE_DIMENSIONS,
   AFFILIATION_GROUPS,
 } from "@/lib/alumni-store";
+import { loginAdmin } from "@/lib/admin-auth";
 import * as XLSX from "xlsx";
 
 interface ProjectEvaluationTabProps {
   trainees: HistoricalTrainee[];
+  isAdmin?: boolean;
 }
 
-export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
+export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvaluationTabProps) {
   const stats = useMemo(() => computeEvaluationStats(trainees), [trainees]);
 
   const [matrixYearFilter, setMatrixYearFilter] = useState<string>("all");
   const [matrixCategoryFilter, setMatrixCategoryFilter] = useState<string>("all");
+
+  // Inline Quick Edit Category State
+  const [editingCourseTitle, setEditingCourseTitle] = useState<string | null>(null);
+  const [editCategorySelect, setEditCategorySelect] = useState<string>("ผู้บริหารกีฬา");
+  const [customCategoryInput, setCustomCategoryInput] = useState<string>("");
+  const [isCustomMode, setIsCustomMode] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Admin PIN Unlock Dialog State
+  const [showPinPrompt, setShowPinPrompt] = useState<boolean>(false);
+  const [pinInput, setPinInput] = useState<string>("");
+  const [pinError, setPinError] = useState<string>("");
+  const [pendingEditCourse, setPendingEditCourse] = useState<{ courseTitle: string; category: string } | null>(null);
+
+  // Dynamic categories from actual trainee data
+  const allCategories = useMemo(() => {
+    const set = new Set<string>(["ผู้บริหารกีฬา", "ผู้ฝึกสอนกีฬา", "อื่นๆ"]);
+    trainees.forEach((t) => {
+      if (t.courseCategory) set.add(t.courseCategory);
+    });
+    return Array.from(set);
+  }, [trainees]);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const handleStartEdit = (courseTitle: string, currentCategory: string) => {
+    if (!isAdmin) {
+      setPendingEditCourse({ courseTitle, category: currentCategory });
+      setShowPinPrompt(true);
+      setPinInput("");
+      setPinError("");
+      return;
+    }
+
+    setEditingCourseTitle(courseTitle);
+    if (["ผู้บริหารกีฬา", "ผู้ฝึกสอนกีฬา", "อื่นๆ"].includes(currentCategory)) {
+      setEditCategorySelect(currentCategory);
+      setIsCustomMode(false);
+      setCustomCategoryInput("");
+    } else {
+      setEditCategorySelect("__custom__");
+      setIsCustomMode(true);
+      setCustomCategoryInput(currentCategory);
+    }
+  };
+
+  const handleSaveCategory = (courseTitle: string) => {
+    const finalCategory = isCustomMode ? customCategoryInput.trim() : editCategorySelect;
+    if (!finalCategory) {
+      alert("กรุณาระบุชื่อประเภทหลักสูตร");
+      return;
+    }
+
+    const count = updateCourseCategory(courseTitle, finalCategory);
+    setEditingCourseTitle(null);
+    setIsCustomMode(false);
+    showToast(`✅ ปรับประเภทหลักสูตร "${courseTitle}" เป็น "${finalCategory}" สำเร็จ (อัปเดตข้อมูล ${count} รายการ)`);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCourseTitle(null);
+    setIsCustomMode(false);
+  };
+
+  const handleUnlockPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loginAdmin(pinInput.trim())) {
+      setShowPinPrompt(false);
+      setPinError("");
+      if (pendingEditCourse) {
+        setEditingCourseTitle(pendingEditCourse.courseTitle);
+        if (["ผู้บริหารกีฬา", "ผู้ฝึกสอนกีฬา", "อื่นๆ"].includes(pendingEditCourse.category)) {
+          setEditCategorySelect(pendingEditCourse.category);
+          setIsCustomMode(false);
+        } else {
+          setEditCategorySelect("__custom__");
+          setIsCustomMode(true);
+          setCustomCategoryInput(pendingEditCourse.category);
+        }
+        setPendingEditCourse(null);
+      }
+    } else {
+      setPinError("รหัส PIN ไม่ถูกต้อง (รหัสเริ่มต้น: 336699)");
+    }
+  };
+
+  const getCategoryBadgeStyle = (category: string) => {
+    switch (category) {
+      case "ผู้บริหารกีฬา":
+        return "bg-blue-50 text-blue-700 border-blue-200";
+      case "ผู้ฝึกสอนกีฬา":
+        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      case "อื่นๆ":
+        return "bg-gray-100 text-gray-700 border-gray-200";
+      default:
+        return "bg-purple-50 text-purple-700 border-purple-200";
+    }
+  };
 
   const yearStatsMap = useMemo(() => {
     const map = new Map<number, { courseCount: number; traineeCount: number }>();
@@ -358,10 +462,12 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
                 onChange={(e) => setMatrixCategoryFilter(e.target.value)}
                 className="rounded-lg border border-gray-300 bg-white p-1.5 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden"
               >
-                <option value="all">ทุกสายวิชาชีพ</option>
-                <option value="ผู้บริหารกีฬา">ผู้บริหารกีฬา</option>
-                <option value="ผู้ฝึกสอนกีฬา">ผู้ฝึกสอนกีฬา</option>
-                <option value="อื่นๆ">อื่นๆ</option>
+                <option value="all">ทุกสายวิชาชีพ ({allCategories.length} กลุ่ม)</option>
+                {allCategories.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -390,6 +496,23 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
           </div>
         </div>
 
+        {/* Success Toast Notification */}
+        {toastMessage && (
+          <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-xs font-bold text-emerald-800 shadow-xs flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <span>🎉</span>
+              <span>{toastMessage}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setToastMessage(null)}
+              className="text-emerald-700 hover:text-emerald-900 cursor-pointer ml-3 font-normal"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Matrix Table */}
         <div className="overflow-x-auto rounded-xl border border-gray-200">
           <table className="w-full text-left text-xs border-collapse">
@@ -397,7 +520,14 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
               <tr>
                 <th className="py-3 px-3.5 font-bold">#</th>
                 <th className="py-3 px-3.5 font-bold min-w-[170px]">ชื่อหลักสูตร</th>
-                <th className="py-3 px-2 font-bold min-w-[90px]">ประเภท</th>
+                <th className="py-3 px-3 font-bold min-w-[140px]">
+                  <div className="flex items-center gap-1.5">
+                    <span>ประเภท</span>
+                    <span className="text-[10px] font-normal text-blue-200 bg-blue-900/60 px-1.5 py-0.2 rounded border border-blue-400/40">
+                      แก้ไขได้ ✎
+                    </span>
+                  </div>
+                </th>
                 <th className="py-3 px-3 text-center font-bold bg-blue-900/70 border-l border-blue-800 min-w-[120px]">
                   สมาคมกีฬาแห่งประเทศไทย
                 </th>
@@ -434,10 +564,82 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
                   <tr key={row.courseTitle} className="hover:bg-blue-50/40 transition-colors">
                     <td className="py-2.5 px-3.5 text-gray-400 font-mono">{idx + 1}</td>
                     <td className="py-2.5 px-3.5 font-bold text-[#16265E]">{row.courseTitle}</td>
-                    <td className="py-2.5 px-2">
-                      <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-700">
-                        {row.category}
-                      </span>
+                    <td className="py-2.5 px-3 min-w-[170px]">
+                      {editingCourseTitle === row.courseTitle ? (
+                        <div className="flex flex-col gap-1.5 py-1">
+                          <div className="flex items-center gap-1.5">
+                            <select
+                              value={isCustomMode ? "__custom__" : editCategorySelect}
+                              onChange={(e) => {
+                                if (e.target.value === "__custom__") {
+                                  setIsCustomMode(true);
+                                } else {
+                                  setIsCustomMode(false);
+                                  setEditCategorySelect(e.target.value);
+                                }
+                              }}
+                              className="rounded-lg border border-[#16265E] bg-white px-2 py-1 text-xs text-gray-800 shadow-xs focus:outline-hidden focus:ring-1 focus:ring-[#16265E]"
+                              autoFocus
+                            >
+                              <option value="ผู้บริหารกีฬา">👔 ผู้บริหารกีฬา</option>
+                              <option value="ผู้ฝึกสอนกีฬา">🏅 ผู้ฝึกสอนกีฬา</option>
+                              <option value="อื่นๆ">📁 อื่นๆ</option>
+                              <option value="__custom__">➕ กำหนดประเภทใหม่...</option>
+                            </select>
+
+                            <button
+                              type="button"
+                              onClick={() => handleSaveCategory(row.courseTitle)}
+                              className="inline-flex items-center justify-center h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                              title="บันทึกการแก้ไข (Enter)"
+                            >
+                              ✓
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={handleCancelEdit}
+                              className="inline-flex items-center justify-center h-7 px-2.5 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold transition-colors cursor-pointer"
+                              title="ยกเลิก (Esc)"
+                            >
+                              ✕
+                            </button>
+                          </div>
+
+                          {isCustomMode && (
+                            <input
+                              type="text"
+                              placeholder="พิมพ์ชื่อประเภทใหม่..."
+                              value={customCategoryInput}
+                              onChange={(e) => setCustomCategoryInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleSaveCategory(row.courseTitle);
+                                if (e.key === "Escape") handleCancelEdit();
+                              }}
+                              className="rounded-lg border border-purple-300 bg-purple-50/50 px-2 py-1 text-xs text-gray-800 focus:border-[#16265E] focus:outline-hidden"
+                              autoFocus
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 group">
+                          <span
+                            className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold border ${getCategoryBadgeStyle(
+                              row.category
+                            )}`}
+                          >
+                            {row.category}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleStartEdit(row.courseTitle, row.category)}
+                            className="opacity-70 group-hover:opacity-100 hover:bg-blue-100 text-gray-500 hover:text-[#16265E] h-5 w-5 rounded flex items-center justify-center transition-all cursor-pointer text-xs"
+                            title="คลิกเพื่อแก้ไขประเภทหลักสูตรนี้"
+                          >
+                            ✎
+                          </button>
+                        </div>
+                      )}
                     </td>
 
                     {/* สมาคมกีฬาแห่งประเทศไทย */}
@@ -930,6 +1132,53 @@ export function ProjectEvaluationTab({ trainees }: ProjectEvaluationTabProps) {
           </table>
         </div>
       </div>
+      {/* Admin PIN Unlock Modal */}
+      {showPinPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl border border-gray-200">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center text-xl font-bold">
+                🔒
+              </div>
+              <div>
+                <h4 className="font-bold text-gray-900 text-sm">ยืนยันสิทธิ์ผู้ดูแลระบบ (Admin)</h4>
+                <p className="text-xs text-gray-500">กรอกรหัส PIN เพื่อปลดล็อกสิทธิ์ปรับแก้ประเภทหลักสูตร</p>
+              </div>
+            </div>
+            <form onSubmit={handleUnlockPin} className="mt-4 space-y-3">
+              <div>
+                <input
+                  type="password"
+                  placeholder="รหัส PIN 6 หลัก (มาตรฐาน: 336699)"
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 p-2.5 text-center text-sm font-mono tracking-widest focus:border-[#16265E] focus:outline-hidden"
+                  autoFocus
+                />
+                {pinError && <p className="mt-1 text-xs text-rose-600 font-semibold text-center">{pinError}</p>}
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPinPrompt(false);
+                    setPendingEditCourse(null);
+                  }}
+                  className="rounded-xl border border-gray-300 px-3.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-[#16265E] px-4 py-2 text-xs font-bold text-white hover:bg-[#111e4a] cursor-pointer"
+                >
+                  ปลดล็อกและเริ่มแก้ไข
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -332,7 +332,7 @@ function AlumniContent() {
         )}
 
         {activeTab === "evaluation" && (
-          <ProjectEvaluationTab trainees={trainees} />
+          <ProjectEvaluationTab trainees={trainees} isAdmin={isAdmin} />
         )}
 
         {activeTab === "timeline" && (

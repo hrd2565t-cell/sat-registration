@@ -201,6 +201,7 @@ export function useAlumniStore() {
     updateTrainee,
     deleteTrainee,
     importTrainees,
+    updateCourseCategory,
     addDutyRecord,
     verifyDutyRecord,
     deleteDutyRecord,
@@ -282,6 +283,36 @@ export function importTrainees(incoming: Omit<HistoricalTrainee, "id" | "created
   persist();
   emit();
   return newItems.length;
+}
+
+export function updateCourseCategory(courseTitle: string, newCategory: string): number {
+  const cleanCat = newCategory.trim();
+  if (!cleanCat) return 0;
+  const now = new Date().toISOString();
+  let updatedCount = 0;
+
+  const nextList = state.trainees.map((t) => {
+    if (t.courseTitle === courseTitle) {
+      updatedCount++;
+      return {
+        ...t,
+        courseCategory: cleanCat,
+        updatedAt: now,
+      };
+    }
+    return t;
+  });
+
+  if (updatedCount > 0) {
+    state = {
+      trainees: nextList,
+      revision: state.revision + 1,
+    };
+    persist();
+    emit();
+  }
+
+  return updatedCount;
 }
 
 export function addDutyRecord(
