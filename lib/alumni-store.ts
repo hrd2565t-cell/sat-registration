@@ -1212,3 +1212,235 @@ export function computeCourseAffiliationMatrix(
     return b.total - a.total;
   });
 }
+
+/**
+ * Helper to get a stable unique key for an individual trainee across records
+ */
+export function getPersonUniqueKey(t: HistoricalTrainee): string {
+  if (t.personnelId && t.personnelId.trim()) {
+    return t.personnelId.trim();
+  }
+  const cleanId = t.idCard ? t.idCard.replace(/\D/g, "") : "";
+  if (cleanId.length === 13) {
+    return cleanId;
+  }
+  return `name_${normalizeNameForMatching(t.name)}`;
+}
+
+export interface AnnualCohortStats {
+  yearBE: number;
+  totalRecords: number;
+  uniquePersons: number;
+  duplicateEnrollments: number;
+  newTrainees: number;
+  returningTrainees: number;
+  newPercentage: number;
+  returningPercentage: number;
+  newByGroup: Record<string, number>;
+  returningByGroup: Record<string, number>;
+}
+
+export interface TraineeCohortPerson {
+  personKey: string;
+  personnelId?: string;
+  idCard: string;
+  name: string;
+  prefix?: string;
+  affiliation: string;
+  affiliationGroup: string;
+  firstYearBE: number;
+  isNewInYear: boolean;
+  coursesInYear: string[];
+  totalCoursesAllTime: number;
+}
+
+export interface YearCohortSummary {
+  yearBE: number | "all";
+  totalRecords: number;
+  uniquePersons: number;
+  duplicateEnrollments: number;
+  newCount: number;
+  returningCount: number;
+  newPercentage: number;
+  returningPercentage: number;
+  newByGroup: Record<string, number>;
+  returningByGroup: Record<string, number>;
+  newPersonsList: TraineeCohortPerson[];
+  returningPersonsList: TraineeCohortPerson[];
+}
+
+/**
+ * Computes Annual Cohort Stats for all years in descending order
+ */
+export function computeAnnualCohortStats(trainees: HistoricalTrainee[]): AnnualCohortStats[] {
+  const personFirstYear = new Map<string, number>();
+  const sortedByYearAsc = [...trainees].sort((a, b) => a.yearBE - b.yearBE);
+  for (const r of sortedByYearAsc) {
+    const key = getPersonUniqueKey(r);
+    if (!personFirstYear.has(key)) {
+      personFirstYear.set(key, r.yearBE);
+    }
+  }
+
+  const allYears = Array.from(new Set(trainees.map((t) => t.yearBE))).sort((a, b) => b - a);
+
+  return allYears.map((year) => {
+    const yearRecords = trainees.filter((t) => t.yearBE === year);
+    const uniqueMap = new Map<string, HistoricalTrainee>();
+    for (const r of yearRecords) {
+      const key = getPersonUniqueKey(r);
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, r);
+      }
+    }
+
+    let newCount = 0;
+    let returningCount = 0;
+    const newByGroup: Record<string, number> = {
+      "สมาคมกีฬาแห่งประเทศไทย": 0,
+      "การกีฬาแห่งประเทศไทย": 0,
+      "สมาคมกีฬาแห่งจังหวัด": 0,
+      "หน่วยงานภายนอก": 0,
+    };
+    const returningByGroup: Record<string, number> = {
+      "สมาคมกีฬาแห่งประเทศไทย": 0,
+      "การกีฬาแห่งประเทศไทย": 0,
+      "สมาคมกีฬาแห่งจังหวัด": 0,
+      "หน่วยงานภายนอก": 0,
+    };
+
+    for (const [key, r] of uniqueMap.entries()) {
+      const grp = r.affiliationGroup || "หน่วยงานภายนอก";
+      const isNew = personFirstYear.get(key) === year;
+      if (isNew) {
+        newCount++;
+        newByGroup[grp] = (newByGroup[grp] || 0) + 1;
+      } else {
+        returningCount++;
+        returningByGroup[grp] = (returningByGroup[grp] || 0) + 1;
+      }
+    }
+
+    const uniquePersons = uniqueMap.size;
+    const newPercentage = uniquePersons > 0 ? Math.round((newCount / uniquePersons) * 1000) / 10 : 0;
+    const returningPercentage = uniquePersons > 0 ? Math.round((returningCount / uniquePersons) * 1000) / 10 : 0;
+
+    return {
+      yearBE: year,
+      totalRecords: yearRecords.length,
+      uniquePersons,
+      duplicateEnrollments: yearRecords.length - uniquePersons,
+      newTrainees: newCount,
+      returningTrainees: returningCount,
+      newPercentage,
+      returningPercentage,
+      newByGroup,
+      returningByGroup,
+    };
+  });
+}
+
+/**
+ * Computes deep cohort summary for a specific year (or all years) with list of individual people
+ */
+export function computeYearCohortSummary(
+  trainees: HistoricalTrainee[],
+  yearFilter: number | "all"
+): YearCohortSummary {
+  const personFirstYear = new Map<string, number>();
+  const personAllRecords = new Map<string, HistoricalTrainee[]>();
+
+  const sortedByYearAsc = [...trainees].sort((a, b) => a.yearBE - b.yearBE);
+  for (const r of sortedByYearAsc) {
+    const key = getPersonUniqueKey(r);
+    if (!personFirstYear.has(key)) {
+      personFirstYear.set(key, r.yearBE);
+    }
+    if (!personAllRecords.has(key)) {
+      personAllRecords.set(key, []);
+    }
+    personAllRecords.get(key)!.push(r);
+  }
+
+  const isSpecificYear = yearFilter !== "all" && typeof yearFilter === "number";
+  const targetYear = isSpecificYear ? yearFilter : 2569;
+
+  const relevantRecords = isSpecificYear
+    ? trainees.filter((t) => t.yearBE === targetYear)
+    : trainees;
+
+  const uniqueInYearMap = new Map<string, HistoricalTrainee[]>();
+  for (const r of relevantRecords) {
+    const key = getPersonUniqueKey(r);
+    if (!uniqueInYearMap.has(key)) {
+      uniqueInYearMap.set(key, []);
+    }
+    uniqueInYearMap.get(key)!.push(r);
+  }
+
+  const newPersonsList: TraineeCohortPerson[] = [];
+  const returningPersonsList: TraineeCohortPerson[] = [];
+
+  const newByGroup: Record<string, number> = {
+    "สมาคมกีฬาแห่งประเทศไทย": 0,
+    "การกีฬาแห่งประเทศไทย": 0,
+    "สมาคมกีฬาแห่งจังหวัด": 0,
+    "หน่วยงานภายนอก": 0,
+  };
+  const returningByGroup: Record<string, number> = {
+    "สมาคมกีฬาแห่งประเทศไทย": 0,
+    "การกีฬาแห่งประเทศไทย": 0,
+    "สมาคมกีฬาแห่งจังหวัด": 0,
+    "หน่วยงานภายนอก": 0,
+  };
+
+  for (const [key, yearRecs] of uniqueInYearMap.entries()) {
+    const primary = [...yearRecs].sort((a, b) => b.yearBE - a.yearBE)[0];
+    const grp = primary.affiliationGroup || "หน่วยงานภายนอก";
+    const firstYear = personFirstYear.get(key) ?? primary.yearBE;
+    const isNew = isSpecificYear ? firstYear === targetYear : true;
+
+    const personInfo: TraineeCohortPerson = {
+      personKey: key,
+      personnelId: primary.personnelId,
+      idCard: primary.idCard,
+      name: primary.name,
+      prefix: primary.prefix,
+      affiliation: primary.affiliation,
+      affiliationGroup: grp,
+      firstYearBE: firstYear,
+      isNewInYear: isNew,
+      coursesInYear: Array.from(new Set(yearRecs.map((r) => r.courseTitle))),
+      totalCoursesAllTime: personAllRecords.get(key)?.length || yearRecs.length,
+    };
+
+    if (isNew) {
+      newPersonsList.push(personInfo);
+      newByGroup[grp] = (newByGroup[grp] || 0) + 1;
+    } else {
+      returningPersonsList.push(personInfo);
+      returningByGroup[grp] = (returningByGroup[grp] || 0) + 1;
+    }
+  }
+
+  const totalUnique = uniqueInYearMap.size;
+  const newCount = newPersonsList.length;
+  const returningCount = returningPersonsList.length;
+  const newPercentage = totalUnique > 0 ? Math.round((newCount / totalUnique) * 1000) / 10 : 0;
+  const returningPercentage = totalUnique > 0 ? Math.round((returningCount / totalUnique) * 1000) / 10 : 0;
+
+  return {
+    yearBE: yearFilter,
+    totalRecords: relevantRecords.length,
+    uniquePersons: totalUnique,
+    duplicateEnrollments: relevantRecords.length - totalUnique,
+    newCount,
+    returningCount,
+    newPercentage,
+    returningPercentage,
+    newByGroup,
+    returningByGroup,
+    newPersonsList: newPersonsList.sort((a, b) => a.name.localeCompare(b.name, "th")),
+    returningPersonsList: returningPersonsList.sort((a, b) => a.name.localeCompare(b.name, "th")),
+  };
+}

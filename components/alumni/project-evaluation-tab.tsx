@@ -5,6 +5,8 @@ import type { HistoricalTrainee, QualitativeHighlight } from "@/lib/alumni-store
 import {
   computeEvaluationStats,
   computeCourseAffiliationMatrix,
+  computeAnnualCohortStats,
+  computeYearCohortSummary,
   updateCourseCategory,
   saveCourseTarget,
   getTargetForCourse,
@@ -47,6 +49,11 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
     | { type: "target"; courseTitle: string; target: number }
     | null
   >(null);
+
+  // Cohort Modal & Search State
+  const [isCohortListModalOpen, setIsCohortListModalOpen] = useState<boolean>(false);
+  const [cohortModalTab, setCohortModalTab] = useState<"new" | "returning">("new");
+  const [cohortSearchQuery, setCohortSearchQuery] = useState<string>("");
 
   // Dynamic categories from actual trainee data
   const allCategories = useMemo(() => {
@@ -274,6 +281,112 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
 
   const handlePrintMatrixReport = () => {
     window.print();
+  };
+
+  // Cohort Analytics
+  const currentCohortSummary = useMemo(() => {
+    return computeYearCohortSummary(
+      trainees,
+      matrixYearFilter === "all" ? "all" : Number(matrixYearFilter)
+    );
+  }, [trainees, matrixYearFilter]);
+
+  const annualCohorts = useMemo(() => {
+    return computeAnnualCohortStats(trainees);
+  }, [trainees]);
+
+  const filteredCohortModalList = useMemo(() => {
+    const list =
+      cohortModalTab === "new"
+        ? currentCohortSummary.newPersonsList
+        : currentCohortSummary.returningPersonsList;
+    if (!cohortSearchQuery.trim()) return list;
+    const q = cohortSearchQuery.toLowerCase().trim();
+    return list.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.affiliation.toLowerCase().includes(q) ||
+        p.affiliationGroup.toLowerCase().includes(q) ||
+        (p.personnelId && p.personnelId.toLowerCase().includes(q)) ||
+        p.coursesInYear.some((c) => c.toLowerCase().includes(q))
+    );
+  }, [cohortModalTab, currentCohortSummary, cohortSearchQuery]);
+
+  // Export Annual Cohort Growth Excel (Point 2)
+  const handleExportAnnualCohortExcel = () => {
+    const workbook = XLSX.utils.book_new();
+    const rows: Record<string, string | number>[] = annualCohorts.map((row) => ({
+      "ปีงบประมาณ (พ.ศ.)": row.yearBE,
+      "ที่นั่งอบรมรวม (คน-ครั้ง)": row.totalRecords,
+      "บุคลากรเดี่ยวจริง (คน)": row.uniquePersons,
+      "การอบรมซ้ำในปี (คน-ครั้ง)": row.duplicateEnrollments,
+      "บุคลากรหน้าใหม่ (คน)": row.newTrainees,
+      "สัดส่วนหน้าใหม่ (%)": `${row.newPercentage}%`,
+      "หน้าใหม่ - สมาคมกีฬาฯ": row.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0,
+      "หน้าใหม่ - กกท.": row.newByGroup["การกีฬาแห่งประเทศไทย"] || 0,
+      "หน้าใหม่ - สมาคมกีฬาจังหวัด": row.newByGroup["สมาคมกีฬาแห่งจังหวัด"] || 0,
+      "หน้าใหม่ - หน่วยงานภายนอก": row.newByGroup["หน่วยงานภายนอก"] || 0,
+      "บุคลากรเดิมต่อยอด (คน)": row.returningTrainees,
+      "สัดส่วนเดิมต่อยอด (%)": `${row.returningPercentage}%`,
+    }));
+
+    const totalRecordsAll = annualCohorts.reduce((acc, c) => acc + c.totalRecords, 0);
+    const uniqueAll = stats.uniquePersonnelCount;
+    const newAll = annualCohorts.reduce((acc, c) => acc + c.newTrainees, 0);
+
+    // Summary Row
+    rows.push({
+      "ปีงบประมาณ (พ.ศ.)": "รวมสะสมทั้งหมด",
+      "ที่นั่งอบรมรวม (คน-ครั้ง)": totalRecordsAll,
+      "บุคลากรเดี่ยวจริง (คน)": uniqueAll,
+      "การอบรมซ้ำในปี (คน-ครั้ง)": totalRecordsAll - uniqueAll,
+      "บุคลากรหน้าใหม่ (คน)": newAll,
+      "สัดส่วนหน้าใหม่ (%)": "100%",
+      "หน้าใหม่ - สมาคมกีฬาฯ": annualCohorts.reduce((a, c) => a + (c.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0), 0),
+      "หน้าใหม่ - กกท.": annualCohorts.reduce((a, c) => a + (c.newByGroup["การกีฬาแห่งประเทศไทย"] || 0), 0),
+      "หน้าใหม่ - สมาคมกีฬาจังหวัด": annualCohorts.reduce((a, c) => a + (c.newByGroup["สมาคมกีฬาแห่งจังหวัด"] || 0), 0),
+      "หน้าใหม่ - หน่วยงานภายนอก": annualCohorts.reduce((a, c) => a + (c.newByGroup["หน่วยงานภายนอก"] || 0), 0),
+      "บุคลากรเดิมต่อยอด (คน)": totalRecordsAll - newAll,
+      "สัดส่วนเดิมต่อยอด (%)": "-",
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(workbook, ws, "ภาพรวมบุคลากรเดี่ยวรายปี");
+    XLSX.writeFile(
+      workbook,
+      `SAT_Annual_Trainee_Cohort_Growth_${new Date().toISOString().split("T")[0]}.xlsx`
+    );
+  };
+
+  // Export Cohort Trainee List Modal
+  const handleExportCohortListExcel = () => {
+    const workbook = XLSX.utils.book_new();
+    const list =
+      cohortModalTab === "new"
+        ? currentCohortSummary.newPersonsList
+        : currentCohortSummary.returningPersonsList;
+    const label = cohortModalTab === "new" ? "บุคลากรหน้าใหม่" : "บุคลากรเดิมต่อยอด";
+    const yearLabel = matrixYearFilter === "all" ? "ทุกปีงบประมาณ" : `ปี_พศ_${matrixYearFilter}`;
+
+    const rows: Record<string, string | number>[] = list.map((p, idx) => ({
+      ลำดับ: idx + 1,
+      รหัสประจำตัว: p.personnelId || p.idCard,
+      คำนำหน้า: p.prefix || "",
+      "ชื่อ-นามสกุล": p.name,
+      กลุ่มสังกัด: p.affiliationGroup,
+      "หน่วยงาน/สมาคม": p.affiliation,
+      หลักสูตรที่เข้าอบรมในปีนี้: p.coursesInYear.join(", "),
+      ปีแรกที่เข้าสู่ระบบ: `พ.ศ. ${p.firstYearBE}`,
+      จำนวนหลักสูตรสะสมทั้งหมด: p.totalCoursesAllTime,
+      สถานะ: cohortModalTab === "new" ? "บุคลากรหน้าใหม่" : "ศิษย์เก่าพัฒนาต่อยอด",
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(workbook, ws, label);
+    XLSX.writeFile(
+      workbook,
+      `SAT_${label}_${yearLabel}_${new Date().toISOString().split("T")[0]}.xlsx`
+    );
   };
 
   const handleExportEvaluationReport = () => {
@@ -647,6 +760,170 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
           </div>
         )}
 
+        {/* ========================================================================= */}
+        {/* POINT 1: แถบสรุปดัชนีชี้วัดบุคลากรเดี่ยวแท้จริง & บุคลากรหน้าใหม่ (Cohort Metric Strip) */}
+        {/* ========================================================================= */}
+        <div className="rounded-xl border border-blue-200/80 bg-gradient-to-br from-blue-50/70 via-indigo-50/30 to-slate-50/60 p-4 sm:p-5 shadow-xs space-y-3.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-blue-200/60 pb-3">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#16265E] text-white text-sm shadow-xs">
+                👤
+              </span>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-bold text-[#16265E]">
+                    สรุปข้อมูลบุคลากรเดี่ยวแท้จริง {matrixYearFilter === "all" ? "(รวมสะสมทุกปีงบประมาณ)" : `ประจำปีงบประมาณ พ.ศ. ${matrixYearFilter}`}
+                  </h4>
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-300">
+                    Cohort Analysis
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  นับตามบุคคลจริง (Distinct Individuals) ตัดการนับซ้ำ เพื่อสะท้อนการขยายตัวของบุคลากรหน้าใหม่ที่เพิ่มขึ้นในแต่ละปี
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Action Buttons to view lists */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setCohortModalTab("new");
+                  setCohortSearchQuery("");
+                  setIsCohortListModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-xs font-bold shadow-xs cursor-pointer transition-colors"
+                title="คลิกเพื่อดูรายชื่อบุคลากรหน้าใหม่ทั้งหมดในปีนี้"
+              >
+                <span>🌱 ดูรายชื่อบุคลากรหน้าใหม่ ({currentCohortSummary.newCount.toLocaleString()} คน)</span>
+              </button>
+              {currentCohortSummary.returningCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCohortModalTab("returning");
+                    setCohortSearchQuery("");
+                    setIsCohortListModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white hover:bg-indigo-50 text-indigo-700 px-3 py-1.5 text-xs font-semibold shadow-xs cursor-pointer transition-colors"
+                  title="คลิกเพื่อดูรายชื่อศิษย์เก่าเดิมที่กลับมาอบรมเพิ่ม"
+                >
+                  <span>🔄 ศิษย์เก่าต่อยอด ({currentCohortSummary.returningCount.toLocaleString()} คน)</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 4 Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Card 1: Unique Individuals */}
+            <div className="rounded-xl border border-blue-200 bg-white p-3.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-gray-500 uppercase">👥 บุคลากรเดี่ยวแท้จริง</span>
+                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-extrabold text-[#16265E]">
+                  บุคคลจริง
+                </span>
+              </div>
+              <div className="mt-2 flex items-baseline gap-1.5">
+                <span className="text-2xl font-black text-[#16265E]">{currentCohortSummary.uniquePersons.toLocaleString()}</span>
+                <span className="text-xs font-medium text-gray-500">คน</span>
+              </div>
+              <div className="mt-2 text-[11px] text-gray-500 flex items-center justify-between border-t border-gray-100 pt-1.5">
+                <span>จากยอดอบรม {currentCohortSummary.totalRecords.toLocaleString()} คน-ครั้ง</span>
+                <span className={`font-semibold ${currentCohortSummary.duplicateEnrollments > 0 ? "text-amber-600" : "text-gray-400"}`}>
+                  {currentCohortSummary.duplicateEnrollments > 0 ? `ซ้ำ ${currentCohortSummary.duplicateEnrollments} ที่นั่ง` : "ไม่มีซ้ำ"}
+                </span>
+              </div>
+            </div>
+
+            {/* Card 2: New Trainees */}
+            <div className="rounded-xl border border-emerald-300 bg-emerald-50/50 p-3.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-emerald-800 uppercase">🆕 บุคลากรหน้าใหม่</span>
+                <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-extrabold text-white">
+                  {currentCohortSummary.newPercentage}%
+                </span>
+              </div>
+              <div className="mt-2 flex items-baseline gap-1.5">
+                <span className="text-2xl font-black text-emerald-700">{currentCohortSummary.newCount.toLocaleString()}</span>
+                <span className="text-xs font-bold text-emerald-800">คน</span>
+              </div>
+              <div className="mt-2 text-[11px] text-emerald-700 border-t border-emerald-200/60 pt-1.5 flex items-center justify-between">
+                <span>เพิ่งเข้าสู่ระบบ กกท. เป็นครั้งแรก</span>
+                <span className="font-extrabold text-emerald-800">+{currentCohortSummary.newCount}</span>
+              </div>
+            </div>
+
+            {/* Card 3: Returning / Upskill Trainees */}
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-3.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-indigo-900 uppercase">🔄 บุคลากรเดิมพัฒนาต่อ</span>
+                <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-extrabold text-white">
+                  {currentCohortSummary.returningPercentage}%
+                </span>
+              </div>
+              <div className="mt-2 flex items-baseline gap-1.5">
+                <span className="text-2xl font-black text-indigo-800">{currentCohortSummary.returningCount.toLocaleString()}</span>
+                <span className="text-xs font-bold text-indigo-900">คน</span>
+              </div>
+              <div className="mt-2 text-[11px] text-indigo-700 border-t border-indigo-200/60 pt-1.5 flex items-center justify-between">
+                <span>ศิษย์เก่ากลับมา Upskill / Reskill</span>
+                <span className="font-bold text-indigo-900">{currentCohortSummary.returningCount} คน</span>
+              </div>
+            </div>
+
+            {/* Card 4: New Trainees Affiliation Distribution */}
+            <div className="rounded-xl border border-gray-200 bg-white p-3.5 shadow-2xs flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-gray-700">🏛️ สังกัดของบุคลากรหน้าใหม่</span>
+                <span className="text-[10px] text-gray-500 font-medium">4 กลุ่มหน่วยงาน</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 mt-2 text-[10.5px]">
+                <div className="rounded-md bg-blue-50/90 p-1 px-1.5 border border-blue-100">
+                  <div className="text-gray-500 text-[10px] truncate">สมาคมกีฬาฯ</div>
+                  <div className="font-bold text-blue-700">{currentCohortSummary.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0} คน</div>
+                </div>
+                <div className="rounded-md bg-purple-50/90 p-1 px-1.5 border border-purple-100">
+                  <div className="text-gray-500 text-[10px] truncate">กกท.</div>
+                  <div className="font-bold text-purple-700">{currentCohortSummary.newByGroup["การกีฬาแห่งประเทศไทย"] || 0} คน</div>
+                </div>
+                <div className="rounded-md bg-amber-50/90 p-1 px-1.5 border border-amber-100">
+                  <div className="text-gray-500 text-[10px] truncate">สมาคม จ.</div>
+                  <div className="font-bold text-amber-700">{currentCohortSummary.newByGroup["สมาคมกีฬาแห่งจังหวัด"] || 0} คน</div>
+                </div>
+                <div className="rounded-md bg-emerald-50/90 p-1 px-1.5 border border-emerald-100">
+                  <div className="text-gray-500 text-[10px] truncate">หน่วยภายนอก</div>
+                  <div className="font-bold text-emerald-700">{currentCohortSummary.newByGroup["หน่วยงานภายนอก"] || 0} คน</div>
+                </div>
+              </div>
+              {/* Distribution Mini Progress Bar */}
+              <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden flex mt-2 shadow-inner">
+                <div
+                  style={{ width: `${currentCohortSummary.newCount > 0 ? ((currentCohortSummary.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0) / currentCohortSummary.newCount) * 100 : 0}%` }}
+                  className="bg-blue-600 transition-all"
+                  title={`สมาคมกีฬาแห่งประเทศไทย: ${currentCohortSummary.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0} คน`}
+                />
+                <div
+                  style={{ width: `${currentCohortSummary.newCount > 0 ? ((currentCohortSummary.newByGroup["การกีฬาแห่งประเทศไทย"] || 0) / currentCohortSummary.newCount) * 100 : 0}%` }}
+                  className="bg-purple-600 transition-all"
+                  title={`การกีฬาแห่งประเทศไทย: ${currentCohortSummary.newByGroup["การกีฬาแห่งประเทศไทย"] || 0} คน`}
+                />
+                <div
+                  style={{ width: `${currentCohortSummary.newCount > 0 ? ((currentCohortSummary.newByGroup["สมาคมกีฬาแห่งจังหวัด"] || 0) / currentCohortSummary.newCount) * 100 : 0}%` }}
+                  className="bg-amber-600 transition-all"
+                  title={`สมาคมกีฬาแห่งจังหวัด: ${currentCohortSummary.newByGroup["สมาคมกีฬาแห่งจังหวัด"] || 0} คน`}
+                />
+                <div
+                  style={{ width: `${currentCohortSummary.newCount > 0 ? ((currentCohortSummary.newByGroup["หน่วยงานภายนอก"] || 0) / currentCohortSummary.newCount) * 100 : 0}%` }}
+                  className="bg-emerald-600 transition-all"
+                  title={`หน่วยงานภายนอก: ${currentCohortSummary.newByGroup["หน่วยงานภายนอก"] || 0} คน`}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Matrix Table */}
         <div className="overflow-x-auto rounded-xl border border-gray-200">
           <table className="w-full text-left text-xs border-collapse">
@@ -1005,6 +1282,253 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                       <span className="h-2 w-2 rounded-xs bg-emerald-500" /> ภายนอก
                     </span>
                   </div>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* POINT 2: ตารางเปรียบเทียบแนวโน้มรายปี (Year-over-Year Trainee Growth & Cohort Table) */}
+      {/* ========================================================================= */}
+      <div className="rounded-2xl border border-blue-200 bg-white p-5 sm:p-6 shadow-xs space-y-5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="rounded-md bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800 border border-emerald-300">
+                สถิติการเติบโตเชิงลึก (Cohort Growth Analytics)
+              </span>
+            </div>
+            <h3 className="mt-1.5 text-lg font-black text-[#16265E] flex items-center gap-2">
+              <span>📈 สรุปภาพรวมและแนวโน้มการเติบโตของบุคลากรรายปี</span>
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              เปรียบเทียบการเพิ่มขึ้นของ &quot;บุคลากรหน้าใหม่&quot; (First-time) ที่เข้าสู่วงการกีฬาในแต่ละปีงบประมาณ เทียบกับ &quot;ศิษย์เก่า&quot; ที่กลับมาพัฒนาทักษะต่อเนื่อง (Upskill / Reskill)
+            </p>
+          </div>
+
+          {/* Action buttons for Cohort Table */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportAnnualCohortExcel}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 shadow-2xs hover:bg-emerald-100 transition-colors cursor-pointer"
+              title="ดาวน์โหลดตารางแนวโน้มบุคลากรรายปีนี้เป็นไฟล์ Excel (.xlsx)"
+            >
+              <span>📊</span>
+              <span>ออกรายงาน Excel</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 transition-colors cursor-pointer"
+              title="สั่งพิมพ์รายงานหน้านี้ (Print / Save as PDF)"
+            >
+              <span>🖨️</span>
+              <span>พิมพ์รายงาน / PDF</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 3 Executive Stat Strips */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5 flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white text-lg">
+              👥
+            </div>
+            <div>
+              <div className="text-[11px] font-bold text-blue-900">บุคลากรเดี่ยวสะสมทั้งระบบ</div>
+              <div className="text-xl font-black text-[#16265E]">
+                {stats.uniquePersonnelCount.toLocaleString()} <span className="text-xs font-medium text-gray-500">คน</span>
+              </div>
+              <div className="text-[10px] text-gray-500">จากประวัติอบรมทั้งหมด {stats.totalTrainees.toLocaleString()} คน-ครั้ง</div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3.5 flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white text-lg">
+              🌱
+            </div>
+            <div>
+              <div className="text-[11px] font-bold text-emerald-900">สัดส่วนบุคลากรหน้าใหม่</div>
+              <div className="text-xl font-black text-emerald-700">
+                {stats.totalTrainees > 0 ? Math.round((stats.uniquePersonnelCount / stats.totalTrainees) * 1000) / 10 : 0}%
+              </div>
+              <div className="text-[10px] text-emerald-800">บุคลากรที่ไม่เคยอบรมมาก่อนในระบบ</div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-3.5 flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white text-lg">
+              🔄
+            </div>
+            <div>
+              <div className="text-[11px] font-bold text-indigo-900">ค่าเฉลี่ยหลักสูตรต่อคน</div>
+              <div className="text-xl font-black text-indigo-800">
+                {stats.uniquePersonnelCount > 0 ? (stats.totalTrainees / stats.uniquePersonnelCount).toFixed(2) : "0"} <span className="text-xs font-medium text-gray-500">หลักสูตร/คน</span>
+              </div>
+              <div className="text-[10px] text-indigo-700">สะท้อนการกลับมาต่อยอดอย่างต่อเนื่อง</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Annual Cohort Table */}
+        <div className="overflow-x-auto rounded-xl border border-gray-200">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead className="bg-[#16265E] text-white">
+              <tr>
+                <th className="py-3 px-3.5 font-bold">ปีงบประมาณ</th>
+                <th className="py-3 px-3 text-center font-bold">ที่นั่งอบรมรวม</th>
+                <th className="py-3 px-3 text-center font-bold bg-blue-900/80 border-l border-blue-800">
+                  👥 บุคลากรเดี่ยวจริง
+                </th>
+                <th className="py-3 px-3 text-center font-black bg-emerald-800/90 text-white border-l border-blue-800">
+                  🆕 บุคลากรหน้าใหม่
+                </th>
+                <th className="py-3 px-3 text-center font-bold bg-emerald-900/80 border-l border-blue-800">
+                  % หน้าใหม่
+                </th>
+                <th className="py-3 px-3 text-center font-black bg-indigo-900/80 text-white border-l border-blue-800">
+                  🔄 ศิษย์เก่าต่อยอด
+                </th>
+                <th className="py-3 px-3 text-center font-bold bg-indigo-950 border-l border-blue-800">
+                  % ศิษย์เก่า
+                </th>
+                <th className="py-3 px-3 text-center font-bold min-w-[150px] border-l border-blue-800">
+                  สัดส่วน (🟢 ใหม่ vs 🟣 เดิม)
+                </th>
+                <th className="py-3 px-3 text-center font-bold min-w-[190px] border-l border-blue-800">
+                  สังกัดคนหน้าใหม่ (สมาคม / กกท / จ. / ภายนอก)
+                </th>
+                <th className="py-3 px-3 text-center font-bold border-l border-blue-800">
+                  การทำงาน
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {annualCohorts.map((cohort) => {
+                const isSelectedYear = matrixYearFilter === String(cohort.yearBE);
+                return (
+                  <tr
+                    key={cohort.yearBE}
+                    className={`transition-colors ${
+                      isSelectedYear ? "bg-blue-50/80 font-semibold" : "hover:bg-gray-50/70"
+                    }`}
+                  >
+                    <td className="py-2.5 px-3.5 font-bold text-[#16265E] flex items-center gap-1.5">
+                      <span>พ.ศ. {cohort.yearBE}</span>
+                      {cohort.yearBE === 2569 && (
+                        <span className="rounded-full bg-blue-100 text-[#16265E] px-1.5 py-0.2 text-[9px] font-bold">
+                          ปีปัจจุบัน
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-mono text-gray-700">
+                      {cohort.totalRecords.toLocaleString()} คน-ครั้ง
+                    </td>
+                    <td className="py-2.5 px-3 text-center border-l border-gray-100 font-mono font-bold text-blue-900 bg-blue-50/30">
+                      {cohort.uniquePersons.toLocaleString()} คน
+                    </td>
+                    <td className="py-2.5 px-3 text-center border-l border-gray-100 font-mono font-black text-emerald-700 bg-emerald-50/40">
+                      {cohort.newTrainees.toLocaleString()}
+                    </td>
+                    <td className="py-2.5 px-3 text-center border-l border-gray-100 font-mono text-emerald-800 bg-emerald-50/20 font-bold">
+                      {cohort.newPercentage}%
+                    </td>
+                    <td className="py-2.5 px-3 text-center border-l border-gray-100 font-mono font-black text-indigo-800 bg-indigo-50/40">
+                      {cohort.returningTrainees.toLocaleString()}
+                    </td>
+                    <td className="py-2.5 px-3 text-center border-l border-gray-100 font-mono text-indigo-900 bg-indigo-50/20 font-bold">
+                      {cohort.returningPercentage}%
+                    </td>
+
+                    {/* Progress Bar (New vs Returning) */}
+                    <td className="py-2.5 px-3 border-l border-gray-100">
+                      <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden flex shadow-2xs">
+                        <div
+                          style={{ width: `${cohort.newPercentage}%` }}
+                          className="bg-emerald-500 h-full"
+                          title={`บุคลากรหน้าใหม่: ${cohort.newTrainees} คน (${cohort.newPercentage}%)`}
+                        />
+                        <div
+                          style={{ width: `${cohort.returningPercentage}%` }}
+                          className="bg-indigo-600 h-full"
+                          title={`ศิษย์เก่าต่อยอด: ${cohort.returningTrainees} คน (${cohort.returningPercentage}%)`}
+                        />
+                      </div>
+                    </td>
+
+                    {/* Affiliation Mini badges for new trainees */}
+                    <td className="py-2.5 px-3 border-l border-gray-100">
+                      <div className="flex items-center justify-center gap-1.5 text-[10px]">
+                        <span className="rounded bg-blue-50 px-1.5 py-0.5 text-blue-700 border border-blue-200" title="สมาคมกีฬาแห่งประเทศไทย">
+                          ส.{cohort.newByGroup["สมาคมกีฬาแห่งประเทศไทย"] || 0}
+                        </span>
+                        <span className="rounded bg-purple-50 px-1.5 py-0.5 text-purple-700 border border-purple-200" title="การกีฬาแห่งประเทศไทย">
+                          กกท.{cohort.newByGroup["การกีฬาแห่งประเทศไทย"] || 0}
+                        </span>
+                        <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-700 border border-amber-200" title="สมาคมกีฬาแห่งจังหวัด">
+                          จ.{cohort.newByGroup["สมาคมกีฬาแห่งจังหวัด"] || 0}
+                        </span>
+                        <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700 border border-emerald-200" title="หน่วยงานภายนอก">
+                          ภ.{cohort.newByGroup["หน่วยงานภายนอก"] || 0}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Action */}
+                    <td className="py-2.5 px-3 text-center border-l border-gray-100">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMatrixYearFilter(String(cohort.yearBE));
+                          window.scrollTo({ top: 800, behavior: "smooth" });
+                        }}
+                        className={`rounded-lg px-2.5 py-1 text-[11px] font-bold cursor-pointer transition-colors ${
+                          isSelectedYear
+                            ? "bg-[#16265E] text-white"
+                            : "border border-gray-300 text-gray-700 hover:bg-gray-100"
+                        }`}
+                        title="กรองตารางเมทริกซ์ด้านบนให้เป็นปีนี้"
+                      >
+                        {isSelectedYear ? "✓ กำลังดูปีนี้" : "🔍 กรองปีนี้"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+
+            {/* Total Footer Row */}
+            <tfoot className="bg-gray-100 font-black text-gray-900 border-t-2 border-gray-300 text-xs">
+              <tr>
+                <td className="py-3 px-3.5 font-extrabold text-[#16265E]">
+                  รวมสะสมทั้งหมด:
+                </td>
+                <td className="py-3 px-3 text-center font-mono">
+                  {stats.totalTrainees.toLocaleString()} คน-ครั้ง
+                </td>
+                <td className="py-3 px-3 text-center border-l border-gray-200 font-mono text-blue-900 bg-blue-50/50">
+                  {stats.uniquePersonnelCount.toLocaleString()} คน
+                </td>
+                <td className="py-3 px-3 text-center border-l border-gray-200 font-mono text-emerald-800 bg-emerald-50/50">
+                  {stats.uniquePersonnelCount.toLocaleString()}
+                </td>
+                <td className="py-3 px-3 text-center border-l border-gray-200 font-mono text-emerald-900 bg-emerald-50/30">
+                  100%
+                </td>
+                <td className="py-3 px-3 text-center border-l border-gray-200 font-mono text-indigo-900 bg-indigo-50/50">
+                  {(stats.totalTrainees - stats.uniquePersonnelCount).toLocaleString()}
+                </td>
+                <td className="py-3 px-3 text-center border-l border-gray-200 font-mono text-indigo-950 bg-indigo-50/30">
+                  -
+                </td>
+                <td className="py-3 px-3 border-l border-gray-200 text-center text-[10.5px] font-normal text-gray-500">
+                  สัดส่วนสะสมตลอดช่วงเวลา
+                </td>
+                <td colSpan={2} className="py-3 px-3 border-l border-gray-200 text-center text-[10.5px] font-normal text-gray-500">
+                  (ระบบ กกท. พ.ศ. 2547–2569)
                 </td>
               </tr>
             </tfoot>
@@ -1372,6 +1896,195 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
           </table>
         </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* COHORT TRAINEE LIST MODAL (บุคลากรหน้าใหม่ vs ศิษย์เก่าต่อยอด) */}
+      {/* ========================================================================= */}
+      {isCohortListModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-4xl max-h-[90vh] rounded-2xl bg-white shadow-2xl border border-gray-200 flex flex-col overflow-hidden animate-in fade-in duration-200">
+            {/* Modal Header */}
+            <div className="bg-[#16265E] text-white p-5 flex items-center justify-between border-b border-blue-900">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-md bg-blue-800/80 px-2 py-0.5 text-xs font-bold text-blue-200">
+                    {matrixYearFilter === "all" ? "ทุกปีงบประมาณ" : `ปีงบประมาณ พ.ศ. ${matrixYearFilter}`}
+                  </span>
+                  <span className="text-xs text-blue-200">
+                    • บุคลากรเดี่ยวแท้จริง {currentCohortSummary.uniquePersons.toLocaleString()} คน
+                  </span>
+                </div>
+                <h3 className="mt-1 text-lg font-bold">
+                  {cohortModalTab === "new" ? "🌱 รายชื่อบุคลากรหน้าใหม่ (First-time Trainees)" : "🔄 รายชื่อศิษย์เก่าพัฒนาต่อยอด (Returning Trainees)"}
+                </h3>
+                <p className="text-xs text-blue-200/80 mt-0.5">
+                  {cohortModalTab === "new"
+                    ? "บุคลากรที่เพิ่งเข้ารับการอบรมกับ กกท. เป็นครั้งแรกในประวัติศาสตร์ (สร้างบุคลากรใหม่เข้าสู่วงการ)"
+                    : "บุคลากรที่มีประวัติเคยผ่านการอบรมในปีก่อนหน้ามาแล้ว และกลับมาเพิ่มพูนทักษะเพิ่มเติมในปีนี้"}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsCohortListModalOpen(false)}
+                className="rounded-xl p-2 text-blue-200 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Toolbar: Tabs, Search, and Export */}
+            <div className="p-4 bg-gray-50 border-b border-gray-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              {/* Tab Switcher */}
+              <div className="flex items-center gap-1.5 bg-gray-200/80 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setCohortModalTab("new")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    cohortModalTab === "new"
+                      ? "bg-white text-emerald-800 shadow-xs"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  🌱 บุคลากรหน้าใหม่ ({currentCohortSummary.newCount.toLocaleString()} คน)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCohortModalTab("returning")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    cohortModalTab === "returning"
+                      ? "bg-white text-indigo-900 shadow-xs"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  🔄 ศิษย์เก่าต่อยอด ({currentCohortSummary.returningCount.toLocaleString()} คน)
+                </button>
+              </div>
+
+              {/* Search & Export */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 sm:w-64">
+                  <span className="absolute left-3 top-2.5 text-gray-400 text-xs">🔍</span>
+                  <input
+                    type="text"
+                    placeholder="ค้นหาชื่อ, สังกัด, รหัส, หลักสูตร..."
+                    value={cohortSearchQuery}
+                    onChange={(e) => setCohortSearchQuery(e.target.value)}
+                    className="w-full rounded-xl border border-gray-300 bg-white py-1.5 pl-8 pr-3 text-xs focus:border-[#16265E] focus:outline-hidden"
+                  />
+                  {cohortSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setCohortSearchQuery("")}
+                      className="absolute right-2.5 top-2 text-gray-400 hover:text-gray-600 text-xs"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleExportCohortListExcel}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 shadow-2xs hover:bg-emerald-100 transition-colors cursor-pointer shrink-0"
+                >
+                  <span>📊</span>
+                  <span>ออก Excel</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Trainee List Table */}
+            <div className="flex-1 overflow-y-auto p-4 max-h-[55vh]">
+              {filteredCohortModalList.length === 0 ? (
+                <div className="py-12 text-center text-gray-400 text-xs">
+                  ไม่พบข้อมูลบุคลากรที่ตรงกับคำค้นหา
+                </div>
+              ) : (
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-[#16265E] text-white sticky top-0 shadow-xs">
+                    <tr>
+                      <th className="py-2.5 px-3 font-bold w-12 text-center">#</th>
+                      <th className="py-2.5 px-3 font-bold">รหัสบุคลากร</th>
+                      <th className="py-2.5 px-3 font-bold">ชื่อ-นามสกุล</th>
+                      <th className="py-2.5 px-3 font-bold">กลุ่มสังกัด</th>
+                      <th className="py-2.5 px-3 font-bold">หน่วยงาน / สมาคม</th>
+                      <th className="py-2.5 px-3 font-bold">หลักสูตรที่อบรมในปีนี้</th>
+                      <th className="py-2.5 px-3 text-center font-bold">เข้าสู่ระบบปีแรก</th>
+                      <th className="py-2.5 px-3 text-center font-bold">หลักสูตรสะสม</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredCohortModalList.map((person, idx) => (
+                      <tr key={person.personKey} className="hover:bg-blue-50/40 transition-colors">
+                        <td className="py-2 px-3 text-center text-gray-400 font-mono">{idx + 1}</td>
+                        <td className="py-2 px-3 font-mono font-bold text-blue-900">
+                          {person.personnelId || (person.idCard.length === 13 ? `ID-••••${person.idCard.slice(-4)}` : person.idCard)}
+                        </td>
+                        <td className="py-2 px-3 font-bold text-gray-900">
+                          {person.prefix ? `${person.prefix} ` : ""}{person.name}
+                        </td>
+                        <td className="py-2 px-3">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              person.affiliationGroup === "สมาคมกีฬาแห่งประเทศไทย"
+                                ? "bg-blue-100 text-blue-800"
+                                : person.affiliationGroup === "การกีฬาแห่งประเทศไทย"
+                                ? "bg-purple-100 text-purple-800"
+                                : person.affiliationGroup === "สมาคมกีฬาแห่งจังหวัด"
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-emerald-100 text-emerald-800"
+                            }`}
+                          >
+                            {person.affiliationGroup}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-gray-700 truncate max-w-[180px]" title={person.affiliation}>
+                          {person.affiliation}
+                        </td>
+                        <td className="py-2 px-3">
+                          <div className="flex flex-wrap gap-1">
+                            {person.coursesInYear.map((c) => (
+                              <span key={c} className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-[#16265E] border border-gray-200">
+                                {c}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 text-center font-mono font-semibold text-gray-700">
+                          พ.ศ. {person.firstYearBE}
+                        </td>
+                        <td className="py-2 px-3 text-center font-mono font-bold text-indigo-900">
+                          {person.totalCoursesAllTime}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-gray-50 border-t border-gray-200 p-3.5 px-5 flex items-center justify-between text-xs text-gray-500">
+              <div>
+                แสดง <strong>{filteredCohortModalList.length}</strong> จากทั้งหมด{" "}
+                <strong>
+                  {cohortModalTab === "new" ? currentCohortSummary.newCount : currentCohortSummary.returningCount}
+                </strong>{" "}
+                คน
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCohortListModalOpen(false)}
+                className="rounded-xl bg-[#16265E] px-4 py-2 text-xs font-bold text-white hover:bg-[#111e4a] cursor-pointer"
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Admin PIN Unlock Modal */}
       {showPinPrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
