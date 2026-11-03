@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { type HistoricalTrainee, type DutyRecord, getTraineePassport, KNOWLEDGE_DIMENSIONS } from "@/lib/alumni-store";
+import {
+  type HistoricalTrainee,
+  type DutyRecord,
+  getTraineePassport,
+  KNOWLEDGE_DIMENSIONS,
+  updatePersonAffiliation,
+  AFFILIATION_GROUPS,
+} from "@/lib/alumni-store";
+import { loginAdmin } from "@/lib/admin-auth";
 
 interface PersonnelPassportModalProps {
   idCard: string;
@@ -24,6 +32,61 @@ export function PersonnelPassportModal({
 }: PersonnelPassportModalProps) {
   const passport = getTraineePassport(idCard, allTrainees);
   const [activeTab, setActiveTab] = useState<"certs" | "duties">("certs");
+  const [isEditingAffiliation, setIsEditingAffiliation] = useState(false);
+  const [editGroup, setEditGroup] = useState<string>("");
+  const [editAffiliationName, setEditAffiliationName] = useState<string>("");
+  const [showPinPrompt, setShowPinPrompt] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState("");
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const { primary, records, allDuties, isActive } = passport || {
+    primary: undefined as unknown as HistoricalTrainee,
+    records: [] as HistoricalTrainee[],
+    allDuties: [] as DutyRecord[],
+    isActive: false,
+  };
+
+  const handleStartEditAffiliation = () => {
+    if (!isAdmin) {
+      setShowPinPrompt(true);
+      setPinInput("");
+      setPinError("");
+      return;
+    }
+    if (primary) {
+      setEditGroup(primary.affiliationGroup || "หน่วยงานภายนอก");
+      setEditAffiliationName(primary.affiliation || "");
+      setIsEditingAffiliation(true);
+    }
+  };
+
+  const handleSaveAffiliation = () => {
+    if (!editAffiliationName.trim()) {
+      alert("กรุณาระบุชื่อสมาคมหรือหน่วยงาน");
+      return;
+    }
+    const targetKey = primary.personnelId || primary.idCard || primary.id;
+    const count = updatePersonAffiliation(targetKey, editGroup, editAffiliationName.trim());
+    setIsEditingAffiliation(false);
+    setToastMessage(`✅ อัปเดตข้อมูลสังกัดเรียบร้อยแล้ว (${count} รายการ)`);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleUnlockPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loginAdmin(pinInput.trim())) {
+      setShowPinPrompt(false);
+      setPinError("");
+      if (primary) {
+        setEditGroup(primary.affiliationGroup || "หน่วยงานภายนอก");
+        setEditAffiliationName(primary.affiliation || "");
+        setIsEditingAffiliation(true);
+      }
+    } else {
+      setPinError("รหัส PIN ไม่ถูกต้อง (รหัสเริ่มต้น: 336699)");
+    }
+  };
 
   if (!passport) {
     return (
@@ -41,8 +104,6 @@ export function PersonnelPassportModal({
       </div>
     );
   }
-
-  const { primary, records, allDuties, isActive } = passport;
 
   // Format masked ID card (e.g., 1-1005-XXXXX-56)
   const cleanId = primary.idCard.replace(/\D/g, "");
@@ -110,7 +171,7 @@ export function PersonnelPassportModal({
                 {primary.name}
               </h2>
 
-              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-blue-100/85">
+              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-blue-100/85">
                 {primary.personnelId && <span>🆔 รหัส {primary.personnelId}</span>}
                 {cleanId.length === 13 && <span>🪪 {maskedId}</span>}
                 {primary.affiliationGroup && (
@@ -120,7 +181,84 @@ export function PersonnelPassportModal({
                 )}
                 <span>📍 {primary.affiliation}</span>
                 {primary.phone && <span>📞 {primary.phone}</span>}
+                <button
+                  type="button"
+                  onClick={handleStartEditAffiliation}
+                  className="inline-flex items-center gap-1 rounded-md bg-white/15 hover:bg-white/25 text-amber-200 hover:text-amber-100 px-2 py-0.5 text-[11px] font-bold border border-white/20 transition-all cursor-pointer shadow-xs"
+                  title="แก้ไขกลุ่มหน่วยงานและสังกัด (Admin)"
+                >
+                  <span>✎</span>
+                  <span>แก้ไขสังกัด</span>
+                </button>
               </div>
+
+              {/* Toast inside Passport */}
+              {toastMessage && (
+                <div className="mt-2.5 rounded-lg bg-emerald-500/90 text-white px-3 py-1.5 text-xs font-bold shadow-md animate-in fade-in duration-150">
+                  {toastMessage}
+                </div>
+              )}
+
+              {/* Inline Edit Affiliation Form */}
+              {isEditingAffiliation && (
+                <div className="mt-3 rounded-xl bg-white/10 p-3.5 border border-white/25 backdrop-blur-md space-y-2.5 animate-in fade-in-50 duration-150">
+                  <div className="flex items-center justify-between text-xs font-bold text-amber-300">
+                    <span>🏢 แก้ไขกลุ่มหน่วยงานและสังกัด (Admin)</span>
+                    <span className="text-[10.5px] text-blue-200 font-normal">
+                      จะอัปเดตทุกหลักสูตรของบุคคลนี้ ({records.length} รายการ)
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className="text-[11px] text-blue-200 font-semibold block mb-1">
+                        กลุ่มหน่วยงาน (4 กลุ่มหลัก):
+                      </label>
+                      <select
+                        value={editGroup}
+                        onChange={(e) => setEditGroup(e.target.value)}
+                        className="w-full rounded-lg bg-white text-gray-900 p-2 text-xs font-semibold focus:outline-hidden"
+                      >
+                        {AFFILIATION_GROUPS.map((grp) => (
+                          <option key={grp} value={grp}>
+                            {grp}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] text-blue-200 font-semibold block mb-1">
+                        ชื่อสมาคม / สังกัด / หน่วยงาน:
+                      </label>
+                      <input
+                        type="text"
+                        value={editAffiliationName}
+                        onChange={(e) => setEditAffiliationName(e.target.value)}
+                        placeholder="เช่น สมาคมกีฬาว่ายน้ำแห่งประเทศไทย"
+                        className="w-full rounded-lg bg-white text-gray-900 p-2 text-xs font-semibold focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingAffiliation(false)}
+                      className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20 cursor-pointer"
+                    >
+                      ยกเลิก
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveAffiliation}
+                      className="rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-emerald-500 shadow-xs cursor-pointer"
+                    >
+                      ✓ บันทึกข้อมูล
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -355,6 +493,15 @@ export function PersonnelPassportModal({
             กองพัฒนาบุคลากรกีฬา · การกีฬาแห่งประเทศไทย
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleStartEditAffiliation}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-900 shadow-xs hover:bg-amber-100 transition-colors cursor-pointer"
+              title="แก้ไขกลุ่มหน่วยงานและสังกัด (Admin)"
+            >
+              <span>🏢</span>
+              <span>แก้ไขสังกัด</span>
+            </button>
             {onOpenDigitalPass && (
               <button
                 type="button"
@@ -392,6 +539,51 @@ export function PersonnelPassportModal({
           </div>
         </div>
       </div>
+
+      {/* Admin PIN Unlock Modal */}
+      {showPinPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-gray-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center text-xl font-bold">
+                🔒
+              </div>
+              <div>
+                <h4 className="font-bold text-gray-900 text-sm">ยืนยันสิทธิ์ผู้ดูแลระบบ (Admin)</h4>
+                <p className="text-xs text-gray-500">กรอกรหัส PIN เพื่อปลดล็อกสิทธิ์แก้ไขข้อมูลสังกัด</p>
+              </div>
+            </div>
+            <form onSubmit={handleUnlockPin} className="mt-4 space-y-3">
+              <div>
+                <input
+                  type="password"
+                  placeholder="รหัส PIN 6 หลัก (มาตรฐาน: 336699)"
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 p-2.5 text-center text-sm font-mono tracking-widest focus:border-[#16265E] focus:outline-hidden"
+                  autoFocus
+                />
+                {pinError && <p className="mt-1 text-xs text-rose-600 font-semibold text-center">{pinError}</p>}
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPinPrompt(false)}
+                  className="rounded-xl border border-gray-300 px-3.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-[#16265E] px-4 py-2 text-xs font-bold text-white hover:bg-[#111e4a] cursor-pointer"
+                >
+                  ปลดล็อกและเริ่มแก้ไข
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

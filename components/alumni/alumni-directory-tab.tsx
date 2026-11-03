@@ -7,8 +7,10 @@ import {
   PAST_YEARS_BE,
   STANDARD_COURSES,
   groupTraineesByPerson,
+  updatePersonAffiliation,
   type UniquePersonTrainee,
 } from "@/lib/alumni-store";
+import { loginAdmin } from "@/lib/admin-auth";
 import * as XLSX from "xlsx";
 
 interface AlumniDirectoryTabProps {
@@ -38,6 +40,60 @@ export function AlumniDirectoryTab({
   const [viewMode, setViewMode] = useState<"person" | "record">("person");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(50);
+
+  // Inline Quick Edit Group State
+  const [editingGroupPersonId, setEditingGroupPersonId] = useState<string | null>(null);
+  const [editingGroupValue, setEditingGroupValue] = useState<string>("สมาคมกีฬาแห่งประเทศไทย");
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Admin PIN Unlock Dialog State
+  const [showPinPrompt, setShowPinPrompt] = useState<boolean>(false);
+  const [pinInput, setPinInput] = useState<string>("");
+  const [pinError, setPinError] = useState<string>("");
+  const [pendingEditPerson, setPendingEditPerson] = useState<{
+    id: string;
+    name: string;
+    currentGroup: string;
+  } | null>(null);
+
+  const handleStartEditGroup = (id: string, name: string, currentGroup: string) => {
+    if (!isAdmin) {
+      setPendingEditPerson({ id, name, currentGroup });
+      setShowPinPrompt(true);
+      setPinInput("");
+      setPinError("");
+      return;
+    }
+
+    setEditingGroupPersonId(id);
+    setEditingGroupValue(currentGroup || "หน่วยงานภายนอก");
+  };
+
+  const handleSaveGroup = (personId: string, personName: string) => {
+    const count = updatePersonAffiliation(personId, editingGroupValue);
+    setEditingGroupPersonId(null);
+    setToastMessage(`✅ ปรับกลุ่มหน่วยงานของ "${personName}" เป็น "${editingGroupValue}" เรียบร้อยแล้ว (อัปเดต ${count} รายการ)`);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const handleCancelEditGroup = () => {
+    setEditingGroupPersonId(null);
+  };
+
+  const handleUnlockPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loginAdmin(pinInput.trim())) {
+      setShowPinPrompt(false);
+      setPinError("");
+      if (pendingEditPerson) {
+        setEditingGroupPersonId(pendingEditPerson.id);
+        setEditingGroupValue(pendingEditPerson.currentGroup || "หน่วยงานภายนอก");
+        setPendingEditPerson(null);
+      }
+    } else {
+      setPinError("รหัส PIN ไม่ถูกต้อง (รหัสเริ่มต้น: 336699)");
+    }
+  };
 
   // Group into clean unique personnel (deduplicated profiles)
   const uniquePersons = useMemo(() => groupTraineesByPerson(trainees), [trainees]);
@@ -558,6 +614,23 @@ export function AlumniDirectoryTab({
         </div>
       </div>
 
+      {/* Success Toast Notification */}
+      {toastMessage && (
+        <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-xs font-bold text-emerald-800 shadow-xs flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <span>🎉</span>
+            <span>{toastMessage}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            className="text-emerald-700 hover:text-emerald-900 cursor-pointer ml-3 font-normal"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Directory Table */}
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xs">
         <div className="overflow-x-auto">
@@ -568,7 +641,16 @@ export function AlumniDirectoryTab({
                 <tr>
                   <th className="py-3 px-3.5 font-bold">#</th>
                   <th className="py-3 px-3.5 font-bold">บุคลากรกีฬา</th>
-                  <th className="py-3 px-3.5 font-bold">กลุ่มหน่วยงาน</th>
+                  <th className="py-3 px-3.5 font-bold">
+                    <div className="flex items-center gap-1.5">
+                      <span>กลุ่มหน่วยงาน</span>
+                      {isAdmin && (
+                        <span className="text-[10px] font-normal text-blue-200 bg-blue-900/60 px-1.5 py-0.2 rounded border border-blue-400/40">
+                          แก้ไขได้ ✎
+                        </span>
+                      )}
+                    </div>
+                  </th>
                   <th className="py-3 px-3.5 font-bold">สังกัด / สมาคม / หน่วยงาน</th>
                   <th className="py-3 px-3.5 font-bold">หลักสูตรที่สำเร็จทั้งหมด</th>
                   <th className="py-3 px-3.5 font-bold text-center">ปีที่สำเร็จ</th>
@@ -614,14 +696,57 @@ export function AlumniDirectoryTab({
                             </div>
                           </div>
                         </td>
-                        <td className="py-3 px-3.5">
-                          <span
-                            className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold border ${getGroupBadgeClass(
-                              p.affiliationGroup
-                            )}`}
-                          >
-                            {p.affiliationGroup || "หน่วยงานภายนอก"}
-                          </span>
+                        <td className="py-3 px-3.5 min-w-[190px]">
+                          {editingGroupPersonId === p.personnelId ? (
+                            <div className="flex items-center gap-1.5 animate-in fade-in-50 duration-150">
+                              <select
+                                value={editingGroupValue}
+                                onChange={(e) => setEditingGroupValue(e.target.value)}
+                                className="rounded-lg border border-[#16265E] bg-white px-2 py-1 text-xs font-semibold text-gray-800 shadow-xs focus:outline-hidden focus:ring-2 focus:ring-[#16265E]/30"
+                                autoFocus
+                              >
+                                {AFFILIATION_GROUPS.map((grp) => (
+                                  <option key={grp} value={grp}>
+                                    {grp}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => handleSaveGroup(p.personnelId, p.name)}
+                                className="h-7 w-7 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center shadow-xs cursor-pointer transition-colors"
+                                title="บันทึกการแก้ไข (Enter)"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleCancelEditGroup}
+                                className="h-7 w-7 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-xs flex items-center justify-center cursor-pointer transition-colors"
+                                title="ยกเลิก"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 group/grp">
+                              <span
+                                className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold border ${getGroupBadgeClass(
+                                  p.affiliationGroup
+                                )}`}
+                              >
+                                {p.affiliationGroup || "หน่วยงานภายนอก"}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditGroup(p.personnelId, p.name, p.affiliationGroup || "หน่วยงานภายนอก")}
+                                className="rounded p-1 text-gray-400 hover:text-[#16265E] hover:bg-blue-50 transition-all cursor-pointer text-xs"
+                                title={isAdmin ? "แก้ไขกลุ่มหน่วยงาน (Admin)" : "คลิกเพื่อปลดล็อก Admin และแก้ไขกลุ่มหน่วยงาน"}
+                              >
+                                ✎
+                              </button>
+                            </div>
+                          )}
                         </td>
                         <td className="py-3 px-3.5">
                           <p className="font-semibold text-gray-800 max-w-xs line-clamp-2" title={p.affiliation}>
@@ -723,7 +848,16 @@ export function AlumniDirectoryTab({
                 <tr>
                   <th className="py-3 px-3.5 font-bold">#</th>
                   <th className="py-3 px-3.5 font-bold">บุคลากรกีฬา</th>
-                  <th className="py-3 px-3.5 font-bold">กลุ่มหน่วยงาน</th>
+                  <th className="py-3 px-3.5 font-bold">
+                    <div className="flex items-center gap-1.5">
+                      <span>กลุ่มหน่วยงาน</span>
+                      {isAdmin && (
+                        <span className="text-[10px] font-normal text-blue-200 bg-blue-900/60 px-1.5 py-0.2 rounded border border-blue-400/40">
+                          แก้ไขได้ ✎
+                        </span>
+                      )}
+                    </div>
+                  </th>
                   <th className="py-3 px-3.5 font-bold">ชื่อสมาคม / หน่วยงาน</th>
                   <th className="py-3 px-3.5 font-bold">หลักสูตรที่สำเร็จ</th>
                   <th className="py-3 px-3.5 font-bold">ปี พ.ศ.</th>
@@ -770,14 +904,57 @@ export function AlumniDirectoryTab({
                             </div>
                           </div>
                         </td>
-                        <td className="py-3 px-3.5">
-                          <span
-                            className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold border ${getGroupBadgeClass(
-                              t.affiliationGroup
-                            )}`}
-                          >
-                            {t.affiliationGroup || "หน่วยงานภายนอก"}
-                          </span>
+                        <td className="py-3 px-3.5 min-w-[190px]">
+                          {editingGroupPersonId === t.id ? (
+                            <div className="flex items-center gap-1.5 animate-in fade-in-50 duration-150">
+                              <select
+                                value={editingGroupValue}
+                                onChange={(e) => setEditingGroupValue(e.target.value)}
+                                className="rounded-lg border border-[#16265E] bg-white px-2 py-1 text-xs font-semibold text-gray-800 shadow-xs focus:outline-hidden focus:ring-2 focus:ring-[#16265E]/30"
+                                autoFocus
+                              >
+                                {AFFILIATION_GROUPS.map((grp) => (
+                                  <option key={grp} value={grp}>
+                                    {grp}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => handleSaveGroup(t.personnelId || t.id, t.name)}
+                                className="h-7 w-7 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center shadow-xs cursor-pointer transition-colors"
+                                title="บันทึกการแก้ไข (Enter)"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleCancelEditGroup}
+                                className="h-7 w-7 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-xs flex items-center justify-center cursor-pointer transition-colors"
+                                title="ยกเลิก"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 group/grp">
+                              <span
+                                className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold border ${getGroupBadgeClass(
+                                  t.affiliationGroup
+                                )}`}
+                              >
+                                {t.affiliationGroup || "หน่วยงานภายนอก"}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditGroup(t.id, t.name, t.affiliationGroup || "หน่วยงานภายนอก")}
+                                className="rounded p-1 text-gray-400 hover:text-[#16265E] hover:bg-blue-50 transition-all cursor-pointer text-xs"
+                                title={isAdmin ? "แก้ไขกลุ่มหน่วยงาน (Admin)" : "คลิกเพื่อปลดล็อก Admin และแก้ไขกลุ่มหน่วยงาน"}
+                              >
+                                ✎
+                              </button>
+                            </div>
+                          )}
                         </td>
                         <td className="py-3 px-3.5">
                           <p className="font-semibold text-gray-800 max-w-xs line-clamp-2" title={t.affiliation}>
@@ -918,6 +1095,54 @@ export function AlumniDirectoryTab({
           </div>
         )}
       </div>
+
+      {/* Admin PIN Unlock Modal */}
+      {showPinPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl border border-gray-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center text-xl font-bold">
+                🔒
+              </div>
+              <div>
+                <h4 className="font-bold text-gray-900 text-sm">ยืนยันสิทธิ์ผู้ดูแลระบบ (Admin)</h4>
+                <p className="text-xs text-gray-500">กรอกรหัส PIN เพื่อปลดล็อกสิทธิ์ปรับแก้กลุ่มหน่วยงาน</p>
+              </div>
+            </div>
+            <form onSubmit={handleUnlockPin} className="mt-4 space-y-3">
+              <div>
+                <input
+                  type="password"
+                  placeholder="รหัส PIN 6 หลัก (มาตรฐาน: 336699)"
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 p-2.5 text-center text-sm font-mono tracking-widest focus:border-[#16265E] focus:outline-hidden"
+                  autoFocus
+                />
+                {pinError && <p className="mt-1 text-xs text-rose-600 font-semibold text-center">{pinError}</p>}
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPinPrompt(false);
+                    setPendingEditPerson(null);
+                  }}
+                  className="rounded-xl border border-gray-300 px-3.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-[#16265E] px-4 py-2 text-xs font-bold text-white hover:bg-[#111e4a] cursor-pointer"
+                >
+                  ปลดล็อกและเริ่มแก้ไข
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

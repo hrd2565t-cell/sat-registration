@@ -202,6 +202,7 @@ export function useAlumniStore() {
     deleteTrainee,
     importTrainees,
     updateCourseCategory,
+    updatePersonAffiliation,
     addDutyRecord,
     verifyDutyRecord,
     deleteDutyRecord,
@@ -300,6 +301,66 @@ export function updateCourseCategory(courseTitle: string, newCategory: string): 
       return {
         ...t,
         courseCategory: cleanCat,
+        updatedAt: now,
+      };
+    }
+    return t;
+  });
+
+  if (updatedCount > 0) {
+    state = {
+      trainees: nextList,
+      revision: state.revision + 1,
+    };
+    persist();
+    emit();
+  }
+
+  return updatedCount;
+}
+
+/**
+ * Updates affiliationGroup (and optionally affiliation name) for a person across all their historical courses.
+ * Matches by personnelId, idCard, direct ID, or normalized name.
+ */
+export function updatePersonAffiliation(
+  identifier: string,
+  newGroup: string,
+  newAffiliationName?: string
+): number {
+  const cleanId = (identifier || "").trim();
+  const cleanGroup = newGroup.trim();
+  if (!cleanId || !cleanGroup) return 0;
+
+  const now = new Date().toISOString();
+  let updatedCount = 0;
+
+  // Find target trainee first to know all their matching identifiers
+  const target = state.trainees.find(
+    (t) =>
+      (t.personnelId && t.personnelId.toLowerCase() === cleanId.toLowerCase()) ||
+      t.id === cleanId ||
+      t.idCard === cleanId ||
+      normalizeNameForMatching(t.name) === normalizeNameForMatching(cleanId)
+  );
+
+  const targetPId = target?.personnelId?.toLowerCase();
+  const targetIdCard = target?.idCard?.replace(/\D/g, "");
+  const targetNormName = target ? normalizeNameForMatching(target.name) : normalizeNameForMatching(cleanId);
+
+  const nextList = state.trainees.map((t) => {
+    const isPIdMatch = targetPId && t.personnelId && t.personnelId.toLowerCase() === targetPId;
+    const isIdCardMatch = targetIdCard && targetIdCard.length === 13 && t.idCard && t.idCard.replace(/\D/g, "") === targetIdCard;
+    const isDirectMatch = t.id === cleanId || t.idCard === cleanId;
+    const isNameMatch = targetNormName && normalizeNameForMatching(t.name) === targetNormName;
+
+    if (isPIdMatch || isIdCardMatch || isDirectMatch || isNameMatch) {
+      updatedCount++;
+      return {
+        ...t,
+        affiliationGroup: cleanGroup,
+        affiliation: newAffiliationName !== undefined && newAffiliationName.trim() ? newAffiliationName.trim() : t.affiliation,
+        sportsType: newAffiliationName !== undefined && newAffiliationName.trim() ? newAffiliationName.trim() : t.sportsType,
         updatedAt: now,
       };
     }
