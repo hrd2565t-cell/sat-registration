@@ -10,6 +10,14 @@ import {
   smartInferAffiliationGroup,
   type AffiliationMatchResult,
 } from "./smart-name-engine";
+import { isSupabaseConfigured, getSupabaseClient } from "./supabase/client";
+import {
+  fetchAlumniFromSupabase,
+  syncTraineeToSupabase,
+  syncTraineesBatchToSupabase,
+  deleteTraineeFromSupabase,
+  mapAlumniRowToTrainee,
+} from "./supabase/sync";
 
 export interface DutyRecord {
   id: string;
@@ -171,6 +179,8 @@ export const SEED_TRAINEES: HistoricalTrainee[] = rawRealTrainees as HistoricalT
 const STORAGE_KEY = "sat-alumni-real-v5";
 const LEGACY_STORAGE_KEYS = ["sat-alumni-real-v4", "sat-alumni-real-v3"];
 
+export type CloudSyncStatus = "idle" | "connected" | "disconnected" | "syncing" | "error";
+
 interface AlumniState {
   trainees: HistoricalTrainee[];
   revision: number;
@@ -183,6 +193,8 @@ const INITIAL_STATE: AlumniState = {
 
 let state: AlumniState = INITIAL_STATE;
 let hydrateStarted = false;
+let realtimeSubscribed = false;
+let cloudSyncStatus: CloudSyncStatus = "idle";
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -196,10 +208,28 @@ export function onStoreChange(callback: () => void): () => void {
   };
 }
 
+export function getCloudSyncStatus(): CloudSyncStatus {
+  if (!isSupabaseConfigured()) return "disconnected";
+  return cloudSyncStatus;
+}
+
+export function isCloudConfigured(): boolean {
+  return isSupabaseConfigured();
+}
+
+function saveToLocalStorage(trainees: HistoricalTrainee[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(trainees));
+  } catch {
+    // Local storage full or unavailable
+  }
+}
+
 function persist() {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.trainees));
+    saveToLocalStorage(state.trainees);
     fetch("/api/admin/save-defaults", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -212,12 +242,67 @@ function persist() {
   }
 }
 
+function initRealtimeSubscription() {
+  if (realtimeSubscribed || typeof window === "undefined" || !isSupabaseConfigured()) return;
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+
+  try {
+    realtimeSubscribed = true;
+    supabase
+      .channel("sat-alumni-realtime-channel")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "alumni" },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            const row = payload.new as import("./supabase/types").Database["public"]["Tables"]["alumni"]["Row"];
+            if (!row || !row.id) return;
+            const newTrainee = mapAlumniRowToTrainee(row);
+            const exists = state.trainees.some((t) => t.id === newTrainee.id);
+            if (!exists) {
+              state = {
+                trainees: [newTrainee, ...state.trainees],
+                revision: state.revision + 1,
+              };
+              saveToLocalStorage(state.trainees);
+              emit();
+            }
+          } else if (payload.eventType === "UPDATE") {
+            const row = payload.new as import("./supabase/types").Database["public"]["Tables"]["alumni"]["Row"];
+            if (!row || !row.id) return;
+            const updated = mapAlumniRowToTrainee(row);
+            state = {
+              trainees: state.trainees.map((t) => (t.id === updated.id ? updated : t)),
+              revision: state.revision + 1,
+            };
+            saveToLocalStorage(state.trainees);
+            emit();
+          } else if (payload.eventType === "DELETE") {
+            const deletedId = (payload.old as { id?: string })?.id;
+            if (deletedId) {
+              state = {
+                trainees: state.trainees.filter((t) => t.id !== deletedId),
+                revision: state.revision + 1,
+              };
+              saveToLocalStorage(state.trainees);
+              emit();
+            }
+          }
+        }
+      )
+      .subscribe();
+  } catch (err) {
+    console.warn("Failed to subscribe to alumni realtime changes:", err);
+  }
+}
+
 function hydrate() {
   if (hydrateStarted || typeof window === "undefined") return;
   hydrateStarted = true;
 
   try {
-    // Check v5 first, fallback to legacy cached keys
+    // 1. Check local storage first for instant 0ms rendering
     let raw = window.localStorage.getItem(STORAGE_KEY);
     let fromLegacy = false;
 
@@ -237,25 +322,55 @@ function hydrate() {
       }
     }
 
-    if (!raw) return;
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      // Automatically run smart standardization & affiliation reclassification
-      // Ensures any machine with stale cache automatically synchronizes to latest standards
-      const result = standardizeAllTrainees(parsed, { reclassifyGroups: true });
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const result = standardizeAllTrainees(parsed, { reclassifyGroups: true });
+        state = {
+          trainees: result.cleaned,
+          revision: state.revision + 1,
+        };
 
-      state = {
-        trainees: result.cleaned,
-        revision: state.revision + 1,
-      };
-
-      if (fromLegacy || result.changedCount > 0) {
-        persist();
+        if (fromLegacy || result.changedCount > 0) {
+          persist();
+        }
+        emit();
       }
-      emit();
     }
   } catch {
     // fallback to seed
+  }
+
+  // 2. Real-time Cloud Synchronization with Supabase
+  if (isSupabaseConfigured()) {
+    cloudSyncStatus = "syncing";
+    initRealtimeSubscription();
+
+    fetchAlumniFromSupabase()
+      .then((cloudTrainees) => {
+        if (cloudTrainees && cloudTrainees.length > 0) {
+          // Cloud database is the single source of truth across all devices!
+          state = {
+            trainees: cloudTrainees,
+            revision: state.revision + 1,
+          };
+          cloudSyncStatus = "connected";
+          saveToLocalStorage(state.trainees);
+          emit();
+        } else if (cloudTrainees && cloudTrainees.length === 0 && state.trainees.length > 0) {
+          // Table exists on Supabase but empty - bootstrap initial records to cloud
+          cloudSyncStatus = "connected";
+          syncTraineesBatchToSupabase(state.trainees).catch(() => {});
+        } else {
+          cloudSyncStatus = "connected";
+        }
+      })
+      .catch((err) => {
+        console.warn("Supabase alumni initial sync error:", err);
+        cloudSyncStatus = "error";
+      });
+  } else {
+    cloudSyncStatus = "disconnected";
   }
 }
 
@@ -265,6 +380,73 @@ function getSnapshot() {
 
 function getServerSnapshot() {
   return INITIAL_STATE;
+}
+
+/**
+ * Triggers a manual full sync of all alumni records to Supabase Cloud
+ */
+export async function syncAllAlumniToCloud(
+  onProgress?: (synced: number, total: number) => void
+): Promise<{ success: boolean; count: number; error?: string }> {
+  if (!isSupabaseConfigured()) {
+    return {
+      success: false,
+      count: 0,
+      error: "ยังไม่ได้ตั้งค่าการเชื่อมต่อ Supabase ใน .env หรือเซิร์ฟเวอร์",
+    };
+  }
+
+  cloudSyncStatus = "syncing";
+  emit();
+
+  try {
+    const res = await syncTraineesBatchToSupabase(state.trainees, onProgress);
+    if (res.success) {
+      cloudSyncStatus = "connected";
+    } else {
+      cloudSyncStatus = "error";
+    }
+    emit();
+    return res;
+  } catch (err) {
+    cloudSyncStatus = "error";
+    emit();
+    return {
+      success: false,
+      count: 0,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/**
+ * Manually forces a refresh from Supabase Cloud
+ */
+export async function refreshAlumniFromCloud(): Promise<number> {
+  if (!isSupabaseConfigured()) return 0;
+  cloudSyncStatus = "syncing";
+  emit();
+
+  try {
+    const cloudTrainees = await fetchAlumniFromSupabase();
+    if (cloudTrainees && cloudTrainees.length > 0) {
+      state = {
+        trainees: cloudTrainees,
+        revision: state.revision + 1,
+      };
+      cloudSyncStatus = "connected";
+      saveToLocalStorage(cloudTrainees);
+      emit();
+      return cloudTrainees.length;
+    }
+    cloudSyncStatus = "connected";
+    emit();
+    return 0;
+  } catch {
+    cloudSyncStatus = "error";
+    emit();
+    return 0;
+  }
 }
 
 export function useAlumniStore() {
@@ -280,6 +462,10 @@ export function useAlumniStore() {
 
   return {
     trainees: snapshot.trainees,
+    cloudStatus: getCloudSyncStatus(),
+    isCloudConfigured: isSupabaseConfigured(),
+    syncAllAlumniToCloud,
+    refreshAlumniFromCloud,
     addTrainee,
     updateTrainee,
     deleteTrainee,
@@ -313,6 +499,9 @@ export function addTrainee(input: Omit<HistoricalTrainee, "id" | "createdAt" | "
     revision: state.revision + 1,
   };
   persist();
+  if (isSupabaseConfigured()) {
+    syncTraineeToSupabase(newTrainee).catch(() => {});
+  }
   emit();
   return newTrainee;
 }
@@ -338,6 +527,9 @@ export function updateTrainee(id: string, patch: Partial<HistoricalTrainee>): Hi
     revision: state.revision + 1,
   };
   persist();
+  if (isSupabaseConfigured() && updated) {
+    syncTraineeToSupabase(updated).catch(() => {});
+  }
   emit();
   return updated;
 }
@@ -351,6 +543,9 @@ export function deleteTrainee(id: string): boolean {
     revision: state.revision + 1,
   };
   persist();
+  if (isSupabaseConfigured()) {
+    deleteTraineeFromSupabase(id).catch(() => {});
+  }
   emit();
   return true;
 }
@@ -370,6 +565,9 @@ export function importTrainees(incoming: Omit<HistoricalTrainee, "id" | "created
     revision: state.revision + 1,
   };
   persist();
+  if (isSupabaseConfigured() && newItems.length > 0) {
+    syncTraineesBatchToSupabase(newItems).catch(() => {});
+  }
   emit();
   return newItems.length;
 }
@@ -398,6 +596,10 @@ export function updateCourseCategory(courseTitle: string, newCategory: string): 
       revision: state.revision + 1,
     };
     persist();
+    if (isSupabaseConfigured()) {
+      const affected = nextList.filter((t) => t.courseTitle === courseTitle);
+      syncTraineesBatchToSupabase(affected).catch(() => {});
+    }
     emit();
   }
 
@@ -489,6 +691,16 @@ export function updatePersonProfile(
       revision: state.revision + 1,
     };
     persist();
+    if (isSupabaseConfigured()) {
+      const affected = nextList.filter((t) => {
+        const isPIdMatch = targetPId && t.personnelId && t.personnelId.toLowerCase() === targetPId;
+        const isIdCardMatch = targetIdCard && targetIdCard.length === 13 && t.idCard && t.idCard.replace(/\D/g, "") === targetIdCard;
+        const isDirectMatch = t.id === cleanId || t.idCard === cleanId;
+        const isNameMatch = targetNormName && normalizeNameForMatching(t.name) === targetNormName;
+        return isPIdMatch || isIdCardMatch || isDirectMatch || isNameMatch;
+      });
+      syncTraineesBatchToSupabase(affected).catch(() => {});
+    }
     emit();
   }
 
@@ -550,6 +762,14 @@ export function addDutyRecord(
     revision: state.revision + 1,
   };
   persist();
+  if (isSupabaseConfigured()) {
+    const affected = nextList.filter((t) =>
+      (target.personnelId && t.personnelId === target.personnelId) ||
+      (t.idCard && t.idCard === target.idCard) ||
+      t.id === target.id
+    );
+    syncTraineesBatchToSupabase(affected).catch(() => {});
+  }
   emit();
   return newDuty;
 }
@@ -589,6 +809,10 @@ export function verifyDutyRecord(
     revision: state.revision + 1,
   };
   persist();
+  if (isSupabaseConfigured()) {
+    const affected = nextList.filter((t) => t.duties.some((d) => d.id === dutyId));
+    syncTraineesBatchToSupabase(affected).catch(() => {});
+  }
   emit();
   return true;
 }
@@ -617,6 +841,14 @@ export function deleteDutyRecord(dutyId: string): boolean {
     revision: state.revision + 1,
   };
   persist();
+  if (isSupabaseConfigured()) {
+    const affected = nextList.filter((t) =>
+      state.trainees.some((oldT) => oldT.id === t.id && oldT.duties.some((d) => d.id === dutyId))
+    );
+    if (affected.length > 0) {
+      syncTraineesBatchToSupabase(affected).catch(() => {});
+    }
+  }
   emit();
   return true;
 }
@@ -634,6 +866,9 @@ export function runDataCleansing(options?: { reclassifyGroups?: boolean }): {
       revision: state.revision + 1,
     };
     persist();
+    if (isSupabaseConfigured()) {
+      syncTraineesBatchToSupabase(result.cleaned).catch(() => {});
+    }
     emit();
   }
   return {
@@ -658,6 +893,10 @@ export function resetAlumniData() {
     } catch {
       // ignore
     }
+  }
+  persist();
+  if (isSupabaseConfigured()) {
+    syncTraineesBatchToSupabase(state.trainees).catch(() => {});
   }
   emit();
 }

@@ -8,6 +8,7 @@ import {
   useApplications,
 } from "@/lib/applications-store";
 import { resetCourses } from "@/lib/courses-store";
+import { useAlumniStore } from "@/lib/alumni-store";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 
 function Toggle({
@@ -65,6 +66,7 @@ function SettingRow({
 
 export function SettingsAdmin() {
   const { applications } = useApplications();
+  const { trainees } = useAlumniStore();
   const hasCloud = isSupabaseConfigured();
   const pending = applications.filter(
     (item) => item.status === "pending"
@@ -194,6 +196,12 @@ export function SettingsAdmin() {
                 <dt className="text-[#6b7280]">รอตรวจสอบ</dt>
                 <dd className="font-semibold text-[#9a5c00]">
                   {pending} คน
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-[#6b7280]">ทำเนียบบุคลากร กกท.</dt>
+                <dd className="font-semibold text-[#1e3a8a]">
+                  {trainees.length.toLocaleString()} คน
                 </dd>
               </div>
               <div className="flex justify-between gap-3">

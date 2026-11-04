@@ -104,6 +104,56 @@ export async function POST(request: Request) {
         "utf-8"
       );
       alumniCount = alumni.length;
+
+      // Sync updated alumni to Supabase if configured
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey =
+        process.env.SUPABASE_SERVICE_ROLE_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (supabaseUrl && supabaseKey) {
+        try {
+          const { createClient } = await import("@supabase/supabase-js");
+          const supabase = createClient(supabaseUrl, supabaseKey);
+
+          // Upsert in batches of 100 to avoid payload size and rate limits
+          const chunkSize = 100;
+          const traineeList = alumni as Record<string, unknown>[];
+          for (let i = 0; i < traineeList.length; i += chunkSize) {
+            const chunk = traineeList.slice(i, i + chunkSize);
+            const rows = chunk.map((t) => ({
+              id: String(t.id),
+              personnel_id: typeof t.personnelId === "string" ? t.personnelId : null,
+              id_card: String(t.idCard || t.personnelId || t.id),
+              name: String(t.name || ""),
+              prefix: typeof t.prefix === "string" ? t.prefix : null,
+              first_name: typeof t.firstName === "string" ? t.firstName : null,
+              last_name: typeof t.lastName === "string" ? t.lastName : null,
+              gender: typeof t.gender === "string" ? t.gender : null,
+              phone: typeof t.phone === "string" ? t.phone : null,
+              email: typeof t.email === "string" ? t.email : null,
+              affiliation: typeof t.affiliation === "string" ? t.affiliation : "",
+              affiliation_group: typeof t.affiliationGroup === "string" ? t.affiliationGroup : "หน่วยงานภายนอก",
+              sports_type: typeof t.sportsType === "string" ? t.sportsType : (typeof t.affiliation === "string" ? t.affiliation : ""),
+              year_be: typeof t.yearBE === "number" ? t.yearBE : 2566,
+              course_id: typeof t.courseId === "number" ? t.courseId : null,
+              course_title: typeof t.courseTitle === "string" ? t.courseTitle : "",
+              course_category: typeof t.courseCategory === "string" ? t.courseCategory : null,
+              batch: typeof t.batch === "string" ? t.batch : null,
+              cert_no: typeof t.certNo === "string" ? t.certNo : null,
+              passed_date: typeof t.passedDate === "string" ? t.passedDate : null,
+              status: typeof t.status === "string" ? t.status : "active",
+              avatar_url: typeof t.avatarUrl === "string" ? t.avatarUrl : null,
+              duties: Array.isArray(t.duties) ? t.duties : [],
+              created_at: typeof t.createdAt === "string" ? t.createdAt : new Date().toISOString(),
+              updated_at: typeof t.updatedAt === "string" ? t.updatedAt : new Date().toISOString(),
+            }));
+
+            await supabase.from("alumni").upsert(rows, { onConflict: "id" });
+          }
+        } catch (alumniSyncErr) {
+          console.warn("Server Supabase alumni sync warning:", alumniSyncErr);
+        }
+      }
     }
 
     if (timelineSettings && typeof timelineSettings === "object") {

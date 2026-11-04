@@ -8,6 +8,8 @@ import {
   STANDARD_COURSES,
   groupTraineesByPerson,
   updatePersonAffiliation,
+  isCloudConfigured,
+  getCloudSyncStatus,
   type UniquePersonTrainee,
 } from "@/lib/alumni-store";
 import { loginAdmin } from "@/lib/admin-auth";
@@ -395,6 +397,29 @@ export function AlumniDirectoryTab({
 
           {/* View Mode Toggle & Action Buttons */}
           <div className="flex flex-wrap items-center gap-2 self-end lg:self-auto">
+            {/* Cloud Database Status Indicator */}
+            <div
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold ${
+                isCloudConfigured()
+                  ? "border-emerald-200 bg-emerald-50/80 text-emerald-800"
+                  : "border-amber-200 bg-amber-50/80 text-amber-800"
+              }`}
+              title={
+                isCloudConfigured()
+                  ? "☁️ เชื่อมต่อฐานข้อมูลกลาง Supabase Cloud - ข้อมูลอัปเดตตรงกันทุกเครื่องแบบ Real-time"
+                  : "💻 ข้อมูลถูกจัดเก็บในแคชของเบราว์เซอร์เครื่องนี้"
+              }
+            >
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${
+                  isCloudConfigured() ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
+                }`}
+              />
+              <span className="hidden sm:inline">
+                {isCloudConfigured() ? "Supabase Cloud" : "Local Cache"}
+              </span>
+            </div>
+
             {/* View Mode Switcher Pills */}
             <div className="flex rounded-xl bg-gray-100 p-0.5 text-xs font-semibold border border-gray-200">
               <button

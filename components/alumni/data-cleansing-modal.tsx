@@ -8,6 +8,10 @@ import {
   groupTraineesByPerson,
   detectAffiliationDiscrepancies,
   AFFILIATION_GROUPS,
+  syncAllAlumniToCloud,
+  refreshAlumniFromCloud,
+  getCloudSyncStatus,
+  isCloudConfigured,
 } from "@/lib/alumni-store";
 import {
   parseThaiFullName,
@@ -29,8 +33,47 @@ export function DataCleansingModal({ trainees, onClose, onRefresh }: DataCleansi
     fixedNameCount: number;
     fixedGroupCount: number;
   } | null>(null);
-  const [activeTab, setActiveTab] = useState<"affiliationDiff" | "summary" | "prefixEvolved" | "groupStats">("affiliationDiff");
+  const [activeTab, setActiveTab] = useState<"affiliationDiff" | "summary" | "prefixEvolved" | "groupStats" | "cloudSync">("affiliationDiff");
   const [confirmReset, setConfirmReset] = useState(false);
+
+  // Cloud Sync State
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+  const [cloudSyncProgress, setCloudSyncProgress] = useState<{ synced: number; total: number } | null>(null);
+  const [cloudSyncMessage, setCloudSyncMessage] = useState<string | null>(null);
+  const [cloudSyncError, setCloudSyncError] = useState<string | null>(null);
+
+  const handleSyncToCloud = async () => {
+    setIsCloudSyncing(true);
+    setCloudSyncMessage(null);
+    setCloudSyncError(null);
+    setCloudSyncProgress({ synced: 0, total: trainees.length });
+
+    const res = await syncAllAlumniToCloud((synced, total) => {
+      setCloudSyncProgress({ synced, total });
+    });
+
+    setIsCloudSyncing(false);
+    if (res.success) {
+      setCloudSyncMessage(`✅ ซิงค์ข้อมูลทั้งหมด ${res.count.toLocaleString()} รายการขึ้น Supabase Cloud สำเร็จเรียบร้อย ทุกเครื่องจะเห็นข้อมูลตรงกันทันที`);
+      if (onRefresh) onRefresh();
+    } else {
+      setCloudSyncError(res.error || "เกิดข้อผิดพลาดในการซิงค์ข้อมูลขึ้น Supabase Cloud");
+    }
+  };
+
+  const handleRefreshFromCloud = async () => {
+    setIsCloudSyncing(true);
+    setCloudSyncMessage(null);
+    setCloudSyncError(null);
+    const count = await refreshAlumniFromCloud();
+    setIsCloudSyncing(false);
+    if (count > 0) {
+      setCloudSyncMessage(`✅ ดึงข้อมูลล่าสุดจาก Supabase Cloud สำเร็จ (${count.toLocaleString()} รายการ)`);
+      if (onRefresh) onRefresh();
+    } else {
+      setCloudSyncError("ไม่สามารถดึงข้อมูลจาก Cloud หรือยังไม่มีข้อมูลใน Cloud");
+    }
+  };
 
   // Group by unique person
   const uniquePersons = useMemo(() => groupTraineesByPerson(trainees), [trainees]);
@@ -362,6 +405,22 @@ export function DataCleansingModal({ trainees, onClose, onRefresh }: DataCleansi
               >
                 📊 สัดส่วน 5 กลุ่มหน่วยงาน
               </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("cloudSync")}
+                className={`pb-2.5 px-3 font-bold border-b-2 transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === "cloudSync"
+                    ? "border-[#16265E] text-[#16265E]"
+                    : "border-transparent text-gray-500 hover:text-gray-800"
+                }`}
+              >
+                <span>☁️ ซิงค์คลาวด์ Supabase</span>
+                <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                  isCloudConfigured() ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"
+                }`}>
+                  {isCloudConfigured() ? "Online" : "Local"}
+                </span>
+              </button>
             </div>
 
             {/* Tab: Affiliation Before & After Comparison */}
@@ -551,6 +610,134 @@ export function DataCleansingModal({ trainees, onClose, onRefresh }: DataCleansi
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Cloud Synchronization */}
+            {activeTab === "cloudSync" && (
+              <div className="mt-4 space-y-4">
+                {/* Cloud Status Card */}
+                <div className={`rounded-xl border p-4 text-xs ${
+                  isCloudConfigured()
+                    ? "border-emerald-200 bg-emerald-50/70 text-emerald-950"
+                    : "border-amber-200 bg-amber-50/70 text-amber-950"
+                }`}>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">
+                        {isCloudConfigured() ? "☁️" : "💻"}
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-sm">
+                            {isCloudConfigured()
+                              ? "ระบบเชื่อมต่อกับ Supabase Cloud Database แล้ว"
+                              : "ระบบกำลังทำงานในโหมดจัดเก็บข้อมูลในเครื่อง (Local Storage)"}
+                          </p>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            isCloudConfigured()
+                              ? "bg-emerald-200 text-emerald-900 animate-pulse"
+                              : "bg-amber-200 text-amber-900"
+                          }`}>
+                            {isCloudConfigured() ? "Cloud Realtime Active" : "Local Mode"}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[11px] leading-relaxed opacity-90">
+                          {isCloudConfigured()
+                            ? "เมื่อมีการแก้ไข/เพิ่มข้อมูลจากเครื่องนี้ หรือเครื่องอื่น ข้อมูลจะถูกซิงค์ผ่าน Supabase Realtime ให้ตรงกันทุกเครื่องทันที"
+                            : "ข้อมูลถูกบันทึกอยู่ในเบราว์เซอร์ของเครื่องนี้ หากต้องการให้ทุกเครื่องเห็นข้อมูลตรงกัน ให้ระบุ NEXT_PUBLIC_SUPABASE_URL และ NEXT_PUBLIC_SUPABASE_ANON_KEY ใน .env"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                      {isCloudConfigured() && (
+                        <button
+                          type="button"
+                          onClick={handleRefreshFromCloud}
+                          disabled={isCloudSyncing}
+                          className="rounded-lg border border-emerald-300 bg-white hover:bg-emerald-100 text-emerald-800 font-bold px-3 py-1.5 text-xs shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                          title="ดึงข้อมูลชุดล่าสุดจากตาราง alumni บน Supabase"
+                        >
+                          🔄 ดึงข้อมูลจากคลาวด์
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Progress Bar during Batch Sync */}
+                  {isCloudSyncing && cloudSyncProgress && (
+                    <div className="mt-4 pt-3 border-t border-emerald-200 space-y-1.5">
+                      <div className="flex justify-between text-[11px] font-semibold text-emerald-900">
+                        <span>กำลังซิงค์ข้อมูลขึ้น Supabase Cloud...</span>
+                        <span>
+                          {cloudSyncProgress.synced.toLocaleString()} / {cloudSyncProgress.total.toLocaleString()} คน (
+                          {Math.round((cloudSyncProgress.synced / cloudSyncProgress.total) * 100)}%)
+                        </span>
+                      </div>
+                      <div className="w-full bg-emerald-200/60 rounded-full h-2.5 overflow-hidden">
+                        <div
+                          className="bg-emerald-600 h-2.5 rounded-full transition-all duration-200"
+                          style={{
+                            width: `${Math.round(
+                              (cloudSyncProgress.synced / Math.max(cloudSyncProgress.total, 1)) * 100
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Success Banner */}
+                  {cloudSyncMessage && (
+                    <div className="mt-3 rounded-lg border border-emerald-400 bg-emerald-100/90 p-2.5 text-xs text-emerald-950 font-medium">
+                      {cloudSyncMessage}
+                    </div>
+                  )}
+
+                  {/* Error Banner */}
+                  {cloudSyncError && (
+                    <div className="mt-3 rounded-lg border border-rose-300 bg-rose-50 p-2.5 text-xs text-rose-900 font-medium">
+                      ⚠️ {cloudSyncError}
+                    </div>
+                  )}
+                </div>
+
+                {/* Cloud Sync Action Section */}
+                <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-4 text-xs space-y-3">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div>
+                      <p className="font-bold text-gray-900">
+                        ซิงค์ข้อมูลทำเนียบบุคลากรทั้งหมดขึ้นฐานข้อมูลกลาง (Batch Cloud Upload)
+                      </p>
+                      <p className="text-[11px] text-gray-600 mt-0.5">
+                        ส่งข้อมูลบุคลากร {trainees.length.toLocaleString()} รายการ ขึ้นตาราง <code className="bg-gray-200 text-gray-800 px-1 py-0.5 rounded font-mono text-[10px]">public.alumni</code> บน Supabase เพื่อให้คอมพิวเตอร์และอุปกรณ์เครื่องอื่นเห็นข้อมูลตรงกันทันที
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSyncToCloud}
+                      disabled={isCloudSyncing}
+                      className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-bold px-4 py-2 text-xs shadow-xs transition-all shrink-0 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      <span>{isCloudSyncing ? "⏳" : "☁️"}</span>
+                      <span>
+                        {isCloudSyncing ? "กำลังซิงค์ข้อมูล..." : "เริ่มซิงค์ข้อมูลทั้งหมดขึ้นคลาวด์"}
+                      </span>
+                    </button>
+                  </div>
+
+                  <div className="rounded-lg bg-blue-50/80 border border-blue-200 p-3 text-[11px] text-blue-900 space-y-1">
+                    <p className="font-bold flex items-center gap-1">
+                      <span>💡</span>
+                      <span>คำแนะนำสำหรับผู้ดูแลระบบฐานข้อมูล (Database Administrator):</span>
+                    </p>
+                    <p className="text-blue-800">
+                      หากเพิ่งสร้างโปรเจกต์ Supabase ใหม่ โปรดตรวจสอบว่าได้รันสคริปต์ SQL จากไฟล์ <code className="bg-white/80 px-1 py-0.5 rounded font-mono text-[10px] text-blue-950">supabase/schema.sql</code> บน SQL Editor ของ Supabase เรียบร้อยแล้ว เพื่อสร้างตาราง <code className="font-mono text-[10px]">alumni</code>, ดัชนีค้นหา และเปิดสิทธิ์ RLS
+                    </p>
+                  </div>
                 </div>
               </div>
             )}

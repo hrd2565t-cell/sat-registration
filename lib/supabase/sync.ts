@@ -1,6 +1,7 @@
 import { getSupabaseClient } from "./client";
 import type { ApplicantRecord, ApplicantDocument } from "@/lib/applications-store";
-import type { Json } from "./types";
+import type { HistoricalTrainee, DutyRecord } from "@/lib/alumni-store";
+import type { Json, Database } from "./types";
 
 /**
  * Uploads a base64 DataURL or file to Supabase Storage bucket
@@ -265,5 +266,200 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
   } catch (err) {
     console.warn("Failed to fetch applications from Supabase:", err);
     return null;
+  }
+}
+
+/**
+ * Maps Supabase alumni database row into HistoricalTrainee domain model
+ */
+export function mapAlumniRowToTrainee(
+  row: Database["public"]["Tables"]["alumni"]["Row"]
+): HistoricalTrainee {
+  return {
+    id: row.id,
+    personnelId: row.personnel_id ?? undefined,
+    idCard: row.id_card,
+    name: row.name,
+    prefix: row.prefix ?? undefined,
+    firstName: row.first_name ?? undefined,
+    lastName: row.last_name ?? undefined,
+    gender: row.gender ?? undefined,
+    phone: row.phone ?? undefined,
+    email: row.email ?? undefined,
+    affiliation: row.affiliation,
+    affiliationGroup: row.affiliation_group,
+    sportsType: row.sports_type,
+    yearBE: row.year_be,
+    courseId: row.course_id ?? undefined,
+    courseTitle: row.course_title,
+    courseCategory: row.course_category ?? undefined,
+    batch: row.batch ?? "",
+    certNo: row.cert_no ?? undefined,
+    passedDate: row.passed_date ?? "",
+    status: (row.status as HistoricalTrainee["status"]) || "active",
+    avatarUrl: row.avatar_url ?? undefined,
+    duties: (Array.isArray(row.duties) ? (row.duties as unknown as DutyRecord[]) : []) || [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * Maps HistoricalTrainee to Supabase alumni insert payload
+ */
+export function mapTraineeToAlumniInsert(
+  trainee: HistoricalTrainee
+): Database["public"]["Tables"]["alumni"]["Insert"] {
+  return {
+    id: trainee.id,
+    personnel_id: trainee.personnelId ?? null,
+    id_card: trainee.idCard,
+    name: trainee.name,
+    prefix: trainee.prefix ?? null,
+    first_name: trainee.firstName ?? null,
+    last_name: trainee.lastName ?? null,
+    gender: trainee.gender ?? null,
+    phone: trainee.phone ?? null,
+    email: trainee.email ?? null,
+    affiliation: trainee.affiliation || "",
+    affiliation_group: trainee.affiliationGroup || "หน่วยงานภายนอก",
+    sports_type: trainee.sportsType || trainee.affiliation || "",
+    year_be: trainee.yearBE || 2566,
+    course_id: trainee.courseId ?? null,
+    course_title: trainee.courseTitle || "",
+    course_category: trainee.courseCategory ?? null,
+    batch: trainee.batch ?? null,
+    cert_no: trainee.certNo ?? null,
+    passed_date: trainee.passedDate ?? null,
+    status: trainee.status || "active",
+    avatar_url: trainee.avatarUrl ?? null,
+    duties: (trainee.duties || []) as unknown as Json,
+    created_at: trainee.createdAt || new Date().toISOString(),
+    updated_at: trainee.updatedAt || new Date().toISOString(),
+  };
+}
+
+/**
+ * Fetches all alumni records from Supabase, paginating past the 1,000 row default limit
+ */
+export async function fetchAlumniFromSupabase(): Promise<HistoricalTrainee[] | null> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return null;
+
+  try {
+    let allRows: Database["public"]["Tables"]["alumni"]["Row"][] = [];
+    let from = 0;
+    const step = 1000;
+
+    while (true) {
+      const { data, error } = await supabase
+        .from("alumni")
+        .select("*")
+        .range(from, from + step - 1)
+        .order("id");
+
+      if (error) {
+        console.warn("Supabase fetch alumni error:", error.message);
+        return null;
+      }
+
+      if (!data || data.length === 0) {
+        break;
+      }
+
+      allRows = allRows.concat(data);
+
+      if (data.length < step) {
+        break;
+      }
+
+      from += step;
+    }
+
+    return allRows.map(mapAlumniRowToTrainee);
+  } catch (err) {
+    console.warn("Failed to fetch alumni from Supabase:", err);
+    return null;
+  }
+}
+
+/**
+ * Syncs a single trainee record to Supabase
+ */
+export async function syncTraineeToSupabase(
+  trainee: HistoricalTrainee
+): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return false;
+
+  try {
+    const payload = mapTraineeToAlumniInsert(trainee);
+    const { error } = await supabase.from("alumni").upsert(payload, { onConflict: "id" });
+    if (error) {
+      console.warn("Supabase upsert alumni error:", error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn("Failed to sync trainee to Supabase:", err);
+    return false;
+  }
+}
+
+/**
+ * Deletes a trainee record from Supabase by ID
+ */
+export async function deleteTraineeFromSupabase(id: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase.from("alumni").delete().eq("id", id);
+    if (error) {
+      console.warn("Supabase delete alumni error:", error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn("Failed to delete trainee from Supabase:", err);
+    return false;
+  }
+}
+
+/**
+ * Batch uploads multiple alumni records in chunks of 100
+ */
+export async function syncTraineesBatchToSupabase(
+  trainees: HistoricalTrainee[],
+  onProgress?: (synced: number, total: number) => void
+): Promise<{ success: boolean; count: number; error?: string }> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return { success: false, count: 0, error: "Supabase is not configured" };
+  }
+
+  try {
+    const chunkSize = 100;
+    let synced = 0;
+
+    for (let i = 0; i < trainees.length; i += chunkSize) {
+      const chunk = trainees.slice(i, i + chunkSize);
+      const rows = chunk.map(mapTraineeToAlumniInsert);
+
+      const { error } = await supabase.from("alumni").upsert(rows, { onConflict: "id" });
+      if (error) {
+        console.warn(`Supabase batch sync failed at chunk ${i}:`, error.message);
+        return { success: false, count: synced, error: error.message };
+      }
+
+      synced += chunk.length;
+      onProgress?.(synced, trainees.length);
+    }
+
+    return { success: true, count: synced };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn("Failed to batch sync alumni to Supabase:", message);
+    return { success: false, count: 0, error: message };
   }
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useCourses } from "@/lib/courses-store";
 import { useSportsEvents } from "@/lib/sports-events-store";
+import { useAlumniStore } from "@/lib/alumni-store";
 
 interface SyncDefaultsButtonProps {
   compact?: boolean;
@@ -15,6 +16,7 @@ export function SyncDefaultsButton({
 }: SyncDefaultsButtonProps) {
   const { courses } = useCourses();
   const { events } = useSportsEvents();
+  const { trainees } = useAlumniStore();
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [statusText, setStatusText] = useState("");
 
@@ -33,6 +35,7 @@ export function SyncDefaultsButton({
         body: JSON.stringify({
           courses,
           sportsEvents: events,
+          alumni: trainees,
         }),
       });
 
@@ -42,7 +45,7 @@ export function SyncDefaultsButton({
         throw new Error(result.error || "บันทึกข้อมูลไม่สำเร็จ");
       }
 
-      const msg = `บันทึกข้อมูลหลักลงระบบถาวรเรียบร้อยแล้ว (หลักสูตร ${result.coursesCount} รายการ, ปฏิทินกีฬา ${result.sportsEventsCount} รายการ)`;
+      const msg = `บันทึกข้อมูลหลักลงระบบถาวรเรียบร้อยแล้ว (หลักสูตร ${result.coursesCount} รายการ, ปฏิทินกีฬา ${result.sportsEventsCount} รายการ, บุคลากร ${result.alumniCount || trainees.length} รายการ)`;
       setStatus("saved");
       setStatusText("บันทึกถาวรแล้ว!");
       onSuccess?.(msg);

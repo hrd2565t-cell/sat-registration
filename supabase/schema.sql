@@ -81,6 +81,35 @@ CREATE TABLE IF NOT EXISTS public.review_notes (
     created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
+-- 6. ALUMNI TABLE (ตารางทำเนียบบุคลากรกีฬาและประวัติการอบรมย้อนหลัง กกท.)
+CREATE TABLE IF NOT EXISTS public.alumni (
+    id TEXT PRIMARY KEY,
+    personnel_id TEXT,
+    id_card TEXT NOT NULL,
+    name TEXT NOT NULL,
+    prefix TEXT,
+    first_name TEXT,
+    last_name TEXT,
+    gender TEXT,
+    phone TEXT,
+    email TEXT,
+    affiliation TEXT NOT NULL DEFAULT '',
+    affiliation_group TEXT NOT NULL DEFAULT 'หน่วยงานภายนอก',
+    sports_type TEXT NOT NULL DEFAULT '',
+    year_be INTEGER NOT NULL DEFAULT 2566,
+    course_id INTEGER,
+    course_title TEXT NOT NULL,
+    course_category TEXT,
+    batch TEXT,
+    cert_no TEXT,
+    passed_date TEXT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'pending_verification')),
+    avatar_url TEXT,
+    duties JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
 -- ==============================================================================
 -- INDEXES FOR PERFORMANCE (ดัชนีเพื่อเพิ่มความเร็วในการสืบค้น)
 -- ==============================================================================
@@ -91,6 +120,13 @@ CREATE INDEX IF NOT EXISTS idx_applications_status ON public.applications(status
 CREATE INDEX IF NOT EXISTS idx_applications_submitted_at ON public.applications(submitted_at DESC);
 CREATE INDEX IF NOT EXISTS idx_app_docs_ref ON public.application_documents(application_ref);
 CREATE INDEX IF NOT EXISTS idx_review_notes_ref ON public.review_notes(application_ref);
+CREATE INDEX IF NOT EXISTS idx_alumni_personnel_id ON public.alumni(personnel_id);
+CREATE INDEX IF NOT EXISTS idx_alumni_id_card ON public.alumni(id_card);
+CREATE INDEX IF NOT EXISTS idx_alumni_name ON public.alumni(name);
+CREATE INDEX IF NOT EXISTS idx_alumni_affiliation_group ON public.alumni(affiliation_group);
+CREATE INDEX IF NOT EXISTS idx_alumni_course_title ON public.alumni(course_title);
+CREATE INDEX IF NOT EXISTS idx_alumni_year_be ON public.alumni(year_be);
+CREATE INDEX IF NOT EXISTS idx_alumni_status ON public.alumni(status);
 
 -- ==============================================================================
 -- TRIGGER FOR UPDATED_AT (อัปเดตเวลาอัตโนมัติเมื่อมีการแก้ไขแถว)
@@ -113,6 +149,11 @@ CREATE TRIGGER set_applications_updated_at
     BEFORE UPDATE ON public.applications
     FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
+DROP TRIGGER IF EXISTS set_alumni_updated_at ON public.alumni;
+CREATE TRIGGER set_alumni_updated_at
+    BEFORE UPDATE ON public.alumni
+    FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
 -- ==============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- ==============================================================================
@@ -120,6 +161,7 @@ ALTER TABLE public.courses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.applications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.application_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.review_notes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.alumni ENABLE ROW LEVEL SECURITY;
 
 -- 1. Courses Policies:
 -- ประชาชนทั่วไปสามารถดูหลักสูตรได้ทั้งหมด
@@ -147,6 +189,18 @@ CREATE POLICY "Public can read own application"
 -- ผู้ดูแลระบบสามารถแก้ไขสถานะ (อนุมัติ/ปฏิเสธ/ขอเอกสารเพิ่ม) ได้
 CREATE POLICY "Admin can update applications" 
     ON public.applications FOR UPDATE 
+    USING (true)
+    WITH CHECK (true);
+
+-- 3. Alumni Policies:
+-- ประชาชนและแอดมินสามารถสืบค้นทำเนียบบุคลากรและพาสปอร์ตได้
+CREATE POLICY "Public and Admin can read alumni" 
+    ON public.alumni FOR SELECT 
+    USING (true);
+
+-- ผู้ดูแลระบบ (หรือ API/Service Role) สามารถเพิ่ม แก้ไข และลบข้อมูลบุคลากรได้
+CREATE POLICY "Admin can modify alumni" 
+    ON public.alumni FOR ALL 
     USING (true)
     WITH CHECK (true);
 
@@ -260,3 +314,27 @@ ON CONFLICT (id) DO UPDATE SET
 
 -- รีเซ็ต Sequence ของ courses.id ให้ตรงกับ ID สูงสุด
 SELECT setval('courses_id_seq', (SELECT MAX(id) FROM public.courses));
+
+-- ==============================================================================
+-- 7. REALTIME SETUP (เปิดใช้งาน Realtime สำหรับการอัปเดตข้ามเครื่องแบบทันที)
+-- ==============================================================================
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+        BEGIN
+            ALTER PUBLICATION supabase_realtime ADD TABLE public.alumni;
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END;
+        BEGIN
+            ALTER PUBLICATION supabase_realtime ADD TABLE public.applications;
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END;
+        BEGIN
+            ALTER PUBLICATION supabase_realtime ADD TABLE public.courses;
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END;
+    END IF;
+END $$;
