@@ -8,6 +8,7 @@ import {
   PAST_YEARS_BE,
   AFFILIATION_GROUPS,
 } from "@/lib/alumni-store";
+import { CourseTimelinePrintModal } from "./course-timeline-print-modal";
 
 interface CourseTimelineTabProps {
   trainees: HistoricalTrainee[];
@@ -22,6 +23,7 @@ export function CourseTimelineTab({ trainees, onOpenPassport }: CourseTimelineTa
   const [selectedCourse, setSelectedCourse] = useState<CourseTimelineItem | null>(null);
   const [viewMode, setViewMode] = useState<"timeline" | "cards">("timeline");
   const [rosterSearch, setRosterSearch] = useState<string>("");
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
 
   // Chronological years (2547 to 2569)
   const yearsAsc = useMemo(() => [...PAST_YEARS_BE].reverse(), []);
@@ -190,9 +192,9 @@ export function CourseTimelineTab({ trainees, onOpenPassport }: CourseTimelineTa
           </button>
         </div>
 
-        {/* Search & View Switcher */}
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1 sm:w-56">
+        {/* Search, View Switcher & Print Action */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 sm:w-52">
             <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400 text-xs">
               🔍
             </span>
@@ -227,6 +229,16 @@ export function CourseTimelineTab({ trainees, onOpenPassport }: CourseTimelineTa
               🗂️ การ์ดสรุป
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsPrintModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 transition-colors cursor-pointer shrink-0"
+            title="พิมพ์รายงาน Timeline ความต่อเนื่องของการพัฒนาหลักสูตร กกท. (Print / Save as PDF)"
+          >
+            <span>🖨️</span>
+            <span>พิมพ์รายงาน / PDF</span>
+          </button>
         </div>
       </div>
 
@@ -640,7 +652,16 @@ export function CourseTimelineTab({ trainees, onOpenPassport }: CourseTimelineTa
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end">
+            <div className="p-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setIsPrintModalOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3.5 py-2 text-xs font-bold text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer shadow-2xs"
+                title="พิมพ์รายงาน Timeline ความต่อเนื่องของการพัฒนาหลักสูตร กกท."
+              >
+                <span>🖨️</span>
+                <span>พิมพ์รายงาน Timeline</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setSelectedCourse(null)}
@@ -651,6 +672,17 @@ export function CourseTimelineTab({ trainees, onOpenPassport }: CourseTimelineTa
             </div>
           </div>
         </div>
+      )}
+
+      {/* Course Timeline Print Preview & PDF Modal */}
+      {isPrintModalOpen && (
+        <CourseTimelinePrintModal
+          onClose={() => setIsPrintModalOpen(false)}
+          timelineData={filteredCourses}
+          yearsAsc={yearsAsc}
+          selectedCategory={selectedCategory}
+          stats={stats}
+        />
       )}
     </div>
   );
