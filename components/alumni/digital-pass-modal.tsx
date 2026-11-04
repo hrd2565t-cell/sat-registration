@@ -95,7 +95,108 @@ export function DigitalPassModal({
       ? `${cleanId.slice(0, 1)}-${cleanId.slice(1, 5)}-XXXXX-${cleanId.slice(10, 12)}-${cleanId.slice(12)}`
       : primary.idCard;
 
-  // Save Card as high-resolution PNG image for phone gallery / album
+  // Isolated Printing: Prints ONLY the digital card centered on 1 single sheet
+  const handlePrintPass = () => {
+    if (!cardRef.current) {
+      window.print();
+      return;
+    }
+
+    try {
+      const existingFrame = document.getElementById("sat-digital-pass-print-iframe");
+      if (existingFrame) existingFrame.remove();
+
+      const iframe = document.createElement("iframe");
+      iframe.id = "sat-digital-pass-print-iframe";
+      iframe.style.position = "fixed";
+      iframe.style.right = "0";
+      iframe.style.bottom = "0";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "0";
+      iframe.style.visibility = "hidden";
+      document.body.appendChild(iframe);
+
+      const frameDoc = iframe.contentWindow?.document;
+      if (!frameDoc) {
+        window.print();
+        return;
+      }
+
+      const styles = Array.from(document.querySelectorAll("style, link[rel='stylesheet']"))
+        .map((el) => el.outerHTML)
+        .join("\n");
+
+      frameDoc.open();
+      frameDoc.write(`
+        <!DOCTYPE html>
+        <html lang="th">
+        <head>
+          <meta charset="utf-8" />
+          <title>บัตรดิจิทัลบุคลากรกีฬา - ${primary.name}</title>
+          ${styles}
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 10mm;
+            }
+            * {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              box-sizing: border-box;
+            }
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #fff !important;
+              color: #0f172a !important;
+              font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            }
+            .print-badge-wrapper {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              min-height: 90vh;
+              padding: 20px 0;
+              width: 100%;
+              page-break-inside: avoid;
+              break-inside: avoid;
+            }
+            .print-badge-wrapper > div {
+              max-width: 380px !important;
+              width: 380px !important;
+              box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
+            }
+            .no-print {
+              display: none !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="print-badge-wrapper">
+            ${cardRef.current.outerHTML}
+            <div style="margin-top: 14px; text-align: center; font-size: 10.5px; color: #475569; font-weight: 600;">
+              เอกสารรับรองคุณวุฒิบัตรดิจิทัลทางการ • การกีฬาแห่งประเทศไทย (กกท.) • หน้า 1 จาก 1
+            </div>
+          </div>
+        </body>
+        </html>
+      `);
+      frameDoc.close();
+
+      setTimeout(() => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch {
+          window.print();
+        }
+      }, 300);
+    } catch {
+      window.print();
+    }
+  };
   const handleSaveImage = async () => {
     if (!cardRef.current) return;
     setIsGenerating(true);
@@ -304,11 +405,12 @@ export function DigitalPassModal({
           {/* Print button */}
           <button
             type="button"
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/20 transition-all"
+            onClick={handlePrintPass}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 bg-white/10 px-3.5 py-2 text-xs font-semibold text-white hover:bg-white/20 transition-all cursor-pointer"
+            title="พิมพ์บัตรดิจิทัลนี้ (ออกกระดาษ 1 หน้าพอดี)"
           >
             <span>🖨️</span>
-            <span>พิมพ์</span>
+            <span>พิมพ์บัตร (PDF)</span>
           </button>
         </div>
 

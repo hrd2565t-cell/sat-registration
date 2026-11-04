@@ -15,6 +15,7 @@ import {
 import { loginAdmin } from "@/lib/admin-auth";
 import * as XLSX from "xlsx";
 import { DataCleansingModal } from "./data-cleansing-modal";
+import { TopTraineesModal } from "./top-trainees-modal";
 
 interface AlumniDirectoryTabProps {
   trainees: HistoricalTrainee[];
@@ -45,6 +46,8 @@ export function AlumniDirectoryTab({
   const [viewMode, setViewMode] = useState<"person" | "record">("person");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
+  const [sortBy, setSortBy] = useState<"default" | "most_courses" | "least_courses" | "name_asc" | "latest_year">("default");
+  const [isTopTraineesModalOpen, setIsTopTraineesModalOpen] = useState<boolean>(false);
 
   // Inline Quick Edit Group State
   const [editingGroupPersonId, setEditingGroupPersonId] = useState<string | null>(null);
@@ -188,7 +191,8 @@ export function AlumniDirectoryTab({
     selectedYear !== "all" ||
     selectedCourse !== "all" ||
     selectedGroup !== "all" ||
-    selectedStatus !== "all";
+    selectedStatus !== "all" ||
+    sortBy !== "default";
 
   const handleResetFilters = () => {
     setSearch("");
@@ -196,12 +200,13 @@ export function AlumniDirectoryTab({
     setSelectedCourse("all");
     setSelectedGroup("all");
     setSelectedStatus("all");
+    setSortBy("default");
     setCurrentPage(1);
   };
 
   // 1. Filtered for Person View (1 row per unique individual)
   const filteredPersons = useMemo(() => {
-    return uniquePersons.filter((p) => {
+    const list = uniquePersons.filter((p) => {
       if (search.trim()) {
         const query = search.trim().toLowerCase();
         const matchName = p.name.toLowerCase().includes(query);
@@ -241,11 +246,30 @@ export function AlumniDirectoryTab({
 
       return true;
     });
-  }, [uniquePersons, search, selectedYear, selectedGroup, selectedCourse, selectedStatus]);
+
+    // Apply Sorting
+    if (sortBy === "most_courses") {
+      list.sort((a, b) => {
+        if (b.totalCourses !== a.totalCourses) return b.totalCourses - a.totalCourses;
+        return b.latestYearBE - a.latestYearBE;
+      });
+    } else if (sortBy === "least_courses") {
+      list.sort((a, b) => {
+        if (a.totalCourses !== b.totalCourses) return a.totalCourses - b.totalCourses;
+        return a.firstYearBE - b.firstYearBE;
+      });
+    } else if (sortBy === "name_asc") {
+      list.sort((a, b) => a.name.localeCompare(b.name, "th"));
+    } else if (sortBy === "latest_year") {
+      list.sort((a, b) => b.latestYearBE - a.latestYearBE);
+    }
+
+    return list;
+  }, [uniquePersons, search, selectedYear, selectedGroup, selectedCourse, selectedStatus, sortBy]);
 
   // 2. Filtered for Certification Record View (all training certification rows)
   const filteredRecords = useMemo(() => {
-    return trainees.filter((t) => {
+    const list = trainees.filter((t) => {
       if (search.trim()) {
         const query = search.trim().toLowerCase();
         const cleanQuery = query.replace(/\D/g, "");
@@ -279,7 +303,16 @@ export function AlumniDirectoryTab({
 
       return true;
     });
-  }, [trainees, search, selectedYear, selectedGroup, selectedCourse, selectedStatus]);
+
+    // Apply Sorting for records
+    if (sortBy === "name_asc") {
+      list.sort((a, b) => a.name.localeCompare(b.name, "th"));
+    } else if (sortBy === "latest_year") {
+      list.sort((a, b) => b.yearBE - a.yearBE);
+    }
+
+    return list;
+  }, [trainees, search, selectedYear, selectedGroup, selectedCourse, selectedStatus, sortBy]);
 
   // Active items based on current view mode
   const activeItemsCount = viewMode === "person" ? filteredPersons.length : filteredRecords.length;
@@ -507,6 +540,17 @@ export function AlumniDirectoryTab({
               <span>📊</span>
               <span>ส่งออก Excel</span>
             </button>
+
+            {/* Executive Top Trainees Ranking (Hall of Fame) Button */}
+            <button
+              type="button"
+              onClick={() => setIsTopTraineesModalOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 to-amber-100/90 px-3.5 py-2 text-xs font-bold text-amber-950 shadow-2xs hover:from-amber-100 hover:to-amber-200 transition-all cursor-pointer"
+              title="เปิดทำเนียบผู้ผ่านการอบรมสะสมสูงสุด (Executive Hall of Fame สำหรับรายงานผู้บริหาร)"
+            >
+              <span>🏆</span>
+              <span>ทำเนียบอบรมสูงสุด</span>
+            </button>
           </div>
         </div>
 
@@ -535,7 +579,7 @@ export function AlumniDirectoryTab({
             )}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 text-xs">
             {/* 1. Year Filter (First column, drives Course filter) */}
             <div>
               <label className="block text-[11px] font-semibold text-gray-600 mb-1">
@@ -631,6 +675,31 @@ export function AlumniDirectoryTab({
                 <option value="active">🟢 ปฏิบัติหน้าที่ต่อเนื่อง (Active)</option>
                 <option value="pending_verification">⏳ รอตรวจสอบ (Pending)</option>
                 <option value="inactive">⚪ ยังไม่มีประวัติรอบปี (Inactive)</option>
+              </select>
+            </div>
+
+            {/* 5. Sort By Filter */}
+            <div className="col-span-2 sm:col-span-1">
+              <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+                การจัดเรียงลำดับ
+              </label>
+              <select
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value as any);
+                  setCurrentPage(1);
+                }}
+                className={`w-full rounded-lg border p-2 text-xs focus:border-[#16265E] focus:outline-hidden font-semibold transition-colors ${
+                  sortBy === "most_courses"
+                    ? "border-amber-400 bg-amber-50/80 text-amber-950 font-bold ring-1 ring-amber-300"
+                    : "border-gray-300 bg-white text-gray-700"
+                }`}
+              >
+                <option value="default">ค่าเริ่มต้น (รหัสบุคลากร / ปีล่าสุด)</option>
+                <option value="most_courses">🏆 อบรมสูงสุด (มาก ➔ น้อย)</option>
+                <option value="least_courses">อบรมน้อยสุด (น้อย ➔ มาก)</option>
+                <option value="latest_year">ปีที่อบรมล่าสุด (ใหม่ ➔ เก่า)</option>
+                <option value="name_asc">ชื่อ - สกุล (ก ➔ ฮ)</option>
               </select>
             </div>
           </div>
@@ -836,7 +905,16 @@ export function AlumniDirectoryTab({
                         {/* Accumulated Course Badges */}
                         <td className="py-3 px-3.5">
                           <div className="flex flex-wrap items-center gap-1.5 max-w-sm">
-                            <span className="rounded-full bg-blue-100 px-2 py-0.2 text-[10px] font-extrabold text-blue-900 border border-blue-200">
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold border ${
+                                p.totalCourses >= 6
+                                  ? "bg-amber-400 text-amber-950 border-amber-500 shadow-2xs font-black"
+                                  : p.totalCourses >= 4
+                                  ? "bg-blue-100 text-blue-900 border-blue-300 font-bold"
+                                  : "bg-gray-100 text-gray-700 border-gray-200 font-semibold"
+                              }`}
+                            >
+                              {p.totalCourses >= 6 ? "🏆 " : ""}
                               {p.totalCourses} หลักสูตร
                             </span>
                             {p.courses.map((c, cIdx) => (
@@ -1264,6 +1342,16 @@ export function AlumniDirectoryTab({
         <DataCleansingModal
           trainees={trainees}
           onClose={() => setShowCleansingModal(false)}
+        />
+      )}
+
+      {/* Executive Top Trainees Ranking (Hall of Fame) Modal */}
+      {isTopTraineesModalOpen && (
+        <TopTraineesModal
+          onClose={() => setIsTopTraineesModalOpen(false)}
+          uniquePersons={uniquePersons}
+          onOpenPassport={onOpenPassport}
+          onOpenDigitalPass={onOpenDigitalPass || (() => {})}
         />
       )}
     </div>
