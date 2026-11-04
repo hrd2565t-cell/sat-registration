@@ -168,7 +168,8 @@ export const STANDARD_COURSES = [
 // 2,732 authentic historical training records (1,891 unique personnel after deduplication) from official SAT Excel files
 export const SEED_TRAINEES: HistoricalTrainee[] = rawRealTrainees as HistoricalTrainee[];
 
-const STORAGE_KEY = "sat-alumni-real-v4";
+const STORAGE_KEY = "sat-alumni-real-v5";
+const LEGACY_STORAGE_KEYS = ["sat-alumni-real-v4", "sat-alumni-real-v3"];
 
 interface AlumniState {
   trainees: HistoricalTrainee[];
@@ -216,26 +217,41 @@ function hydrate() {
   hydrateStarted = true;
 
   try {
-    // Check v4 first, fallback to v3
+    // Check v5 first, fallback to legacy cached keys
     let raw = window.localStorage.getItem(STORAGE_KEY);
+    let fromLegacy = false;
+
     if (!raw) {
-      raw = window.localStorage.getItem("sat-alumni-real-v3");
+      for (const legacyKey of LEGACY_STORAGE_KEYS) {
+        const val = window.localStorage.getItem(legacyKey);
+        if (val) {
+          raw = val;
+          fromLegacy = true;
+          try {
+            window.localStorage.removeItem(legacyKey);
+          } catch {
+            // ignore
+          }
+          break;
+        }
+      }
     }
+
     if (!raw) return;
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      // Auto-migrate any existing records with "กองทุน" to "กองทุนพัฒนาการกีฬาแห่งชาติ"
-      const migrated = parsed.map((t: HistoricalTrainee) => {
-        if ((t.affiliation && t.affiliation.includes("กองทุน")) && t.affiliationGroup !== "กองทุนพัฒนาการกีฬาแห่งชาติ") {
-          return { ...t, affiliationGroup: "กองทุนพัฒนาการกีฬาแห่งชาติ" };
-        }
-        return t;
-      });
+      // Automatically run smart standardization & affiliation reclassification
+      // Ensures any machine with stale cache automatically synchronizes to latest standards
+      const result = standardizeAllTrainees(parsed, { reclassifyGroups: true });
 
       state = {
-        trainees: migrated,
+        trainees: result.cleaned,
         revision: state.revision + 1,
       };
+
+      if (fromLegacy || result.changedCount > 0) {
+        persist();
+      }
       emit();
     }
   } catch {
@@ -636,6 +652,9 @@ export function resetAlumniData() {
   if (typeof window !== "undefined") {
     try {
       window.localStorage.removeItem(STORAGE_KEY);
+      for (const legacyKey of LEGACY_STORAGE_KEYS) {
+        window.localStorage.removeItem(legacyKey);
+      }
     } catch {
       // ignore
     }
