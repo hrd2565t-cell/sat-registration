@@ -6,6 +6,7 @@ import {
   runDataCleansing,
   resetAlumniData,
   groupTraineesByPerson,
+  detectAffiliationDiscrepancies,
   AFFILIATION_GROUPS,
 } from "@/lib/alumni-store";
 import {
@@ -28,11 +29,14 @@ export function DataCleansingModal({ trainees, onClose, onRefresh }: DataCleansi
     fixedNameCount: number;
     fixedGroupCount: number;
   } | null>(null);
-  const [activeTab, setActiveTab] = useState<"summary" | "prefixEvolved" | "groupStats">("summary");
+  const [activeTab, setActiveTab] = useState<"affiliationDiff" | "summary" | "prefixEvolved" | "groupStats">("affiliationDiff");
   const [confirmReset, setConfirmReset] = useState(false);
 
   // Group by unique person
   const uniquePersons = useMemo(() => groupTraineesByPerson(trainees), [trainees]);
+
+  // Audit: Detect affiliation discrepancies (e.g. สมาคมกีฬาจังหวัด marked as หน่วยงานภายนอก)
+  const discrepancies = useMemo(() => detectAffiliationDiscrepancies(trainees), [trainees]);
 
   // Audit: Count people with multiple courses where prefix evolved (e.g. น.ส. -> นาง, นาย -> ดร.)
   const prefixEvolvedList = useMemo(() => {
@@ -103,11 +107,28 @@ export function DataCleansingModal({ trainees, onClose, onRefresh }: DataCleansi
     return { completed, missing, percent };
   }, [trainees]);
 
-  // Handler: Run Data Cleansing
+  // Badge class helper
+  const getGroupBadgeClass = (group?: string) => {
+    switch (group) {
+      case "การกีฬาแห่งประเทศไทย":
+        return "bg-purple-50 text-purple-700 border-purple-200";
+      case "กองทุนพัฒนาการกีฬาแห่งชาติ":
+        return "bg-sky-50 text-sky-800 border-sky-300";
+      case "สมาคมกีฬาแห่งประเทศไทย":
+        return "bg-blue-50 text-blue-700 border-blue-200";
+      case "สมาคมกีฬาแห่งจังหวัด":
+        return "bg-amber-50 text-amber-800 border-amber-200";
+      case "หน่วยงานภายนอก":
+      default:
+        return "bg-gray-100 text-gray-700 border-gray-200";
+    }
+  };
+
+  // Handler: Run Full Data Cleansing
   const handleRunCleansing = () => {
     setIsRunning(true);
     setTimeout(() => {
-      const res = runDataCleansing();
+      const res = runDataCleansing({ reclassifyGroups: true });
       setCleansingResult(res);
       setIsRunning(false);
       if (onRefresh) onRefresh();
@@ -160,7 +181,7 @@ export function DataCleansingModal({ trainees, onClose, onRefresh }: DataCleansi
                 </span>
               </div>
               <p className="text-xs text-blue-100/90 mt-0.5">
-                ขับเคลื่อนโดย Smart Thai Name & Prefix Engine • ตรวจสอบความถูกต้องและจัดโครงสร้างฐานข้อมูล กกท.
+                ขับเคลื่อนโดย Smart Thai Name & Affiliation Classifier Engine • ตรวจสอบความถูกต้องและจัดโครงสร้างฐานข้อมูล กกท.
               </p>
             </div>
           </div>
@@ -182,11 +203,11 @@ export function DataCleansingModal({ trainees, onClose, onRefresh }: DataCleansi
               <span className="text-xl">✨</span>
               <div className="flex-1">
                 <p className="font-bold text-sm text-emerald-900">
-                  จัดระเบียบข้อมูลสำเร็จเรียบร้อยแล้ว!
+                  จัดระเบียบข้อมูลและกลุ่มสังกัดสำเร็จเรียบร้อยแล้ว!
                 </p>
                 <p className="text-emerald-800 mt-0.5">
                   ระบบได้ตรวจสอบข้อมูลทั้งหมด {cleansingResult.total.toLocaleString()} รายการ และจัดระเบียบข้อมูลที่ต้องปรับปรุงจำนวน{" "}
-                  <strong>{cleansingResult.changedCount} รายการ</strong> (ปรับปรุงชื่อ-สกุล/คำนำหน้า {cleansingResult.fixedNameCount} รายการ, กลุ่มหน่วยงาน {cleansingResult.fixedGroupCount} รายการ)
+                  <strong>{cleansingResult.changedCount} รายการ</strong> (ปรับปรุงชื่อ-สกุล/คำนำหน้า {cleansingResult.fixedNameCount} รายการ, จัดกลุ่มสังกัดใหม่ {cleansingResult.fixedGroupCount} รายการ)
                 </p>
               </div>
               <button
@@ -217,13 +238,25 @@ export function DataCleansingModal({ trainees, onClose, onRefresh }: DataCleansi
               <p className="mt-1 text-[10px] text-indigo-600">รหัส USR-2026 ไม่ซ้ำซ้อน</p>
             </div>
 
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5">
-              <p className="text-[11px] font-medium text-emerald-700">แยกชื่อ-นามสกุลอิสระ</p>
-              <p className="mt-1 text-2xl font-black text-emerald-800 font-mono">
-                {separateNameStats.percent}%
+            <div className={`rounded-xl border p-3.5 ${
+              discrepancies.length > 0
+                ? "border-amber-200 bg-amber-50/70"
+                : "border-emerald-100 bg-emerald-50/60"
+            }`}>
+              <p className={`text-[11px] font-medium ${
+                discrepancies.length > 0 ? "text-amber-800 font-bold" : "text-emerald-700"
+              }`}>
+                สังกัดที่ตรวจพบข้อคลาดเคลื่อน
               </p>
-              <p className="mt-1 text-[10px] text-emerald-700">
-                {separateNameStats.completed}/{trainees.length} รายการสมบูรณ์
+              <p className={`mt-1 text-2xl font-black font-mono ${
+                discrepancies.length > 0 ? "text-amber-900" : "text-emerald-800"
+              }`}>
+                {discrepancies.length}
+              </p>
+              <p className={`mt-1 text-[10px] ${
+                discrepancies.length > 0 ? "text-amber-700" : "text-emerald-700"
+              }`}>
+                {discrepancies.length > 0 ? "เช่น สมาคมกีฬาจังหวัด" : "ทุกรายการสอดคล้อง 100%"}
               </p>
             </div>
 
@@ -239,11 +272,16 @@ export function DataCleansingModal({ trainees, onClose, onRefresh }: DataCleansi
           {/* Action Ribbon */}
           <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="space-y-0.5 text-center sm:text-left">
-              <p className="text-xs font-bold text-gray-800">
-                คำสั่งปฏิบัติการจัดระเบียบฐานข้อมูล
+              <p className="text-xs font-bold text-gray-800 flex items-center gap-1.5 justify-center sm:justify-start">
+                <span>คำสั่งปฏิบัติการจัดระเบียบฐานข้อมูล</span>
+                {discrepancies.length > 0 && (
+                  <span className="rounded-full bg-amber-100 text-amber-900 px-2 py-0.2 text-[10px] font-bold border border-amber-300">
+                    พบ {discrepancies.length} รายการที่ปรับกลุ่มได้
+                  </span>
+                )}
               </p>
               <p className="text-[11px] text-gray-500">
-                สแกนคำนำหน้า 80+ รูปแบบ, ตัดช่องว่างขยะ, แยก firstName / lastName, และจัดกลุ่มกองทุนอัตโนมัติ
+                สแกนคำนำหน้า 80+ รูปแบบ, ตรวจจับกลุ่มสังกัดอัตโนมัติจากชื่อหน่วยงาน, และแยกชื่อ-นามสกุล
               </p>
             </div>
 
@@ -254,7 +292,7 @@ export function DataCleansingModal({ trainees, onClose, onRefresh }: DataCleansi
                 disabled={isRunning}
                 className="inline-flex items-center gap-2 rounded-xl bg-[#16265E] hover:bg-[#111e4a] text-white px-4 py-2.5 text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer disabled:opacity-50"
               >
-                <span>{isRunning ? "⏳ กำลังประมวลผล..." : "🧹 จัดระเบียบข้อมูลทันที"}</span>
+                <span>{isRunning ? "⏳ กำลังประมวลผล..." : "⚡ ปรับปรุงกลุ่มสังกัดและจัดระเบียบทันที"}</span>
               </button>
 
               <button
@@ -271,7 +309,23 @@ export function DataCleansingModal({ trainees, onClose, onRefresh }: DataCleansi
 
           {/* Navigation Tabs for In-depth Insights */}
           <div>
-            <div className="flex items-center gap-2 border-b border-gray-200 text-xs">
+            <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 text-xs">
+              <button
+                type="button"
+                onClick={() => setActiveTab("affiliationDiff")}
+                className={`pb-2.5 px-3 font-bold border-b-2 transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === "affiliationDiff"
+                    ? "border-[#16265E] text-[#16265E]"
+                    : "border-transparent text-gray-500 hover:text-gray-800"
+                }`}
+              >
+                <span>🏛️ เปรียบเทียบสังกัด ก่อน-หลัง</span>
+                <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                  discrepancies.length > 0 ? "bg-amber-100 text-amber-900 border border-amber-300" : "bg-emerald-100 text-emerald-800"
+                }`}>
+                  {discrepancies.length}
+                </span>
+              </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("summary")}
@@ -306,11 +360,93 @@ export function DataCleansingModal({ trainees, onClose, onRefresh }: DataCleansi
                     : "border-transparent text-gray-500 hover:text-gray-800"
                 }`}
               >
-                🏛️ การกระจายตัว 5 กลุ่มหน่วยงาน
+                📊 สัดส่วน 5 กลุ่มหน่วยงาน
               </button>
             </div>
 
-            {/* Tab 1: Quality Summary */}
+            {/* Tab: Affiliation Before & After Comparison */}
+            {activeTab === "affiliationDiff" && (
+              <div className="mt-4 space-y-3">
+                <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                  <div>
+                    <p className="font-bold">
+                      {discrepancies.length > 0
+                        ? `ตรวจพบ ${discrepancies.length} รายการที่ชื่อสังกัดบ่งชี้ชัดเจน แต่จัดกลุ่มไม่ตรง`
+                        : "ยอดเยี่ยม! ฐานข้อมูลทั้งหมดได้รับการจัดกลุ่มสังกัดถูกต้องตรงกันครบถ้วนแล้ว"}
+                    </p>
+                    <p className="text-[11px] text-amber-800 mt-0.5">
+                      ระบบใช้ Smart Affiliation Classifier ตรวจจับคำสำคัญ เช่น สมาคมกีฬาประจำจังหวัด, สมาคมกีฬาคนพิการ และกองทุน
+                    </p>
+                  </div>
+                  {discrepancies.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleRunCleansing}
+                      disabled={isRunning}
+                      className="rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 text-xs shadow-xs transition-colors shrink-0 cursor-pointer disabled:opacity-50"
+                    >
+                      {isRunning ? "กำลังปรับปรุง..." : `⚡ อนุมัติปรับปรุง ${discrepancies.length} รายการ`}
+                    </button>
+                  )}
+                </div>
+
+                {discrepancies.length > 0 ? (
+                  <div className="max-h-80 overflow-y-auto rounded-xl border border-gray-200 shadow-xs">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-[#16265E] text-white sticky top-0 z-10 text-[11px]">
+                        <tr>
+                          <th className="py-2.5 px-3">#</th>
+                          <th className="py-2.5 px-3">บุคลากร</th>
+                          <th className="py-2.5 px-3">ชื่อสังกัดที่ระบุในประวัติ</th>
+                          <th className="py-2.5 px-3 text-center">กลุ่มเดิม (ก่อนแก้)</th>
+                          <th className="py-2.5 px-2 text-center">➔</th>
+                          <th className="py-2.5 px-3 text-center">กลุ่มใหม่ที่ระบบแนะนำ</th>
+                          <th className="py-2.5 px-3">เหตุผลการตรวจจับ</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white">
+                        {discrepancies.map((d, i) => (
+                          <tr key={d.traineeId || i} className="hover:bg-amber-50/40 transition-colors">
+                            <td className="py-2 px-3 text-gray-400 font-mono">{i + 1}</td>
+                            <td className="py-2 px-3">
+                              <p className="font-bold text-[#16265E]">{d.name}</p>
+                              <p className="text-[10px] text-gray-500 font-mono">{d.personnelId || d.traineeId}</p>
+                            </td>
+                            <td className="py-2 px-3 font-semibold text-gray-800 max-w-[200px]">
+                              {d.affiliation}
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold border ${getGroupBadgeClass(d.currentGroup)}`}>
+                                {d.currentGroup}
+                              </span>
+                            </td>
+                            <td className="py-2 px-2 text-center font-bold text-gray-400">➔</td>
+                            <td className="py-2 px-3 text-center">
+                              <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold border shadow-2xs ${getGroupBadgeClass(d.suggestedGroup)}`}>
+                                {d.suggestedGroup}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-gray-600 text-[11px] max-w-[200px]">
+                              {d.reason}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-8 text-center text-xs">
+                    <span className="text-3xl">🎉</span>
+                    <h5 className="font-bold text-emerald-900 text-sm mt-2">ไม่พบความคลาดเคลื่อนของกลุ่มหน่วยงาน</h5>
+                    <p className="text-emerald-700 mt-1">
+                      ข้อมูลสังกัดของบุคลากรทั้ง {trainees.length.toLocaleString()} รายการสอดคล้องกับทั้ง 5 กลุ่มหน่วยงานอย่างสมบูรณ์แบบแล้ว
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab: Quality Summary */}
             {activeTab === "summary" && (
               <div className="mt-4 space-y-3">
                 <div className="rounded-xl border border-gray-200 bg-white p-4 text-xs space-y-3">
@@ -354,7 +490,7 @@ export function DataCleansingModal({ trainees, onClose, onRefresh }: DataCleansi
               </div>
             )}
 
-            {/* Tab 2: Prefix Evolved Cases */}
+            {/* Tab: Prefix Evolved Cases */}
             {activeTab === "prefixEvolved" && (
               <div className="mt-4 space-y-3">
                 <p className="text-xs text-gray-500">
@@ -393,7 +529,7 @@ export function DataCleansingModal({ trainees, onClose, onRefresh }: DataCleansi
               </div>
             )}
 
-            {/* Tab 3: Group Distribution */}
+            {/* Tab: Group Distribution */}
             {activeTab === "groupStats" && (
               <div className="mt-4 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

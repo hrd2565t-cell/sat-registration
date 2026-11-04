@@ -7,6 +7,8 @@ import {
   getCoreNameKey,
   evaluateNameMatch,
   standardizeAllTrainees,
+  smartInferAffiliationGroup,
+  type AffiliationMatchResult,
 } from "./smart-name-engine";
 
 export interface DutyRecord {
@@ -82,13 +84,39 @@ export const AFFILIATION_GROUPS = [
 ] as const;
 
 export function inferAffiliationGroup(orgName: string): (typeof AFFILIATION_GROUPS)[number] {
-  const clean = (orgName || "").trim();
-  if (!clean) return "หน่วยงานภายนอก";
-  if (clean.includes("กองทุน")) return "กองทุนพัฒนาการกีฬาแห่งชาติ";
-  if (clean.includes("สมาคมกีฬาแห่งจังหวัด") || clean.includes("สมาคมกีฬาจังหวัด")) return "สมาคมกีฬาแห่งจังหวัด";
-  if (clean.includes("สมาคมกีฬาแห่งประเทศไทย")) return "สมาคมกีฬาแห่งประเทศไทย";
-  if (clean.includes("การกีฬาแห่งประเทศไทย") || clean.includes("กกท") || clean.includes("กกท.")) return "การกีฬาแห่งประเทศไทย";
-  return "หน่วยงานภายนอก";
+  return smartInferAffiliationGroup(orgName).group;
+}
+
+export interface AffiliationDiscrepancy {
+  traineeId: string;
+  personnelId?: string;
+  name: string;
+  affiliation: string;
+  currentGroup: string;
+  suggestedGroup: string;
+  reason: string;
+}
+
+/**
+ * Scan trainees and detect any mismatches between organization name and affiliation group
+ */
+export function detectAffiliationDiscrepancies(trainees: HistoricalTrainee[]): AffiliationDiscrepancy[] {
+  const discrepancies: AffiliationDiscrepancy[] = [];
+  for (const t of trainees) {
+    const res = smartInferAffiliationGroup(t.affiliation);
+    if (res.group !== t.affiliationGroup) {
+      discrepancies.push({
+        traineeId: t.id,
+        personnelId: t.personnelId,
+        name: t.name,
+        affiliation: t.affiliation,
+        currentGroup: t.affiliationGroup || "หน่วยงานภายนอก",
+        suggestedGroup: res.group,
+        reason: res.reason,
+      });
+    }
+  }
+  return discrepancies;
 }
 
 export const SPORTS_TYPES = [
@@ -577,13 +605,13 @@ export function deleteDutyRecord(dutyId: string): boolean {
   return true;
 }
 
-export function runDataCleansing(): {
+export function runDataCleansing(options?: { reclassifyGroups?: boolean }): {
   total: number;
   changedCount: number;
   fixedNameCount: number;
   fixedGroupCount: number;
 } {
-  const result = standardizeAllTrainees(state.trainees);
+  const result = standardizeAllTrainees(state.trainees, options);
   if (result.changedCount > 0) {
     state = {
       trainees: result.cleaned,

@@ -389,7 +389,109 @@ export function searchExistingCandidates(
  * - Standardizes prefix and cleanFullName
  * - Fixes any double spaces
  */
-export function standardizeAllTrainees(trainees: HistoricalTrainee[]): {
+export interface AffiliationMatchResult {
+  group: "การกีฬาแห่งประเทศไทย" | "กองทุนพัฒนาการกีฬาแห่งชาติ" | "สมาคมกีฬาแห่งประเทศไทย" | "สมาคมกีฬาแห่งจังหวัด" | "หน่วยงานภายนอก";
+  reason: string;
+  confidence: number;
+}
+
+/**
+ * Smart Affiliation Classifier based on Linguistic Patterns and Legal Establishment of Sports Authority of Thailand
+ */
+export function smartInferAffiliationGroup(orgName: string): AffiliationMatchResult {
+  const clean = (orgName || "").trim();
+  if (!clean) {
+    return {
+      group: "หน่วยงานภายนอก",
+      reason: "ไม่ระบุชื่อสังกัด",
+      confidence: 100,
+    };
+  }
+
+  // 1. Special academic & external exclusions
+  if (clean.includes("มหาวิทยาลัยการกีฬาแห่งชาติ")) {
+    return {
+      group: "หน่วยงานภายนอก",
+      reason: "มหาวิทยาลัยการกีฬาแห่งชาติ (มกช.) สังกัดกระทรวงการท่องเที่ยวและกีฬา",
+      confidence: 100,
+    };
+  }
+  if (clean.includes("คณะกรรมการโอลิมปิคแห่งประเทศไทย")) {
+    return {
+      group: "หน่วยงานภายนอก",
+      reason: "คณะกรรมการโอลิมปิคแห่งประเทศไทยฯ เป็นองค์กรกีฬาอิสระ",
+      confidence: 100,
+    };
+  }
+
+  // 2. Fund (NSDF)
+  if (clean.includes("กองทุน")) {
+    return {
+      group: "กองทุนพัฒนาการกีฬาแห่งชาติ",
+      reason: "พบคีย์เวิร์ด 'กองทุน' (กองทุนพัฒนาการกีฬาแห่งชาติ)",
+      confidence: 100,
+    };
+  }
+
+  // 3. Sports Authority of Thailand (กกท. - SAT)
+  if (
+    clean.includes("การกีฬาแห่งประเทศไทย") ||
+    clean === "กกท" ||
+    clean === "กกท." ||
+    clean.startsWith("ฝ่ายกีฬา") ||
+    clean.includes("สำนักงานคณะกรรมการกีฬามวย") ||
+    clean.includes("ศูนย์การกีฬาแห่งประเทศไทย")
+  ) {
+    return {
+      group: "การกีฬาแห่งประเทศไทย",
+      reason: "พบคีย์เวิร์ดหน่วยงานในสังกัดการกีฬาแห่งประเทศไทย (กกท.)",
+      confidence: 100,
+    };
+  }
+
+  // 4. Provincial Sports Associations
+  if (
+    clean.includes("สมาคมกีฬาแห่งจังหวัด") ||
+    clean.includes("สมาคมกีฬาจังหวัด") ||
+    clean.includes("สมาคมกีฬาคนพิการจังหวัด")
+  ) {
+    return {
+      group: "สมาคมกีฬาแห่งจังหวัด",
+      reason: "พบคีย์เวิร์ดสมาคมกีฬาประจำจังหวัด",
+      confidence: 100,
+    };
+  }
+
+  // 5. National Sports Associations
+  if (
+    (clean.includes("สมาคมกีฬา") || clean.includes("ราชยานยนต์สมาคม") || clean.includes("สมาคมปัญจกีฬา")) &&
+    (clean.includes("แห่งประเทศไทย") || clean.includes("แห่งประเทศไทยฯ") || clean.includes("แห่งชาติ"))
+  ) {
+    return {
+      group: "สมาคมกีฬาแห่งประเทศไทย",
+      reason: "พบคีย์เวิร์ดสมาคมกีฬาแห่งประเทศไทย",
+      confidence: 100,
+    };
+  }
+
+  return {
+    group: "หน่วยงานภายนอก",
+    reason: "สถาบันการศึกษา, สโมสร หรือหน่วยงานภายนอก",
+    confidence: 85,
+  };
+}
+
+/**
+ * Standardize an entire list of trainees:
+ * - Separates firstName and lastName
+ * - Standardizes prefix and cleanFullName
+ * - Fixes any double spaces
+ * - Reclassifies affiliation groups intelligently
+ */
+export function standardizeAllTrainees(
+  trainees: HistoricalTrainee[],
+  options?: { reclassifyGroups?: boolean }
+): {
   cleaned: HistoricalTrainee[];
   changedCount: number;
   fixedNameCount: number;
@@ -398,6 +500,7 @@ export function standardizeAllTrainees(trainees: HistoricalTrainee[]): {
   let changedCount = 0;
   let fixedNameCount = 0;
   let fixedGroupCount = 0;
+  const doReclassify = options?.reclassifyGroups ?? true;
 
   const cleaned = trainees.map((t) => {
     const parsed = parseThaiFullName(t.name, t.prefix);
@@ -405,12 +508,15 @@ export function standardizeAllTrainees(trainees: HistoricalTrainee[]): {
     const hasPrefixDiff = t.prefix !== parsed.prefix;
     const hasMissingFields = !t.firstName || !t.lastName;
 
-    // Check affiliation group (e.g. ensure fund records belong to กองทุนพัฒนาการกีฬาแห่งชาติ)
+    // Check affiliation group using smartInferAffiliationGroup
     let nextAffiliationGroup = t.affiliationGroup;
     let hasGroupDiff = false;
-    if ((t.affiliation || "").includes("กองทุน") && t.affiliationGroup !== "กองทุนพัฒนาการกีฬาแห่งชาติ") {
-      nextAffiliationGroup = "กองทุนพัฒนาการกีฬาแห่งชาติ";
-      hasGroupDiff = true;
+    if (doReclassify) {
+      const match = smartInferAffiliationGroup(t.affiliation);
+      if (match.group !== t.affiliationGroup) {
+        nextAffiliationGroup = match.group;
+        hasGroupDiff = true;
+      }
     }
 
     if (hasNameDiff || hasPrefixDiff || hasMissingFields || hasGroupDiff) {

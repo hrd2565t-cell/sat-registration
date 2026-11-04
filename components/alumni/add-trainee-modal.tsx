@@ -13,6 +13,7 @@ import {
   parseThaiFullName,
   evaluateNameMatch,
   searchExistingCandidates,
+  smartInferAffiliationGroup,
 } from "@/lib/smart-name-engine";
 
 interface AddTraineeModalProps {
@@ -34,6 +35,19 @@ export function AddTraineeModal({ onClose, onSuccess, trainees }: AddTraineeModa
   const [batch, setBatch] = useState("รุ่นปี พ.ศ. 2569");
   const [status, setStatus] = useState<"active" | "inactive">("active");
   const [error, setError] = useState("");
+  const [isGroupManual, setIsGroupManual] = useState(false);
+  const [inferredReason, setInferredReason] = useState<string>("");
+
+  const handleAffiliationChange = (val: string) => {
+    setAffiliation(val);
+    if (!isGroupManual && val.trim().length >= 2) {
+      const match = smartInferAffiliationGroup(val);
+      setAffiliationGroup(match.group);
+      setInferredReason(match.reason);
+    } else if (val.trim().length < 2 && !isGroupManual) {
+      setInferredReason("");
+    }
+  };
 
   const nextAutoId = useMemo(() => getNextPersonnelId(trainees), [trainees]);
 
@@ -305,12 +319,23 @@ export function AddTraineeModal({ onClose, onSuccess, trainees }: AddTraineeModa
           {/* Row 2: Organization Group & Name */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">
-                กลุ่มหน่วยงาน <span className="text-rose-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-gray-700">
+                  กลุ่มหน่วยงาน <span className="text-rose-500">*</span>
+                </label>
+                {inferredReason && (
+                  <span className="text-[10px] text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded font-semibold border border-emerald-200">
+                    🤖 ระบบเลือกให้อัตโนมัติ
+                  </span>
+                )}
+              </div>
               <select
                 value={affiliationGroup}
-                onChange={(e) => setAffiliationGroup(e.target.value)}
+                onChange={(e) => {
+                  setAffiliationGroup(e.target.value);
+                  setIsGroupManual(true);
+                  setInferredReason("");
+                }}
                 className="w-full rounded-xl border border-gray-300 p-2.5 text-xs text-gray-800 focus:border-[#16265E] focus:outline-hidden"
               >
                 {AFFILIATION_GROUPS.map((g) => (
@@ -319,6 +344,11 @@ export function AddTraineeModal({ onClose, onSuccess, trainees }: AddTraineeModa
                   </option>
                 ))}
               </select>
+              {inferredReason && (
+                <p className="mt-1 text-[10px] text-gray-500 leading-tight">
+                  เหตุผล: {inferredReason}
+                </p>
+              )}
             </div>
 
             <div>
@@ -329,7 +359,7 @@ export function AddTraineeModal({ onClose, onSuccess, trainees }: AddTraineeModa
                 type="text"
                 placeholder="เช่น ฝ่ายการคลังกองทุน, สมาคมกีฬาฟุตบอลแห่งประเทศไทยฯ"
                 value={affiliation}
-                onChange={(e) => setAffiliation(e.target.value)}
+                onChange={(e) => handleAffiliationChange(e.target.value)}
                 className="w-full rounded-xl border border-gray-300 p-2.5 text-xs text-gray-800 focus:border-[#16265E] focus:outline-hidden"
                 required
               />
