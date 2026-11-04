@@ -17,6 +17,8 @@ import {
 } from "@/lib/alumni-store";
 import { loginAdmin } from "@/lib/admin-auth";
 import * as XLSX from "xlsx";
+import { MatrixReportPrintModal } from "./matrix-report-print-modal";
+import { AnnualCohortPrintModal } from "./annual-cohort-print-modal";
 
 interface ProjectEvaluationTabProps {
   trainees: HistoricalTrainee[];
@@ -63,6 +65,10 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
   const [isCohortListModalOpen, setIsCohortListModalOpen] = useState<boolean>(false);
   const [cohortModalTab, setCohortModalTab] = useState<"new" | "returning">("new");
   const [cohortSearchQuery, setCohortSearchQuery] = useState<string>("");
+
+  // Scoped Print Modal States
+  const [isMatrixPrintModalOpen, setIsMatrixPrintModalOpen] = useState<boolean>(false);
+  const [isAnnualCohortPrintModalOpen, setIsAnnualCohortPrintModalOpen] = useState<boolean>(false);
 
   // Dynamic categories from actual trainee data
   const allCategories = useMemo(() => {
@@ -294,7 +300,7 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
   };
 
   const handlePrintMatrixReport = () => {
-    window.print();
+    setIsMatrixPrintModalOpen(true);
   };
 
   // Cohort Analytics
@@ -1377,7 +1383,7 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
             </button>
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={() => setIsAnnualCohortPrintModalOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 transition-colors cursor-pointer"
               title="สั่งพิมพ์รายงานหน้านี้ (Print / Save as PDF)"
             >
@@ -2190,6 +2196,28 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
             </form>
           </div>
         </div>
+      )}
+
+      {/* Print Preview & PDF Modal for Cross-Tabulation Matrix */}
+      {isMatrixPrintModalOpen && (
+        <MatrixReportPrintModal
+          onClose={() => setIsMatrixPrintModalOpen(false)}
+          matrixData={matrixData}
+          matrixTotals={matrixTotals}
+          cohortSummary={currentCohortSummary}
+          selectedYear={matrixYearFilter}
+          selectedCategory={matrixCategoryFilter}
+          overallAchievementRate={overallAchievementRate}
+        />
+      )}
+
+      {/* Print Preview & PDF Modal for Annual Cohort Report */}
+      {isAnnualCohortPrintModalOpen && (
+        <AnnualCohortPrintModal
+          onClose={() => setIsAnnualCohortPrintModalOpen(false)}
+          annualCohorts={annualCohorts}
+          stats={stats}
+        />
       )}
     </div>
   );
