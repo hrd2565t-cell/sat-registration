@@ -433,10 +433,10 @@ export function AlumniDirectoryTab({
                     ? "bg-white text-[#16265E] shadow-xs font-bold"
                     : "text-gray-600 hover:text-gray-900"
                 }`}
-                title="จัดกลุ่มรายชื่อ 1 คนต่อ 1 แถว รวมหลักสูตรทั้งหมดไว้ด้วยกัน (1,891 บุคลากร)"
+                title={`จัดกลุ่มรายชื่อ 1 คนต่อ 1 แถว รวมหลักสูตรทั้งหมดไว้ด้วยกัน (${uniquePersons.length.toLocaleString()} บุคลากร)`}
               >
                 <span>👤</span>
-                <span>มุมมองรายบุคคล ({uniquePersons.length})</span>
+                <span>มุมมองรายบุคคล ({uniquePersons.length.toLocaleString()})</span>
               </button>
               <button
                 type="button"
@@ -449,10 +449,10 @@ export function AlumniDirectoryTab({
                     ? "bg-white text-[#16265E] shadow-xs font-bold"
                     : "text-gray-600 hover:text-gray-900"
                 }`}
-                title="แสดงผลแบบแยกแถวตามใบวุฒิบัตรทุกรายการ (2,732 รายการ)"
+                title={`แสดงผลแบบแยกแถวตามใบวุฒิบัตรทุกรายการ (${trainees.length.toLocaleString()} รายการ)`}
               >
                 <span>📜</span>
-                <span>รายประวัติวุฒิบัตร ({trainees.length})</span>
+                <span>รายประวัติวุฒิบัตร ({trainees.length.toLocaleString()})</span>
               </button>
             </div>
 

@@ -173,11 +173,11 @@ export const STANDARD_COURSES = [
   "การพัฒนาบุคลากรกีฬาสู่นักบริหารจัดการองค์กรกีฬาเพื่อความยั่งยืน",
 ] as const;
 
-// 2,732 authentic historical training records (1,891 unique personnel after deduplication) from official SAT Excel files
+// 2,811 authentic historical training records (1,943 unique personnel) from official SAT Excel files
 export const SEED_TRAINEES: HistoricalTrainee[] = rawRealTrainees as HistoricalTrainee[];
 
-const STORAGE_KEY = "sat-alumni-real-v5";
-const LEGACY_STORAGE_KEYS = ["sat-alumni-real-v4", "sat-alumni-real-v3"];
+const STORAGE_KEY = "sat-alumni-real-v6";
+const LEGACY_STORAGE_KEYS = ["sat-alumni-real-v5", "sat-alumni-real-v4", "sat-alumni-real-v3"];
 
 export type CloudSyncStatus = "idle" | "connected" | "disconnected" | "syncing" | "error";
 
@@ -324,7 +324,7 @@ function hydrate() {
 
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed) && parsed.length >= SEED_TRAINEES.length) {
         const result = standardizeAllTrainees(parsed, { reclassifyGroups: true });
         state = {
           trainees: result.cleaned,
@@ -334,6 +334,14 @@ function hydrate() {
         if (fromLegacy || result.changedCount > 0) {
           persist();
         }
+        emit();
+      } else if (Array.isArray(parsed) && parsed.length < SEED_TRAINEES.length) {
+        // Auto-upgrade stale cache with fewer records to full 2,811 official dataset
+        state = {
+          trainees: SEED_TRAINEES,
+          revision: state.revision + 1,
+        };
+        persist();
         emit();
       }
     }
@@ -1540,7 +1548,7 @@ export function getTargetForCourse(courseTitle: string, yearBE?: number | "all")
  * Calculate the highest existing USR-2026-XXXX sequence number and return the next available ID
  */
 export function getNextPersonnelId(trainees: HistoricalTrainee[]): string {
-  let maxNum = 1913; // Base from dataset
+  let maxNum = 1965; // Base from dataset (updated to latest 1,943 personnel dataset)
   for (const t of trainees) {
     const pId = t.personnelId || t.idCard || "";
     if (pId.startsWith("USR-2026-")) {
@@ -1557,7 +1565,7 @@ export function getNextPersonnelId(trainees: HistoricalTrainee[]): string {
  * Generate a sequence of N new unique USR-2026-XXXX IDs
  */
 export function generateNextPersonnelIds(trainees: HistoricalTrainee[], count: number): string[] {
-  let maxNum = 1913;
+  let maxNum = 1965;
   for (const t of trainees) {
     const pId = t.personnelId || t.idCard || "";
     if (pId.startsWith("USR-2026-")) {

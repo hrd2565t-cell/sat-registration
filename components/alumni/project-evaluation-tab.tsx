@@ -305,6 +305,8 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
     );
   }, [trainees, matrixYearFilter]);
 
+  const totalUniquePersons = useMemo(() => new Set(trainees.map((t) => t.personnelId || t.idCard)).size, [trainees]);
+
   const annualCohorts = useMemo(() => {
     return computeAnnualCohortStats(trainees);
   }, [trainees]);
@@ -542,7 +544,7 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
               แดชบอร์ดการประเมินผลโครงการพัฒนาบุคลากรกีฬา
             </h2>
             <p className="mt-1 text-xs sm:text-sm text-blue-100/80">
-              วิเคราะห์ความคุ้มค่าและผลสัมฤทธิ์ของการจัดอบรม จากฐานข้อมูลจริง 2,732 รายการ (1,891 บุคลากรเดี่ยวแท้จริง)
+              วิเคราะห์ความคุ้มค่าและผลสัมฤทธิ์ของการจัดอบรม จากฐานข้อมูลจริง {trainees.length.toLocaleString()} รายการ ({totalUniquePersons.toLocaleString()} บุคลากรเดี่ยวแท้จริง)
             </p>
           </div>
 

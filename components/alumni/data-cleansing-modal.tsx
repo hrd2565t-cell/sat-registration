@@ -519,7 +519,7 @@ export function DataCleansingModal({ trainees, onClose, onRefresh }: DataCleansi
                         <span className="text-emerald-600 font-bold">✓</span>
                         <span>แยกฟิลด์ <strong>firstName</strong> และ <strong>lastName</strong> ใน data/alumni.json</span>
                       </span>
-                      <span className="font-mono font-bold text-emerald-700">100% (2,732/2,732)</span>
+                      <span className="font-mono font-bold text-emerald-700">100% ({trainees.length.toLocaleString()}/{trainees.length.toLocaleString()})</span>
                     </li>
                     <li className="flex items-center justify-between py-1.5 border-b border-gray-100">
                       <span className="flex items-center gap-2">
