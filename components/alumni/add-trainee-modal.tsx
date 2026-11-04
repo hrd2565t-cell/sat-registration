@@ -4,12 +4,16 @@ import { useState, useMemo } from "react";
 import type { HistoricalTrainee } from "@/lib/alumni-store";
 import {
   addTrainee,
-  findExistingTrainee,
   getNextPersonnelId,
   STANDARD_COURSES,
   AFFILIATION_GROUPS,
   PAST_YEARS_BE,
 } from "@/lib/alumni-store";
+import {
+  parseThaiFullName,
+  evaluateNameMatch,
+  searchExistingCandidates,
+} from "@/lib/smart-name-engine";
 
 interface AddTraineeModalProps {
   onClose: () => void;
@@ -33,15 +37,40 @@ export function AddTraineeModal({ onClose, onSuccess, trainees }: AddTraineeModa
 
   const nextAutoId = useMemo(() => getNextPersonnelId(trainees), [trainees]);
 
-  // Real-time check if person already exists in system
-  const matchedPerson = useMemo(() => {
-    if (!name.trim()) return undefined;
-    return findExistingTrainee(trainees, name);
-  }, [name, trainees]);
-
   const finalPrefix = prefix === "อื่นๆ" ? customPrefix.trim() : prefix;
   const fullName = finalPrefix ? `${finalPrefix} ${name.trim()}` : name.trim();
   const finalCourse = selectedCourse === "__custom__" ? customCourse.trim() : selectedCourse;
+
+  // Real-time Name Match Evaluation using Smart Engine
+  const nameMatchResult = useMemo(() => {
+    if (!name.trim()) return null;
+    return evaluateNameMatch(name.trim(), finalPrefix, trainees);
+  }, [name, finalPrefix, trainees]);
+
+  // Real-time Candidate Auto-suggestions as user types
+  const candidateSuggestions = useMemo(() => {
+    if (!name.trim() || name.trim().length < 2) return [];
+    return searchExistingCandidates(name.trim(), trainees, 3);
+  }, [name, trainees]);
+
+  // Quick select an existing candidate
+  const handleSelectCandidate = (candidate: HistoricalTrainee) => {
+    const parsed = parseThaiFullName(candidate.name, candidate.prefix);
+    setName(`${parsed.firstName} ${parsed.lastName}`.trim());
+    if (["นาย", "นาง", "นางสาว", "ดร."].includes(parsed.prefix)) {
+      setPrefix(parsed.prefix);
+      setCustomPrefix("");
+    } else if (parsed.prefix) {
+      setPrefix("อื่นๆ");
+      setCustomPrefix(parsed.prefix);
+    }
+    if (candidate.affiliation) {
+      setAffiliation(candidate.affiliation);
+    }
+    if (candidate.affiliationGroup && AFFILIATION_GROUPS.includes(candidate.affiliationGroup as any)) {
+      setAffiliationGroup(candidate.affiliationGroup);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,14 +89,27 @@ export function AddTraineeModal({ onClose, onSuccess, trainees }: AddTraineeModa
       return;
     }
 
-    // Determine personnel ID: reuse existing ID if matched, or assign nextAutoId
-    const assignedId: string = (matchedPerson && matchedPerson.personnelId) ? matchedPerson.personnelId : nextAutoId;
+    const parsed = parseThaiFullName(fullName, finalPrefix);
+
+    // Determine personnel ID: reuse existing ID if matched (Exact or Same Person Diff Prefix), or assign nextAutoId
+    const matchedTrainee = nameMatchResult?.matchedTrainee;
+    const isMatched =
+      nameMatchResult &&
+      (nameMatchResult.confidence === "EXACT_MATCH" ||
+        nameMatchResult.confidence === "SAME_PERSON_DIFF_PREFIX");
+
+    const assignedId: string =
+      isMatched && matchedTrainee && matchedTrainee.personnelId
+        ? matchedTrainee.personnelId
+        : nextAutoId;
 
     const newRecord = addTrainee({
       personnelId: assignedId,
       idCard: assignedId,
-      name: fullName,
-      prefix: finalPrefix || undefined,
+      name: parsed.cleanFullName,
+      prefix: parsed.prefix || finalPrefix || undefined,
+      firstName: parsed.firstName,
+      lastName: parsed.lastName,
       affiliation: affiliation.trim(),
       affiliationGroup,
       sportsType: affiliation.trim(),
@@ -102,7 +144,7 @@ export function AddTraineeModal({ onClose, onSuccess, trainees }: AddTraineeModa
                 เพิ่มข้อมูลบุคลากรและประวัติการอบรม
               </h3>
               <p className="text-xs text-blue-100/80">
-                บันทึกประวัติการสำเร็จการอบรมรายบุคคลเข้าสู่ฐานข้อมูลทำเนียบ กกท.
+                บันทึกประวัติการสำเร็จการอบรมรายบุคคลเข้าสู่ฐานข้อมูลทำเนียบ กกท. (พร้อมระบบ Smart Name Matching)
               </p>
             </div>
           </div>
@@ -123,16 +165,50 @@ export function AddTraineeModal({ onClose, onSuccess, trainees }: AddTraineeModa
             </div>
           )}
 
-          {/* Real-time Match Indicator */}
-          {matchedPerson ? (
-            <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-900 flex items-start gap-2.5 shadow-2xs">
+          {/* Real-time Smart Name Match Indicator */}
+          {nameMatchResult && nameMatchResult.confidence === "EXACT_MATCH" ? (
+            <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-900 flex items-start gap-2.5 shadow-2xs animate-in fade-in-50 duration-150">
               <span className="text-base mt-0.5">🟢</span>
               <div className="flex-1">
-                <p className="font-bold">
-                  พบบัญชีเดิมในระบบแล้ว: {matchedPerson.name} ({matchedPerson.personnelId})
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="font-bold">
+                    พบบัญชีเดิมในระบบแล้ว: {nameMatchResult.matchedTrainee?.name}
+                  </p>
+                  <span className="rounded font-mono text-[10px] bg-emerald-200 text-emerald-900 px-1.5 py-0.2 font-bold">
+                    {nameMatchResult.matchedTrainee?.personnelId}
+                  </span>
+                </div>
                 <p className="text-emerald-700 mt-0.5">
-                  สังกัดเดิม: {matchedPerson.affiliation} · ระบบจะบันทึกหลักสูตรนี้เป็น <strong>วุฒิบัตรสะสม</strong> เพิ่มเติมให้ใน Digital Sports Passport ของท่านเดิมโดยไม่สร้างแถวบุคคลซ้ำ
+                  สังกัดเดิม: {nameMatchResult.matchedTrainee?.affiliation} · ระบบจะบันทึกหลักสูตรนี้เป็น <strong>วุฒิบัตรสะสม</strong> ในพาสปอร์ตเดิมโดยไม่สร้างรหัสบุคคลซ้ำ
+                </p>
+              </div>
+            </div>
+          ) : nameMatchResult && nameMatchResult.confidence === "SAME_PERSON_DIFF_PREFIX" ? (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950 flex items-start gap-2.5 shadow-2xs animate-in fade-in-50 duration-150">
+              <span className="text-base mt-0.5">🟡</span>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-bold text-amber-900">
+                    พบชื่อ-นามสกุลตรงกันกับบุคลากรเดิม (ตรวจพบคำนำหน้าพัฒนา/เปลี่ยน)
+                  </p>
+                  <span className="rounded font-mono text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.2 font-bold">
+                    {nameMatchResult.matchedTrainee?.personnelId}
+                  </span>
+                </div>
+                <p className="text-amber-800 mt-0.5">
+                  {nameMatchResult.reason} · ระบบจะผูกประวัติเข้ากับรหัส <strong>{nameMatchResult.matchedTrainee?.personnelId}</strong> เดิมให้อัตโนมัติ
+                </p>
+              </div>
+            </div>
+          ) : nameMatchResult && nameMatchResult.confidence === "PARTIAL_MATCH" ? (
+            <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900 flex items-start gap-2 shadow-2xs">
+              <span className="text-base mt-0.5">ℹ️</span>
+              <div className="flex-1">
+                <p className="font-semibold text-sky-950">
+                  {nameMatchResult.reason}
+                </p>
+                <p className="text-sky-700 text-[11px] mt-0.5">
+                  หากเป็นบุคลากรท่านใหม่ ระบบจะออกรหัสอัตโนมัติให้ <strong>{nextAutoId}</strong>
                 </p>
               </div>
             </div>
@@ -152,7 +228,7 @@ export function AddTraineeModal({ onClose, onSuccess, trainees }: AddTraineeModa
             <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-3 text-xs text-gray-600 flex items-center gap-2">
               <span>💡</span>
               <span>
-                รหัสถัดไปสำหรับบุคลากรใหม่: <strong className="text-[#16265E] font-mono">{nextAutoId}</strong> (หากมีชื่อเดิมอยู่แล้ว ระบบจะผูกรหัสเดิมให้อัตโนมัติ)
+                รหัสถัดไปสำหรับบุคลากรใหม่: <strong className="text-[#16265E] font-mono">{nextAutoId}</strong> (Smart Name Engine จะสแกนหาชื่อซ้ำหรือคำนำหน้าเปลี่ยนอัตโนมัติ)
               </span>
             </div>
           )}
@@ -177,7 +253,7 @@ export function AddTraineeModal({ onClose, onSuccess, trainees }: AddTraineeModa
               {prefix === "อื่นๆ" && (
                 <input
                   type="text"
-                  placeholder="เช่น พลโท, ร.ต.อ."
+                  placeholder="เช่น พลโท, ร.ต.อ., ผศ.ดร."
                   value={customPrefix}
                   onChange={(e) => setCustomPrefix(e.target.value)}
                   className="mt-1.5 w-full rounded-xl border border-gray-300 p-2 text-xs"
@@ -191,12 +267,38 @@ export function AddTraineeModal({ onClose, onSuccess, trainees }: AddTraineeModa
               </label>
               <input
                 type="text"
-                placeholder="กรอกชื่อและนามสกุล (ระบบจะสแกนหาชื่อซ้ำอัตโนมัติ)"
+                placeholder="กรอกชื่อและนามสกุล (เช่น กรรณิกา จรมาศ หรือใส่คำนำหน้ามาด้วยได้)"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full rounded-xl border border-gray-300 p-2.5 text-xs text-gray-800 focus:border-[#16265E] focus:outline-hidden"
                 required
               />
+
+              {/* Instant Search Candidates Pills */}
+              {candidateSuggestions.length > 0 && !nameMatchResult?.matchedTrainee && (
+                <div className="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-2 text-xs space-y-1">
+                  <span className="text-[10px] text-gray-500 font-bold block">
+                    🔍 พบรายชื่อบุคลากรใกล้เคียงในระบบ (คลิกเพื่อดึงข้อมูล):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {candidateSuggestions.map((c) => (
+                      <button
+                        key={c.trainee.id}
+                        type="button"
+                        onClick={() => handleSelectCandidate(c.trainee)}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white hover:bg-blue-50 px-2 py-1 text-[11px] text-gray-800 transition-colors cursor-pointer shadow-2xs"
+                        title={`สังกัด: ${c.trainee.affiliation}`}
+                      >
+                        <span className="font-bold text-[#16265E]">{c.trainee.name}</span>
+                        <span className="font-mono text-[9px] text-gray-500">
+                          {c.trainee.personnelId}
+                        </span>
+                        <span className="text-[9px] text-blue-600 font-semibold">เลือกใช้</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -225,7 +327,7 @@ export function AddTraineeModal({ onClose, onSuccess, trainees }: AddTraineeModa
               </label>
               <input
                 type="text"
-                placeholder="เช่น สมาคมกีฬาฟุตบอลแห่งประเทศไทยฯ"
+                placeholder="เช่น ฝ่ายการคลังกองทุน, สมาคมกีฬาฟุตบอลแห่งประเทศไทยฯ"
                 value={affiliation}
                 onChange={(e) => setAffiliation(e.target.value)}
                 className="w-full rounded-xl border border-gray-300 p-2.5 text-xs text-gray-800 focus:border-[#16265E] focus:outline-hidden"

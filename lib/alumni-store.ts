@@ -2,6 +2,12 @@
 
 import { useSyncExternalStore } from "react";
 import rawRealTrainees from "@/data/alumni.json";
+import {
+  parseThaiFullName,
+  getCoreNameKey,
+  evaluateNameMatch,
+  standardizeAllTrainees,
+} from "./smart-name-engine";
 
 export interface DutyRecord {
   id: string;
@@ -240,6 +246,7 @@ export function useAlumniStore() {
     addDutyRecord,
     verifyDutyRecord,
     deleteDutyRecord,
+    runDataCleansing,
     resetAlumniData,
   };
 }
@@ -568,6 +575,29 @@ export function deleteDutyRecord(dutyId: string): boolean {
   persist();
   emit();
   return true;
+}
+
+export function runDataCleansing(): {
+  total: number;
+  changedCount: number;
+  fixedNameCount: number;
+  fixedGroupCount: number;
+} {
+  const result = standardizeAllTrainees(state.trainees);
+  if (result.changedCount > 0) {
+    state = {
+      trainees: result.cleaned,
+      revision: state.revision + 1,
+    };
+    persist();
+    emit();
+  }
+  return {
+    total: state.trainees.length,
+    changedCount: result.changedCount,
+    fixedNameCount: result.fixedNameCount,
+    fixedGroupCount: result.fixedGroupCount,
+  };
 }
 
 export function resetAlumniData() {
@@ -1260,23 +1290,21 @@ export function generateNextPersonnelIds(trainees: HistoricalTrainee[], count: n
 }
 
 /**
- * Clean Thai name for matching: strips common honorific prefixes, extra spaces, and lowercase
+ * Clean Thai name for matching using Smart Name Engine (extracts coreNameKey)
  */
 export function normalizeNameForMatching(name: string): string {
-  return name
-    .trim()
-    .replace(/^(นาย|นางสาว|นาง|ดร\.|นาวาเอก|นาวาโท|นาวาตรี|เรือเอก|ร\.ต\.อ\.|พ\.จ\.ต\.|ส\.อ\.|ผศ\.|รศ\.|ศ\.|พลเอก|พลโท|พลตรี)\s*/, "")
-    .replace(/\s+/g, " ")
-    .toLowerCase();
+  if (!name) return "";
+  return getCoreNameKey(name);
 }
 
 /**
- * Check if a person already exists in the system by name or ID
+ * Check if a person already exists in the system by name, prefix, or ID
  */
 export function findExistingTrainee(
   trainees: HistoricalTrainee[],
   name: string,
-  idCardOrPersonnelId?: string
+  idCardOrPersonnelId?: string,
+  prefix?: string
 ): HistoricalTrainee | undefined {
   const cleanId = (idCardOrPersonnelId || "").trim();
   if (cleanId && cleanId.startsWith("USR-2026-")) {
@@ -1284,13 +1312,12 @@ export function findExistingTrainee(
     if (foundById) return foundById;
   }
 
-  const normTarget = normalizeNameForMatching(name);
-  if (!normTarget) return undefined;
+  const match = evaluateNameMatch(name, prefix, trainees);
+  if (match.confidence === "EXACT_MATCH" || match.confidence === "SAME_PERSON_DIFF_PREFIX") {
+    return match.matchedTrainee;
+  }
 
-  return trainees.find((t) => {
-    const normT = normalizeNameForMatching(t.name);
-    return normT === normTarget;
-  });
+  return undefined;
 }
 
 export interface CourseMatrixRow {

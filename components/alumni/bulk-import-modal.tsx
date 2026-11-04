@@ -4,12 +4,15 @@ import { useState, useMemo, type ChangeEvent, type DragEvent } from "react";
 import * as XLSX from "xlsx";
 import type { HistoricalTrainee } from "@/lib/alumni-store";
 import {
-  findExistingTrainee,
   generateNextPersonnelIds,
-  getNextPersonnelId,
   AFFILIATION_GROUPS,
   inferAffiliationGroup,
 } from "@/lib/alumni-store";
+import {
+  parseThaiFullName,
+  evaluateNameMatch,
+  type NameMatchConfidence,
+} from "@/lib/smart-name-engine";
 
 export interface ParsedImportRow extends Omit<
   HistoricalTrainee,
@@ -18,6 +21,8 @@ export interface ParsedImportRow extends Omit<
   isExisting: boolean;
   matchedPersonnelId?: string;
   matchedName?: string;
+  matchConfidence?: NameMatchConfidence;
+  matchReason?: string;
 }
 
 interface BulkImportModalProps {
@@ -30,7 +35,7 @@ interface BulkImportModalProps {
 
 export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModalProps) {
   const [parsedRows, setParsedRows] = useState<ParsedImportRow[]>([]);
-  const [previewFilter, setPreviewFilter] = useState<"all" | "new" | "existing">("all");
+  const [previewFilter, setPreviewFilter] = useState<"all" | "new" | "existing" | "diffPrefix">("all");
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -64,10 +69,10 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
       },
       {
         "รหัสประจำตัว (เว้นว่างได้ ระบบจะออกรหัสให้อัตโนมัติ)": "",
-        "คำนำหน้าชื่อ": "นาย",
-        "ชื่อ-นามสกุล": "บุคลากรใหม่ ทดสอบระบบ",
-        "กลุ่มหน่วยงาน": "การกีฬาแห่งประเทศไทย",
-        "ชื่อสมาคม/หน่วยงาน": "การกีฬาแห่งประเทศไทย",
+        "คำนำหน้าชื่อ": "นาง",
+        "ชื่อ-นามสกุล": "กรรณิกา จรมาศ",
+        "กลุ่มหน่วยงาน": "กองทุนพัฒนาการกีฬาแห่งชาติ",
+        "ชื่อสมาคม/หน่วยงาน": "ฝ่ายการคลังกองทุน",
         "ชื่อหลักสูตร": "Olympic",
         "ประเภทหลักสูตร": "อื่นๆ",
         "ปี พ.ศ. ที่อบรม": 2569,
@@ -102,7 +107,7 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
           return;
         }
 
-        // 1. Initial parse of rows
+        // 1. Initial parse of rows using Smart Thai Name Engine
         const initialParsed = rawJson.map((row) => {
           const rawId = String(
             row["รหัสประจำตัว (เว้นว่างได้ ระบบจะออกรหัสให้อัตโนมัติ)"] ??
@@ -117,7 +122,7 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
             row["ชื่อ-นามสกุล"] ?? row["ชื่อ"] ?? row["name"] ?? "ไม่ระบุชื่อ"
           ).trim();
 
-          const fullName = prefix && !rawName.startsWith(prefix) ? `${prefix} ${rawName}` : rawName;
+          const parsedName = parseThaiFullName(rawName, prefix);
 
           const rawGroup = String(
             row["กลุ่มหน่วยงาน"] ?? row["กลุ่ม"] ?? row["affiliationGroup"] ?? ""
@@ -156,8 +161,10 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
 
           return {
             rawId,
-            prefix: prefix || undefined,
-            name: fullName,
+            prefix: parsedName.prefix || prefix || undefined,
+            firstName: parsedName.firstName,
+            lastName: parsedName.lastName,
+            name: parsedName.cleanFullName,
             affiliation: org,
             affiliationGroup: group,
             sportsType: org,
@@ -169,25 +176,48 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
           };
         });
 
-        // 2. Count new people vs existing people
+        // 2. Evaluate matches with existing trainees
         let newCount = 0;
         const mappedWithExistingCheck = initialParsed.map((item) => {
-          const match = findExistingTrainee(trainees, item.name, item.rawId);
-          if (match) {
+          // If explicit USR-2026 ID was provided in file
+          if (item.rawId && item.rawId.startsWith("USR-2026-")) {
+            const matchById = trainees.find((t) => t.personnelId === item.rawId);
+            if (matchById) {
+              return {
+                ...item,
+                isExisting: true,
+                matchedPersonnelId: matchById.personnelId,
+                matchedName: matchById.name,
+                matchConfidence: "EXACT_MATCH" as const,
+                matchReason: `ตรงกับรหัสเดิมในระบบ ${matchById.personnelId}`,
+                affiliationGroup: item.affiliationGroup || matchById.affiliationGroup,
+                affiliation: item.affiliation || matchById.affiliation || "หน่วยงานภายนอก",
+              };
+            }
+          }
+
+          // Evaluate by Smart Thai Name Engine
+          const matchResult = evaluateNameMatch(item.name, item.prefix, trainees);
+          if (matchResult.confidence === "EXACT_MATCH" || matchResult.confidence === "SAME_PERSON_DIFF_PREFIX") {
+            const matched = matchResult.matchedTrainee;
             return {
               ...item,
               isExisting: true,
-              matchedPersonnelId: match.personnelId,
-              matchedName: match.name,
-              // Inherit group or affiliation if blank
-              affiliationGroup: item.affiliationGroup || match.affiliationGroup,
-              affiliation: item.affiliation || match.affiliation,
+              matchedPersonnelId: matched?.personnelId,
+              matchedName: matched?.name,
+              matchConfidence: matchResult.confidence,
+              matchReason: matchResult.reason,
+              affiliationGroup: item.affiliationGroup || matched?.affiliationGroup,
+              affiliation: item.affiliation || matched?.affiliation || "หน่วยงานภายนอก",
             };
           } else {
             newCount++;
             return {
               ...item,
+              affiliation: item.affiliation || "หน่วยงานภายนอก",
               isExisting: false,
+              matchConfidence: "NEW_PERSON" as const,
+              matchReason: "บุคลากรใหม่ในระบบ",
               matchedPersonnelId: undefined as string | undefined,
               matchedName: undefined as string | undefined,
             };
@@ -199,6 +229,7 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
         let newIdx = 0;
 
         const finalMapped: ParsedImportRow[] = mappedWithExistingCheck.map((item) => {
+          const finalAffiliation = item.affiliation || "หน่วยงานภายนอก";
           if (item.isExisting) {
             const finalPId = item.matchedPersonnelId!;
             return {
@@ -206,9 +237,11 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
               personnelId: finalPId,
               name: item.name,
               prefix: item.prefix,
-              affiliation: item.affiliation,
+              firstName: item.firstName,
+              lastName: item.lastName,
+              affiliation: finalAffiliation,
               affiliationGroup: item.affiliationGroup,
-              sportsType: item.sportsType,
+              sportsType: item.sportsType || finalAffiliation,
               courseTitle: item.courseTitle,
               courseCategory: item.courseCategory,
               yearBE: item.yearBE,
@@ -218,6 +251,8 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
               isExisting: true,
               matchedPersonnelId: item.matchedPersonnelId,
               matchedName: item.matchedName,
+              matchConfidence: item.matchConfidence,
+              matchReason: item.matchReason,
             };
           } else {
             const assignedPId = item.rawId && item.rawId.startsWith("USR-2026-")
@@ -228,9 +263,11 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
               personnelId: assignedPId,
               name: item.name,
               prefix: item.prefix,
-              affiliation: item.affiliation,
+              firstName: item.firstName,
+              lastName: item.lastName,
+              affiliation: finalAffiliation,
               affiliationGroup: item.affiliationGroup,
-              sportsType: item.sportsType,
+              sportsType: item.sportsType || finalAffiliation,
               courseTitle: item.courseTitle,
               courseCategory: item.courseCategory,
               yearBE: item.yearBE,
@@ -238,6 +275,8 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
               passedDate: `${item.yearBE - 543}-09-30`,
               status: item.status,
               isExisting: false,
+              matchConfidence: "NEW_PERSON",
+              matchReason: "บุคลากรใหม่ในระบบ",
             };
           }
         });
@@ -277,15 +316,42 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
 
   const handleConfirm = () => {
     if (parsedRows.length === 0) return;
-    onImport(parsedRows);
+    onImport(
+      parsedRows.map((r) => ({
+        personnelId: r.personnelId,
+        idCard: r.idCard,
+        name: r.name,
+        prefix: r.prefix,
+        firstName: r.firstName,
+        lastName: r.lastName,
+        affiliation: r.affiliation,
+        affiliationGroup: r.affiliationGroup,
+        sportsType: r.sportsType,
+        courseTitle: r.courseTitle,
+        courseCategory: r.courseCategory,
+        yearBE: r.yearBE,
+        batch: r.batch,
+        passedDate: r.passedDate,
+        status: r.status,
+      }))
+    );
     onClose();
   };
 
-  const existingCount = useMemo(() => parsedRows.filter((r) => r.isExisting).length, [parsedRows]);
+  const exactCount = useMemo(
+    () => parsedRows.filter((r) => r.matchConfidence === "EXACT_MATCH").length,
+    [parsedRows]
+  );
+  const diffPrefixCount = useMemo(
+    () => parsedRows.filter((r) => r.matchConfidence === "SAME_PERSON_DIFF_PREFIX").length,
+    [parsedRows]
+  );
+  const existingCount = exactCount + diffPrefixCount;
   const newCount = useMemo(() => parsedRows.filter((r) => !r.isExisting).length, [parsedRows]);
 
   const filteredPreview = useMemo(() => {
-    if (previewFilter === "existing") return parsedRows.filter((r) => r.isExisting);
+    if (previewFilter === "existing") return parsedRows.filter((r) => r.matchConfidence === "EXACT_MATCH");
+    if (previewFilter === "diffPrefix") return parsedRows.filter((r) => r.matchConfidence === "SAME_PERSON_DIFF_PREFIX");
     if (previewFilter === "new") return parsedRows.filter((r) => !r.isExisting);
     return parsedRows;
   }, [parsedRows, previewFilter]);
@@ -297,19 +363,19 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="relative my-6 w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 animate-in fade-in-50 zoom-in-95 duration-200">
+      <div className="relative my-6 w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 animate-in fade-in-50 zoom-in-95 duration-200">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 bg-[#16265E] p-5 text-white">
           <div className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-lg">
-              📊
+              📥
             </span>
             <div>
               <h3 className="text-base font-bold text-white">
-                นำเข้าข้อมูลผู้ผ่านการอบรมจากไฟล์ Excel (Smart Import & Preview)
+                นำเข้าข้อมูลผู้ผ่านการอบรมย้อนหลัง (Bulk Excel Import)
               </h3>
               <p className="text-xs text-blue-100/80">
-                ระบบจะตรวจสอบความซ้ำซ้อนกับฐานข้อมูลเดิม และสร้างรหัส Unique ID ให้อัตโนมัติ
+                ขับเคลื่อนโดย Smart Thai Name Engine • ตรวจสอบความซ้ำซ้อนและแยกชื่อ-นามสกุลอัตโนมัติ
               </p>
             </div>
           </div>
@@ -323,59 +389,62 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-4">
-          {/* Template Download Banner */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50/70 p-4">
-            <div>
-              <h4 className="text-xs font-bold text-[#16265E]">
-                📄 ดาวน์โหลดไฟล์เทมเพลตตัวอย่าง (Template)
-              </h4>
-              <p className="text-xs text-gray-600 mt-0.5">
-                มีคอลัมน์มาตรฐาน: ชื่อ-นามสกุล, กลุ่มหน่วยงาน, ชื่อสมาคม/หน่วยงาน, ชื่อหลักสูตร, ปี พ.ศ. (รหัสประจำตัวเว้นว่างได้)
+        <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+          {/* Instructions and Download Template */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/60 p-4 text-xs">
+            <div className="space-y-1">
+              <p className="font-bold text-[#16265E]">
+                📄 ใช้ไฟล์ Excel ตามแบบฟอร์มมาตรฐานของ กกท. (SAT Template)
+              </p>
+              <p className="text-gray-600">
+                ระบบจะตรวจสอบชื่อ-นามสกุล และคำนำหน้า 80+ รูปแบบ หากตรงกับคนเดิมจะผูกรหัส USR-2026 เดิมให้อัตโนมัติ
               </p>
             </div>
             <button
               type="button"
               onClick={handleDownloadTemplate}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#16265E] bg-white px-3.5 py-2 text-xs font-semibold text-[#16265E] shadow-xs hover:bg-[#16265E] hover:text-white transition-colors cursor-pointer shrink-0"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#16265E] bg-white px-3.5 py-2 font-bold text-[#16265E] shadow-2xs hover:bg-blue-50 transition-colors shrink-0 cursor-pointer"
             >
-              <span>⬇️</span>
-              <span>ดาวน์โหลด Template (.xlsx)</span>
+              <span>📥</span>
+              <span>ดาวน์โหลดเทมเพลต Excel (.xlsx)</span>
             </button>
           </div>
 
-          {/* Drag & Drop Area */}
+          {/* Upload Dropzone */}
           <div
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition-all ${
+            className={`relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-8 text-center transition-all ${
               isDragging
-                ? "border-[#16265E] bg-blue-50/60 scale-[0.99]"
-                : "border-gray-300 bg-gray-50/50 hover:bg-gray-50"
+                ? "border-emerald-500 bg-emerald-50/50"
+                : "border-gray-300 bg-gray-50/50 hover:bg-gray-50 hover:border-gray-400"
             }`}
           >
-            <span className="text-4xl">📁</span>
-            <p className="mt-2 text-sm font-semibold text-gray-700">
-              ลากไฟล์ Excel (.xlsx, .csv) มาวางที่นี่
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleFileChange}
+              className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
+            />
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-xs border border-gray-200 text-2xl mb-3">
+              📊
+            </div>
+            <p className="text-sm font-bold text-gray-800">
+              ลากและวางไฟล์ Excel หรือ <span className="text-[#16265E] underline">คลิกเพื่อเลือกไฟล์</span>
             </p>
-            <p className="text-xs text-gray-500 mt-1">หรือคลิกปุ่มเพื่อเลือกไฟล์จากเครื่องคอมพิวเตอร์</p>
-            <label className="mt-3 inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-[#16265E] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-[#111e4a] transition-colors">
-              <span>เลือกไฟล์จากเครื่อง</span>
-              <input
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-            </label>
+            <p className="mt-1 text-xs text-gray-500">
+              รองรับไฟล์ .xlsx, .xls และ .csv (แนะนำไฟล์ .xlsx จากเทมเพลตมาตรฐาน)
+            </p>
             {fileName && (
-              <span className="mt-3 text-xs font-semibold text-emerald-800 bg-emerald-50 px-3.5 py-1 rounded-full border border-emerald-200">
-                📄 ไฟล์ที่เลือก: {fileName} (พบ {parsedRows.length} รายการ)
-              </span>
+              <div className="mt-3 inline-flex items-center gap-2 rounded-lg bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
+                <span>✓ ไฟล์ที่เลือก:</span>
+                <span className="font-mono">{fileName}</span>
+              </div>
             )}
           </div>
 
+          {/* Error Message */}
           {error && (
             <div className="rounded-xl bg-rose-50 p-3 text-xs text-rose-700 border border-rose-200 font-medium">
               ⚠️ {error}
@@ -395,8 +464,13 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 font-bold text-emerald-800 border border-emerald-200">
-                    🟢 บุคลากรเดิม: {existingCount} ท่าน
+                    🟢 บุคลากรเดิม (ตรง 100%): {exactCount} ท่าน
                   </span>
+                  {diffPrefixCount > 0 && (
+                    <span className="rounded-full bg-amber-100 px-2.5 py-0.5 font-bold text-amber-900 border border-amber-300">
+                      🟡 คำนำหน้าเปลี่ยน: {diffPrefixCount} ท่าน
+                    </span>
+                  )}
                   <span className="rounded-full bg-blue-100 px-2.5 py-0.5 font-bold text-blue-800 border border-blue-200">
                     ✨ บุคลากรใหม่: {newCount} ท่าน
                   </span>
@@ -404,7 +478,7 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
               </div>
 
               {/* Filter Tabs in Preview */}
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1 text-xs">
                   <button
                     type="button"
@@ -422,8 +496,19 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
                       previewFilter === "existing" ? "bg-white text-emerald-800 shadow-2xs" : "text-gray-600"
                     }`}
                   >
-                    🟢 บุคลากรเดิม ({existingCount})
+                    🟢 บุคลากรเดิม ({exactCount})
                   </button>
+                  {diffPrefixCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewFilter("diffPrefix")}
+                      className={`rounded-md px-2.5 py-1 font-semibold transition-all cursor-pointer ${
+                        previewFilter === "diffPrefix" ? "bg-white text-amber-900 shadow-2xs" : "text-gray-600"
+                      }`}
+                    >
+                      🟡 คำนำหน้าเปลี่ยน ({diffPrefixCount})
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setPreviewFilter("new")}
@@ -436,17 +521,17 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
                 </div>
 
                 <span className="text-[11px] text-gray-500">
-                  ตรวจสอบรหัสประจำตัวและสถานะก่อนกดยืนยัน
+                  ระบบ Smart Name Matching ตรวจสอบรหัสประจำตัวอัตโนมัติก่อนนำเข้า
                 </span>
               </div>
 
               {/* Preview Table */}
-              <div className="max-h-64 overflow-auto rounded-xl border border-gray-200 bg-white shadow-xs">
+              <div className="max-h-72 overflow-auto rounded-xl border border-gray-200 bg-white shadow-xs">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-[#16265E] text-white sticky top-0 z-10">
                     <tr>
                       <th className="py-2.5 px-3">#</th>
-                      <th className="py-2.5 px-3">สถานะตรวจสอบ</th>
+                      <th className="py-2.5 px-3">สถานะตรวจสอบ Smart Matching</th>
                       <th className="py-2.5 px-3 font-mono">รหัสประจำตัว (Unique ID)</th>
                       <th className="py-2.5 px-3">ชื่อ-นามสกุล</th>
                       <th className="py-2.5 px-3">กลุ่มสังกัด</th>
@@ -460,10 +545,15 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
                       <tr key={i} className="hover:bg-blue-50/50 transition-colors">
                         <td className="py-2 px-3 text-gray-400 font-mono">{i + 1}</td>
                         <td className="py-2 px-3">
-                          {r.isExisting ? (
+                          {r.matchConfidence === "EXACT_MATCH" ? (
                             <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-200">
                               <span>🟢</span>
                               <span>พบบัญชีเดิม (ผูกวุฒิบัตรสะสม)</span>
+                            </span>
+                          ) : r.matchConfidence === "SAME_PERSON_DIFF_PREFIX" ? (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-900 border border-amber-300" title={r.matchReason}>
+                              <span>🟡</span>
+                              <span>คำนำหน้าเปลี่ยน (ผูกรหัสเดิม)</span>
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-800 border border-blue-200">
@@ -475,9 +565,16 @@ export function BulkImportModal({ onClose, onImport, trainees }: BulkImportModal
                         <td className="py-2 px-3 font-mono font-bold text-[#16265E]">
                           {r.personnelId}
                         </td>
-                        <td className="py-2 px-3 font-semibold text-gray-900">{r.name}</td>
+                        <td className="py-2 px-3">
+                          <p className="font-semibold text-gray-900">{r.name}</p>
+                          {r.firstName && r.lastName && (
+                            <p className="text-[10px] text-gray-400 font-mono">
+                              {r.firstName} | {r.lastName}
+                            </p>
+                          )}
+                        </td>
                         <td className="py-2 px-3 text-gray-600">{r.affiliationGroup || "-"}</td>
-                        <td className="py-2 px-3 text-gray-600 max-w-[150px] truncate">{r.affiliation}</td>
+                        <td className="py-2 px-3 text-gray-600 max-w-[150px] truncate" title={r.affiliation}>{r.affiliation}</td>
                         <td className="py-2 px-3 font-bold text-[#16265E]">{r.courseTitle}</td>
                         <td className="py-2 px-3 text-center font-bold text-gray-700">{r.yearBE}</td>
                       </tr>

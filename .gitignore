@@ -44,4 +44,5 @@ next-env.d.ts
 # large files & local scratch
 opencode-history.md.json
 *.jsonl
+*.backup.json
 scratch/

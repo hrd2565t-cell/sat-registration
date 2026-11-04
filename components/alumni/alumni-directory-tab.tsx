@@ -12,6 +12,7 @@ import {
 } from "@/lib/alumni-store";
 import { loginAdmin } from "@/lib/admin-auth";
 import * as XLSX from "xlsx";
+import { DataCleansingModal } from "./data-cleansing-modal";
 
 interface AlumniDirectoryTabProps {
   trainees: HistoricalTrainee[];
@@ -48,8 +49,12 @@ export function AlumniDirectoryTab({
   const [editingGroupValue, setEditingGroupValue] = useState<string>("การกีฬาแห่งประเทศไทย");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Data Cleansing Modal State
+  const [showCleansingModal, setShowCleansingModal] = useState<boolean>(false);
+
   // Admin PIN Unlock Dialog State
   const [showPinPrompt, setShowPinPrompt] = useState<boolean>(false);
+  const [pinAction, setPinAction] = useState<"editGroup" | "cleansing">("editGroup");
   const [pinInput, setPinInput] = useState<string>("");
   const [pinError, setPinError] = useState<string>("");
   const [pendingEditPerson, setPendingEditPerson] = useState<{
@@ -58,8 +63,20 @@ export function AlumniDirectoryTab({
     currentGroup: string;
   } | null>(null);
 
+  const handleOpenCleansing = () => {
+    if (isAdmin) {
+      setShowCleansingModal(true);
+    } else {
+      setPinAction("cleansing");
+      setShowPinPrompt(true);
+      setPinInput("");
+      setPinError("");
+    }
+  };
+
   const handleStartEditGroup = (id: string, name: string, currentGroup: string) => {
     if (!isAdmin) {
+      setPinAction("editGroup");
       setPendingEditPerson({ id, name, currentGroup });
       setShowPinPrompt(true);
       setPinInput("");
@@ -87,7 +104,9 @@ export function AlumniDirectoryTab({
     if (loginAdmin(pinInput.trim())) {
       setShowPinPrompt(false);
       setPinError("");
-      if (pendingEditPerson) {
+      if (pinAction === "cleansing") {
+        setShowCleansingModal(true);
+      } else if (pendingEditPerson) {
         setEditingGroupPersonId(pendingEditPerson.id);
         setEditingGroupValue(pendingEditPerson.currentGroup || "หน่วยงานภายนอก");
         setPendingEditPerson(null);
@@ -412,7 +431,7 @@ export function AlumniDirectoryTab({
               </button>
             </div>
 
-            {isAdmin && (
+            {isAdmin ? (
               <>
                 <button
                   type="button"
@@ -432,7 +451,26 @@ export function AlumniDirectoryTab({
                   <span>📥</span>
                   <span>นำเข้า Excel</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={handleOpenCleansing}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-purple-300 bg-purple-50 px-3.5 py-2 text-xs font-bold text-purple-800 shadow-xs hover:bg-purple-100 transition-colors cursor-pointer"
+                  title="เครื่องมือจัดระเบียบและตรวจสอบข้อมูล (Data Cleansing Tool)"
+                >
+                  <span>🧹</span>
+                  <span>จัดระเบียบข้อมูล</span>
+                </button>
               </>
+            ) : (
+              <button
+                type="button"
+                onClick={handleOpenCleansing}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-purple-200 bg-purple-50/70 px-3 py-2 text-xs font-medium text-purple-700 shadow-xs hover:bg-purple-100 transition-colors cursor-pointer"
+                title="คลิกเพื่อปลดล็อก Admin PIN และเปิดเครื่องมือจัดระเบียบข้อมูล (Data Cleansing Tool)"
+              >
+                <span>🧹</span>
+                <span>จัดระเบียบข้อมูล</span>
+              </button>
             )}
 
             <button
@@ -1154,7 +1192,11 @@ export function AlumniDirectoryTab({
               </div>
               <div>
                 <h4 className="font-bold text-gray-900 text-sm">ยืนยันสิทธิ์ผู้ดูแลระบบ (Admin)</h4>
-                <p className="text-xs text-gray-500">กรอกรหัส PIN เพื่อปลดล็อกสิทธิ์ปรับแก้กลุ่มหน่วยงาน</p>
+                <p className="text-xs text-gray-500">
+                  {pinAction === "cleansing"
+                    ? "กรอกรหัส PIN เพื่อเปิดเครื่องมือจัดระเบียบข้อมูล"
+                    : "กรอกรหัส PIN เพื่อปลดล็อกสิทธิ์ปรับแก้กลุ่มหน่วยงาน"}
+                </p>
               </div>
             </div>
             <form onSubmit={handleUnlockPin} className="mt-4 space-y-3">
@@ -1190,6 +1232,14 @@ export function AlumniDirectoryTab({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Data Cleansing Modal */}
+      {showCleansingModal && (
+        <DataCleansingModal
+          trainees={trainees}
+          onClose={() => setShowCleansingModal(false)}
+        />
       )}
     </div>
   );
