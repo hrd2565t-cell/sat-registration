@@ -510,6 +510,8 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
 
   const [selectedDimensionFilter, setSelectedDimensionFilter] = useState("all");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [quotesPage, setQuotesPage] = useState<number>(1);
+  const QUOTES_PAGE_SIZE = 6;
 
   const filteredHighlights = useMemo(() => {
     if (selectedDimensionFilter === "all") return stats.qualitativeHighlights;
@@ -517,6 +519,14 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
       q.dimensions.includes(selectedDimensionFilter)
     );
   }, [stats.qualitativeHighlights, selectedDimensionFilter]);
+
+  const totalQuotePages = Math.ceil(filteredHighlights.length / QUOTES_PAGE_SIZE) || 1;
+  const safeQuotesPage = Math.min(quotesPage, totalQuotePages);
+
+  const pagedHighlights = useMemo(() => {
+    const start = (safeQuotesPage - 1) * QUOTES_PAGE_SIZE;
+    return filteredHighlights.slice(start, start + QUOTES_PAGE_SIZE);
+  }, [filteredHighlights, safeQuotesPage]);
 
   const handleCopyQuote = (q: QualitativeHighlight) => {
     const textToCopy = `"${q.text}"\n— ${q.traineeName} (${q.role}, ${q.sportsType}) | หลักสูตร ${q.courseTitle}`;
@@ -1811,7 +1821,10 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
               <button
                 type="button"
-                onClick={() => setSelectedDimensionFilter("all")}
+                onClick={() => {
+                  setSelectedDimensionFilter("all");
+                  setQuotesPage(1);
+                }}
                 className={`rounded-lg px-2.5 py-1 font-semibold transition-colors cursor-pointer ${
                   selectedDimensionFilter === "all"
                     ? "bg-[#16265E] text-white shadow-xs"
@@ -1824,7 +1837,10 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                 <button
                   key={dim.key}
                   type="button"
-                  onClick={() => setSelectedDimensionFilter(dim.key)}
+                  onClick={() => {
+                    setSelectedDimensionFilter(dim.key);
+                    setQuotesPage(1);
+                  }}
                   className={`rounded-lg px-2.5 py-1 text-xs transition-colors flex items-center gap-1 cursor-pointer ${
                     selectedDimensionFilter === dim.key
                       ? "bg-[#16265E] text-white font-semibold shadow-xs"
@@ -1839,7 +1855,7 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-2">
-            {filteredHighlights.map((q) => (
+            {pagedHighlights.map((q) => (
               <div
                 key={q.id}
                 className="rounded-2xl border border-gray-200 bg-white p-4 shadow-2xs hover:border-blue-300 transition-all flex flex-col justify-between"
@@ -1898,6 +1914,52 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
               </div>
             ))}
           </div>
+
+          {/* Quotes Pagination Controls (6 items per page) */}
+          {totalQuotePages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-gray-100 text-xs">
+              <span className="text-gray-500 text-[11.5px]">
+                แสดงคำตอบที่ <strong>{(safeQuotesPage - 1) * QUOTES_PAGE_SIZE + 1} - {Math.min(safeQuotesPage * QUOTES_PAGE_SIZE, filteredHighlights.length)}</strong> จากทั้งหมด <strong>{filteredHighlights.length}</strong> คำตอบ (หน้า {safeQuotesPage} จาก {totalQuotePages})
+              </span>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setQuotesPage((p) => Math.max(p - 1, 1))}
+                  disabled={safeQuotesPage === 1}
+                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  title="หน้าก่อนหน้า"
+                >
+                  ‹ ก่อนหน้า
+                </button>
+
+                {Array.from({ length: totalQuotePages }, (_, i) => i + 1).map((pageNum) => (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => setQuotesPage(pageNum)}
+                    className={`h-7 w-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      safeQuotesPage === pageNum
+                        ? "bg-[#16265E] text-white shadow-xs"
+                        : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => setQuotesPage((p) => Math.min(p + 1, totalQuotePages))}
+                  disabled={safeQuotesPage === totalQuotePages}
+                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  title="หน้าถัดไป"
+                >
+                  ถัดไป ›
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
