@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { AdminNavButton } from "@/components/layout/admin-nav-button";
 
@@ -30,8 +31,9 @@ export function Header({
             : `px-5 ${isDark ? "py-2" : "py-2.5"}`
         }`}
       >
-        <div
-          className={`flex items-center ${
+        <Link
+          href="/"
+          className={`flex items-center transition-opacity hover:opacity-90 ${
             compact ? "gap-2.5 lg:gap-[18px]" : "gap-2.5"
           }`}
         >
@@ -69,7 +71,7 @@ export function Header({
               </h1>
             </div>
           )}
-        </div>
+        </Link>
 
         <div className="flex min-w-0 max-w-full items-center gap-3">
           {rightSlot ?? (

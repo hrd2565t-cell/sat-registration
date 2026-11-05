@@ -723,7 +723,7 @@ function RegistrationContent() {
           onSubmit={handleSubmit}
         >
           <Link
-            href={`/?course=${course.id}`}
+            href={`/courses?course=${course.id}`}
             className="inline-flex h-[34px] items-center justify-center rounded bg-[#d1d5db] px-5 text-[13px] font-semibold text-[#4b5563] transition-colors hover:bg-[#c3c9d1]"
           >
             ย้อนกลับไปหน้าแก้ไข
