@@ -24,6 +24,10 @@ export function DutyTrackingTab({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSport, setSelectedSport] = useState("all");
 
+  // Pagination State: 5 items per page
+  const PAGE_SIZE = 5;
+  const [currentPage, setCurrentPage] = useState(1);
+
   // Flatten all duties with their corresponding trainee info
   const allDutyItems = useMemo(() => {
     const list: { duty: DutyRecord; trainee: HistoricalTrainee }[] = [];
@@ -65,6 +69,28 @@ export function DutyTrackingTab({
 
   const pendingCount = allDutyItems.filter((i) => !i.duty.verified).length;
   const verifiedCount = allDutyItems.filter((i) => i.duty.verified).length;
+
+  // Pagination calculations: 5 items per page
+  const totalPages = Math.ceil(filteredDuties.length / PAGE_SIZE) || 1;
+  const validCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const pagedDuties = useMemo(() => {
+    const startIndex = (validCurrentPage - 1) * PAGE_SIZE;
+    return filteredDuties.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [filteredDuties, validCurrentPage]);
+
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (validCurrentPage <= 4) {
+      return [1, 2, 3, 4, 5, "...", totalPages];
+    }
+    if (validCurrentPage >= totalPages - 3) {
+      return [1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, "...", validCurrentPage - 1, validCurrentPage, validCurrentPage + 1, "...", totalPages];
+  };
 
   return (
     <div className="space-y-5">
@@ -115,7 +141,10 @@ export function DutyTrackingTab({
         <div className="flex items-center gap-1.5 rounded-xl bg-gray-100 p-1 text-xs font-semibold">
           <button
             type="button"
-            onClick={() => setFilterMode("all")}
+            onClick={() => {
+              setFilterMode("all");
+              setCurrentPage(1);
+            }}
             className={`rounded-lg px-3 py-1.5 transition-colors ${
               filterMode === "all"
                 ? "bg-white text-[#16265E] shadow-xs"
@@ -126,7 +155,10 @@ export function DutyTrackingTab({
           </button>
           <button
             type="button"
-            onClick={() => setFilterMode("pending")}
+            onClick={() => {
+              setFilterMode("pending");
+              setCurrentPage(1);
+            }}
             className={`rounded-lg px-3 py-1.5 transition-colors flex items-center gap-1 ${
               filterMode === "pending"
                 ? "bg-white text-amber-800 shadow-xs"
@@ -142,7 +174,10 @@ export function DutyTrackingTab({
           </button>
           <button
             type="button"
-            onClick={() => setFilterMode("verified")}
+            onClick={() => {
+              setFilterMode("verified");
+              setCurrentPage(1);
+            }}
             className={`rounded-lg px-3 py-1.5 transition-colors ${
               filterMode === "verified"
                 ? "bg-white text-emerald-800 shadow-xs"
@@ -159,7 +194,10 @@ export function DutyTrackingTab({
             type="text"
             placeholder="ค้นหาชื่องาน, บทบาท, ชื่อโค้ช/ผู้ตัดสิน..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
             className="rounded-xl border border-gray-300 px-3 py-1.5 text-xs text-gray-700 focus:border-[#16265E] focus:outline-hidden w-full sm:w-64"
           />
 
@@ -189,7 +227,7 @@ export function DutyTrackingTab({
             </p>
           </div>
         ) : (
-          filteredDuties.map(({ duty, trainee }, idx) => (
+          pagedDuties.map(({ duty, trainee }, idx) => (
             <div
               key={duty.id || idx}
               className={`rounded-2xl border p-4 sm:p-5 transition-all shadow-xs ${
@@ -342,6 +380,72 @@ export function DutyTrackingTab({
           ))
         )}
       </div>
+
+      {/* Pagination Controls (5 items per page) */}
+      {filteredDuties.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3.5 shadow-xs">
+          <div className="text-xs text-gray-500 font-medium">
+            แสดงรายการที่{" "}
+            <span className="font-bold text-gray-800">
+              {(validCurrentPage - 1) * PAGE_SIZE + 1}
+            </span>{" "}
+            -{" "}
+            <span className="font-bold text-gray-800">
+              {Math.min(validCurrentPage * PAGE_SIZE, filteredDuties.length)}
+            </span>{" "}
+            จากทั้งหมด{" "}
+            <span className="font-bold text-[#16265E]">
+              {filteredDuties.length}
+            </span>{" "}
+            รายการ (หน้า {validCurrentPage} จาก {totalPages})
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={validCurrentPage === 1}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              <span>‹</span>
+              <span>ก่อนหน้า</span>
+            </button>
+
+            <div className="flex items-center gap-1">
+              {getPageNumbers().map((pageNum, idx) =>
+                typeof pageNum === "number" ? (
+                  <button
+                    key={pageNum}
+                    type="button"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`h-8 min-w-8 px-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                      validCurrentPage === pageNum
+                        ? "bg-[#16265E] text-white shadow-xs"
+                        : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                ) : (
+                  <span key={`dots-${idx}`} className="px-1 text-xs text-gray-400">
+                    ...
+                  </span>
+                )
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={validCurrentPage === totalPages}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              <span>ถัดไป</span>
+              <span>›</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

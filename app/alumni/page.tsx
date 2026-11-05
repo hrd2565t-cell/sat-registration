@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { Header } from "@/components/layout/header";
 import { AppHeaderNav } from "@/components/layout/app-header-nav";
@@ -38,6 +38,13 @@ function AlumniContent() {
   } = useAlumniStore();
 
   const [activeTab, setActiveTab] = useState<"directory" | "duty" | "evaluation" | "timeline" | "future">("directory");
+
+  // Protect duty tab: If non-admin user lands on or switches to duty tab, smoothly redirect to directory
+  useEffect(() => {
+    if (!isAdmin && activeTab === "duty") {
+      setActiveTab("directory");
+    }
+  }, [isAdmin, activeTab]);
   const [passportIdCard, setPassportIdCard] = useState<string | null>(null);
   const [digitalPassIdCard, setDigitalPassIdCard] = useState<string | null>(null);
   const [dutyTargetTrainee, setDutyTargetTrainee] = useState<HistoricalTrainee | null>(null);
@@ -236,21 +243,23 @@ function AlumniContent() {
             </span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab("duty")}
-            className={`flex items-center gap-2 border-b-2 py-3 px-5 text-sm font-bold transition-all ${
-              activeTab === "duty"
-                ? "border-[#16265E] text-[#16265E]"
-                : "border-transparent text-gray-500 hover:text-gray-800"
-            }`}
-          >
-            <span className="text-base">🏃</span>
-            <span>การติดตามการปฏิบัติหน้าที่</span>
-            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">
-              {trainees.reduce((sum, t) => sum + t.duties.length, 0)} ครั้ง
-            </span>
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("duty")}
+              className={`flex items-center gap-2 border-b-2 py-3 px-5 text-sm font-bold transition-all ${
+                activeTab === "duty"
+                  ? "border-[#16265E] text-[#16265E]"
+                  : "border-transparent text-gray-500 hover:text-gray-800"
+              }`}
+            >
+              <span className="text-base">🛡️</span>
+              <span>การติดตามการปฏิบัติหน้าที่ (Admin)</span>
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 font-bold">
+                {trainees.reduce((sum, t) => sum + t.duties.length, 0)} ครั้ง
+              </span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -312,7 +321,7 @@ function AlumniContent() {
           />
         )}
 
-        {activeTab === "duty" && (
+        {isAdmin && activeTab === "duty" && (
           <DutyTrackingTab
             trainees={trainees}
             onOpenPassport={(idCard) => setPassportIdCard(idCard)}
