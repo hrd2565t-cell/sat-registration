@@ -977,9 +977,11 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                 <th className="py-3 px-3 font-bold min-w-[140px]">
                   <div className="flex items-center gap-1.5">
                     <span>ประเภท</span>
-                    <span className="text-[10px] font-normal text-blue-200 bg-blue-900/60 px-1.5 py-0.2 rounded border border-blue-400/40">
-                      แก้ไขได้ ✎
-                    </span>
+                    {isAdmin && (
+                      <span className="text-[10px] font-normal text-blue-200 bg-blue-900/60 px-1.5 py-0.2 rounded border border-blue-400/40">
+                        แก้ไขได้ ✎
+                      </span>
+                    )}
                   </div>
                 </th>
                 <th className="py-3 px-3 text-center font-bold bg-purple-900/70 border-l border-blue-800 min-w-[105px]">
@@ -1000,7 +1002,7 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                 <th className="py-3 px-3 text-center font-bold bg-indigo-950 border-l border-blue-800 min-w-[125px]">
                   <div className="flex items-center justify-center gap-1">
                     <span>ค่าเป้าหมาย (คน)</span>
-                    <span className="text-[10px] font-normal text-indigo-300">✎</span>
+                    {isAdmin && <span className="text-[10px] font-normal text-indigo-300">✎</span>}
                   </div>
                 </th>
                 <th className="py-3 px-3 text-center font-black text-amber-300 border-l border-blue-800 min-w-[95px]">
@@ -1098,14 +1100,16 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                           >
                             {row.category}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => handleStartEdit(row.courseTitle, row.category)}
-                            className="opacity-70 group-hover:opacity-100 hover:bg-blue-100 text-gray-500 hover:text-[#16265E] h-5 w-5 rounded flex items-center justify-center transition-all cursor-pointer text-xs"
-                            title="คลิกเพื่อแก้ไขประเภทหลักสูตรนี้"
-                          >
-                            ✎
-                          </button>
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => handleStartEdit(row.courseTitle, row.category)}
+                              className="opacity-70 group-hover:opacity-100 hover:bg-blue-100 text-gray-500 hover:text-[#16265E] h-5 w-5 rounded flex items-center justify-center transition-all cursor-pointer text-xs"
+                              title="คลิกเพื่อแก้ไขประเภทหลักสูตรนี้ (Admin)"
+                            >
+                              ✎
+                            </button>
+                          )}
                         </div>
                       )}
                     </td>
@@ -1203,14 +1207,16 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                           <span className="font-bold text-indigo-950 font-mono">
                             {row.target.toLocaleString()}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => handleStartEditTarget(row.courseTitle, row.target)}
-                            className="opacity-60 group-hover:opacity-100 hover:bg-indigo-100 text-indigo-700 h-5 w-5 rounded flex items-center justify-center transition-all cursor-pointer text-xs"
-                            title="คลิกเพื่อแก้ไขค่าเป้าหมายหลักสูตรนี้"
-                          >
-                            ✎
-                          </button>
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditTarget(row.courseTitle, row.target)}
+                              className="opacity-60 group-hover:opacity-100 hover:bg-indigo-100 text-indigo-700 h-5 w-5 rounded flex items-center justify-center transition-all cursor-pointer text-xs"
+                              title="คลิกเพื่อแก้ไขค่าเป้าหมายหลักสูตรนี้ (Admin)"
+                            >
+                              ✎
+                            </button>
+                          )}
                         </div>
                       )}
                     </td>

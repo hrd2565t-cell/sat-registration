@@ -489,7 +489,7 @@ export function AlumniDirectoryTab({
               </button>
             </div>
 
-            {isAdmin ? (
+            {isAdmin && (
               <>
                 <button
                   type="button"
@@ -519,16 +519,6 @@ export function AlumniDirectoryTab({
                   <span>จัดระเบียบข้อมูล</span>
                 </button>
               </>
-            ) : (
-              <button
-                type="button"
-                onClick={handleOpenCleansing}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-purple-200 bg-purple-50/70 px-3 py-2 text-xs font-medium text-purple-700 shadow-xs hover:bg-purple-100 transition-colors cursor-pointer"
-                title="คลิกเพื่อปลดล็อก Admin PIN และเปิดเครื่องมือจัดระเบียบข้อมูล (Data Cleansing Tool)"
-              >
-                <span>🧹</span>
-                <span>จัดระเบียบข้อมูล</span>
-              </button>
             )}
 
             <button
@@ -885,14 +875,16 @@ export function AlumniDirectoryTab({
                               >
                                 {p.affiliationGroup || "หน่วยงานภายนอก"}
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => handleStartEditGroup(p.personnelId, p.name, p.affiliationGroup || "หน่วยงานภายนอก")}
-                                className="rounded p-1 text-gray-400 hover:text-[#16265E] hover:bg-blue-50 transition-all cursor-pointer text-xs"
-                                title={isAdmin ? "แก้ไขกลุ่มหน่วยงาน (Admin)" : "คลิกเพื่อปลดล็อก Admin และแก้ไขกลุ่มหน่วยงาน"}
-                              >
-                                ✎
-                              </button>
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditGroup(p.personnelId, p.name, p.affiliationGroup || "หน่วยงานภายนอก")}
+                                  className="rounded p-1 text-gray-400 hover:text-[#16265E] hover:bg-blue-50 transition-all cursor-pointer text-xs"
+                                  title="แก้ไขกลุ่มหน่วยงาน (Admin)"
+                                >
+                                  ✎
+                                </button>
+                              )}
                             </div>
                           )}
                         </td>
@@ -1114,14 +1106,16 @@ export function AlumniDirectoryTab({
                               >
                                 {t.affiliationGroup || "หน่วยงานภายนอก"}
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => handleStartEditGroup(t.id, t.name, t.affiliationGroup || "หน่วยงานภายนอก")}
-                                className="rounded p-1 text-gray-400 hover:text-[#16265E] hover:bg-blue-50 transition-all cursor-pointer text-xs"
-                                title={isAdmin ? "แก้ไขกลุ่มหน่วยงาน (Admin)" : "คลิกเพื่อปลดล็อก Admin และแก้ไขกลุ่มหน่วยงาน"}
-                              >
-                                ✎
-                              </button>
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditGroup(t.id, t.name, t.affiliationGroup || "หน่วยงานภายนอก")}
+                                  className="rounded p-1 text-gray-400 hover:text-[#16265E] hover:bg-blue-50 transition-all cursor-pointer text-xs"
+                                  title="แก้ไขกลุ่มหน่วยงาน (Admin)"
+                                >
+                                  ✎
+                                </button>
+                              )}
                             </div>
                           )}
                         </td>

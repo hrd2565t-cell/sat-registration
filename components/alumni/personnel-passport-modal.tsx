@@ -217,15 +217,17 @@ export function PersonnelPassportModal({
                 )}
                 <span>📍 {primary.affiliation}</span>
                 {primary.phone && <span>📞 {primary.phone}</span>}
-                <button
-                  type="button"
-                  onClick={handleStartEditProfile}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-[#1e1b4b] px-3 py-1 text-xs font-bold border border-amber-300/60 transition-all cursor-pointer shadow-md"
-                  title="แก้ไขข้อมูลบุคลากร คำนำหน้า ชื่อ-สกุล สังกัด กลุ่มหน่วยงาน (Admin)"
-                >
-                  <span>✏️</span>
-                  <span>แก้ไขข้อมูลบุคลากร (Admin)</span>
-                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={handleStartEditProfile}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-[#1e1b4b] px-3 py-1 text-xs font-bold border border-amber-300/60 transition-all cursor-pointer shadow-md"
+                    title="แก้ไขข้อมูลบุคลากร คำนำหน้า ชื่อ-สกุล สังกัด กลุ่มหน่วยงาน (Admin)"
+                  >
+                    <span>✏️</span>
+                    <span>แก้ไขข้อมูลบุคลากร (Admin)</span>
+                  </button>
+                )}
               </div>
 
               {/* Toast inside Passport */}
@@ -644,15 +646,17 @@ export function PersonnelPassportModal({
             กองพัฒนาบุคลากรกีฬา · การกีฬาแห่งประเทศไทย
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleStartEditProfile}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-900 shadow-xs hover:bg-amber-100 transition-colors cursor-pointer"
-              title="แก้ไขข้อมูลบุคลากร คำนำหน้า ชื่อ-สกุล สังกัด กลุ่มหน่วยงาน (Admin)"
-            >
-              <span>✏️</span>
-              <span>แก้ไขข้อมูลบุคลากร</span>
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={handleStartEditProfile}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-900 shadow-xs hover:bg-amber-100 transition-colors cursor-pointer"
+                title="แก้ไขข้อมูลบุคลากร คำนำหน้า ชื่อ-สกุล สังกัด กลุ่มหน่วยงาน (Admin)"
+              >
+                <span>✏️</span>
+                <span>แก้ไขข้อมูลบุคลากร</span>
+              </button>
+            )}
             {onOpenDigitalPass && (
               <button
                 type="button"

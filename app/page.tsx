@@ -7,6 +7,7 @@ import { Header } from "@/components/layout/header";
 import { AppHeaderNav } from "@/components/layout/app-header-nav";
 import { useAlumniStore, searchTrainees, type TraineeSearchResult } from "@/lib/alumni-store";
 import { useCourses } from "@/lib/courses-store";
+import { useIsAdmin } from "@/lib/admin-auth";
 import { PersonnelPassportModal } from "@/components/alumni/personnel-passport-modal";
 import { DigitalPassModal } from "@/components/alumni/digital-pass-modal";
 
@@ -19,6 +20,7 @@ export default function HomePage() {
 }
 
 function HomeContent() {
+  const isAdmin = useIsAdmin();
   const { trainees } = useAlumniStore();
   const { courses } = useCourses();
 
@@ -395,7 +397,7 @@ function HomeContent() {
             setPassportIdCard(null);
             setDigitalPassIdCard(id);
           }}
-          isAdmin={false}
+          isAdmin={isAdmin}
         />
       )}
 
