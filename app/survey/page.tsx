@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import QRCode from "qrcode";
 import { Header } from "@/components/layout/header";
+import { AppHeaderNav } from "@/components/layout/app-header-nav";
 import {
   FUTURE_PILLARS,
   loadSurveyTopics,
@@ -268,22 +269,20 @@ function SurveyContent() {
       {/* Top Header */}
       <Header
         rightSlot={
-          <div className="flex items-center gap-2">
-            <Link
-              href="/"
-              className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              กลับสู่หน้าแรก
-            </Link>
-            <button
-              type="button"
-              onClick={() => setIsShareModalOpen(true)}
-              className="rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>📲</span>
-              <span>แชร์ QR Code</span>
-            </button>
-          </div>
+          <AppHeaderNav
+            page="survey"
+            extraButtons={
+              <button
+                type="button"
+                onClick={() => setIsShareModalOpen(true)}
+                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+                title="แชร์ QR Code หน้าโหวต"
+              >
+                <span>📲</span>
+                <span className="hidden sm:inline">แชร์ QR Code</span>
+              </button>
+            }
+          />
         }
       />
 

@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
+import { AppHeaderNav } from "@/components/layout/app-header-nav";
 import { useAlumniStore, getTraineePassport, searchTrainees, type HistoricalTrainee, type TraineeSearchResult } from "@/lib/alumni-store";
 
 export default function VerifyPage() {
@@ -214,24 +215,7 @@ function VerifyContent() {
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       {/* Header */}
-      <Header
-        rightSlot={
-          <div className="flex items-center gap-2">
-            <Link
-              href="/"
-              className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              กลับสู่หน้าแรก
-            </Link>
-            <Link
-              href="/admin"
-              className="rounded-lg bg-[#16265E] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#1e3a8a] transition-colors"
-            >
-              เข้าสู่ระบบ (Admin)
-            </Link>
-          </div>
-        }
-      />
+      <Header rightSlot={<AppHeaderNav page="verify" />} />
 
       <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 space-y-6">
         {/* Verification Title Banner */}

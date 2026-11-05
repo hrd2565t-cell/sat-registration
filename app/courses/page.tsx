@@ -4,7 +4,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout/header";
-import { AdminNavButton } from "@/components/layout/admin-nav-button";
+import { AppHeaderNav } from "@/components/layout/app-header-nav";
 import { Stepper } from "@/components/stepper/stepper";
 import { CourseCard } from "@/components/course/course-card";
 import { CourseDetailDialog } from "@/components/course/course-detail-dialog";
@@ -49,25 +49,7 @@ function CourseCatalogContent() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Header
-        rightSlot={
-          <div className="flex items-center gap-2.5">
-            <Link
-              href="/"
-              className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              กลับสู่หน้าแรก
-            </Link>
-            <Link
-              href="/status"
-              className="whitespace-nowrap rounded-lg border border-[#d1d5db] bg-white px-3.5 py-1.5 text-xs font-semibold text-[#374151] transition-colors hover:bg-[#f8fafc]"
-            >
-              ตรวจสอบสถานะ
-            </Link>
-            <AdminNavButton />
-          </div>
-        }
-      />
+      <Header rightSlot={<AppHeaderNav page="courses" />} />
 
       <main className="mx-auto max-w-[1440px] px-5 pb-28 pt-5">
         <div className="mb-3 flex items-center gap-2 text-xs text-gray-500">

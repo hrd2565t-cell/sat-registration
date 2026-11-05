@@ -3,6 +3,7 @@
 import { useState, Suspense } from "react";
 import Link from "next/link";
 import { Header } from "@/components/layout/header";
+import { AppHeaderNav } from "@/components/layout/app-header-nav";
 import { useIsAdmin } from "@/lib/admin-auth";
 import { useAlumniStore, searchTrainees, type HistoricalTrainee, type TraineeSearchResult } from "@/lib/alumni-store";
 import { AlumniDirectoryTab } from "@/components/alumni/alumni-directory-tab";
@@ -78,24 +79,7 @@ function AlumniContent() {
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       {/* Top Header */}
-      <Header
-        rightSlot={
-          <div className="flex items-center gap-2.5">
-            <Link
-              href="/"
-              className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              กลับสู่หน้าแรก
-            </Link>
-            <Link
-              href="/admin"
-              className="rounded-lg bg-[#16265E] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#1e3a8a] transition-colors"
-            >
-              {isAdmin ? "⚙️ ระบบหลังบ้าน (Admin)" : "เข้าสู่ระบบ (Admin)"}
-            </Link>
-          </div>
-        }
-      />
+      <Header rightSlot={<AppHeaderNav page="alumni" />} />
 
       {/* Main Container */}
       <main className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 space-y-6">

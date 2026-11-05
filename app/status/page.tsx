@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout/header";
+import { AppHeaderNav } from "@/components/layout/app-header-nav";
 import { AdminNavButton } from "@/components/layout/admin-nav-button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeftIcon, DownloadIcon } from "@/components/ui/icons";
@@ -57,19 +58,7 @@ function useMounted() {
 
 function StatusHeader() {
   return (
-    <Header
-      rightSlot={
-        <div className="flex items-center gap-2 sm:gap-3">
-          <Link
-            href="/"
-            className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            กลับสู่หน้าแรก
-          </Link>
-          <AdminNavButton compact variant="outline" />
-        </div>
-      }
-    />
+    <Header rightSlot={<AppHeaderNav page="status" />} />
   );
 }
 

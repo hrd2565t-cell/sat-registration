@@ -3,31 +3,13 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Header } from "@/components/layout/header";
+import { AppHeaderNav } from "@/components/layout/app-header-nav";
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#f8fafc] via-[#f1f5f9] to-[#e2e8f0] flex flex-col justify-between text-gray-900">
       {/* Header */}
-      <Header
-        rightSlot={
-          <div className="flex items-center gap-2">
-            <Link
-              href="/verify"
-              className="rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition-colors shadow-xs flex items-center gap-1.5"
-              title="เปิดกล้องสแกน QR Code ตรวจสอบคุณวุฒิและบัตรบุคลากรหน้างาน"
-            >
-              <span>📷</span>
-              <span className="hidden sm:inline">สแกนบัตรหน้างาน</span>
-            </Link>
-            <Link
-              href="/admin"
-              className="rounded-lg bg-[#16265E] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#1e3a8a] transition-colors"
-            >
-              เข้าสู่ระบบ (Admin)
-            </Link>
-          </div>
-        }
-      />
+      <Header rightSlot={<AppHeaderNav page="home" />} />
 
       {/* Main Centered Gateway Container */}
       <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:py-14 space-y-8 flex-1 flex flex-col justify-center">
