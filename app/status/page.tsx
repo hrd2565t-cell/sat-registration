@@ -61,26 +61,10 @@ function StatusHeader() {
       rightSlot={
         <div className="flex items-center gap-2 sm:gap-3">
           <Link
-            href="/verify"
-            className={`${navLinkClass} bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs flex items-center gap-1`}
-            title="เปิดกล้องสแกน QR Code ตรวจสอบคุณวุฒิและบัตรบุคลากรหน้างาน"
+            href="/"
+            className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
           >
-            <span>📷</span>
-            <span>ตรวจสอบหน้างาน</span>
-          </Link>
-          <Link
-            href="/alumni"
-            className={`${navLinkClass} border border-blue-200 bg-white text-[#16265E] hover:bg-blue-50`}
-            title="ทำเนียบผู้ผ่านการอบรมย้อนหลัง และแดชบอร์ดประเมินโครงการ"
-          >
-            🏅 ทำเนียบ & ประเมินผล
-          </Link>
-          <Link
-            href="/status"
-            aria-current="page"
-            className={`${navLinkClass} bg-[#0b3c92] text-white hover:bg-[#09327a]`}
-          >
-            ตรวจสอบสถานะ
+            กลับสู่หน้าแรก
           </Link>
           <AdminNavButton compact variant="outline" />
         </div>

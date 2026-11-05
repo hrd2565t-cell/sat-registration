@@ -270,10 +270,10 @@ function SurveyContent() {
         rightSlot={
           <div className="flex items-center gap-2">
             <Link
-              href="/alumni"
+              href="/"
               className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
             >
-              🏅 ดูทำเนียบบุคลากร
+              กลับสู่หน้าแรก
             </Link>
             <button
               type="button"

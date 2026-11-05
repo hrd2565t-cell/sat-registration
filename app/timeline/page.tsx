@@ -23,10 +23,10 @@ export default function TimelinePage() {
         rightSlot={
           <div className="flex items-center gap-2 sm:gap-3">
             <Link
-              href="/status"
-              className={`${navLinkClass} border border-[#d1d5db] bg-white px-2.5 text-[11.5px] text-[#374151] hover:bg-[#f8fafc]`}
+              href="/"
+              className="rounded-lg border border-gray-300 bg-white px-3.5 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
             >
-              ตรวจสอบสถานะ
+              กลับสู่หน้าแรก
             </Link>
             <AdminNavButton compact />
           </div>

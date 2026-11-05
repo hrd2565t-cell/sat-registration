@@ -218,23 +218,16 @@ function VerifyContent() {
         rightSlot={
           <div className="flex items-center gap-2">
             <Link
-              href="/survey"
-              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-100 transition-colors flex items-center gap-1 shadow-2xs"
+              href="/"
+              className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
             >
-              <span>🗳️</span>
-              <span>โหวตหลักสูตร</span>
+              กลับสู่หน้าแรก
             </Link>
             <Link
-              href="/alumni"
-              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+              href="/admin"
+              className="rounded-lg bg-[#16265E] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#1e3a8a] transition-colors"
             >
-              🏅 ทำเนียบ & ประเมินผล
-            </Link>
-            <Link
-              href="/status"
-              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              ตรวจสอบสถานะ
+              เข้าสู่ระบบ (Admin)
             </Link>
           </div>
         }
