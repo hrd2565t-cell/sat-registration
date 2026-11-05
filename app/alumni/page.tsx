@@ -9,6 +9,7 @@ import { AlumniDirectoryTab } from "@/components/alumni/alumni-directory-tab";
 import { DutyTrackingTab } from "@/components/alumni/duty-tracking-tab";
 import { ProjectEvaluationTab } from "@/components/alumni/project-evaluation-tab";
 import { CourseTimelineTab } from "@/components/alumni/course-timeline-tab";
+import { FutureCurriculumTab } from "@/components/alumni/future-curriculum-tab";
 import { PersonnelPassportModal } from "@/components/alumni/personnel-passport-modal";
 import { DigitalPassModal } from "@/components/alumni/digital-pass-modal";
 import { DutyRecordModal } from "@/components/alumni/duty-record-modal";
@@ -35,7 +36,7 @@ function AlumniContent() {
     resetAlumniData,
   } = useAlumniStore();
 
-  const [activeTab, setActiveTab] = useState<"directory" | "duty" | "evaluation" | "timeline">("directory");
+  const [activeTab, setActiveTab] = useState<"directory" | "duty" | "evaluation" | "timeline" | "future">("directory");
   const [passportIdCard, setPassportIdCard] = useState<string | null>(null);
   const [digitalPassIdCard, setDigitalPassIdCard] = useState<string | null>(null);
   const [dutyTargetTrainee, setDutyTargetTrainee] = useState<HistoricalTrainee | null>(null);
@@ -309,6 +310,22 @@ function AlumniContent() {
               17 หลักสูตร
             </span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("future")}
+            className={`flex items-center gap-2 border-b-2 py-3 px-5 text-sm font-bold transition-all ${
+              activeTab === "future"
+                ? "border-[#16265E] text-[#16265E]"
+                : "border-transparent text-gray-500 hover:text-gray-800"
+            }`}
+          >
+            <span className="text-base">💡</span>
+            <span>ทิศทางพัฒนาหลักสูตรอนาคต</span>
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-900 font-extrabold">
+              5 พิมพ์เขียว
+            </span>
+          </button>
         </div>
 
         {/* Tab Content Display */}
@@ -345,6 +362,10 @@ function AlumniContent() {
             trainees={trainees}
             onOpenPassport={(idCard) => setPassportIdCard(idCard)}
           />
+        )}
+
+        {activeTab === "future" && (
+          <FutureCurriculumTab trainees={trainees} />
         )}
       </main>
 
