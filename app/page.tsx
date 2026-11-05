@@ -53,6 +53,14 @@ function CourseCatalogContent() {
         rightSlot={
           <div className="flex items-center gap-3">
             <Link
+              href="/survey"
+              className="whitespace-nowrap rounded-md border border-amber-300 bg-amber-50 px-3.5 py-2 text-[13px] font-bold text-amber-900 transition-colors hover:bg-amber-100 flex items-center gap-1.5 shadow-2xs"
+              title="ร่วมโหวตและเสนอทิศทางหลักสูตรบุคลากรกีฬาสมัยใหม่"
+            >
+              <span>🗳️</span>
+              <span>โหวตหลักสูตรอนาคต</span>
+            </Link>
+            <Link
               href="/alumni"
               className="whitespace-nowrap rounded-md border border-blue-200 bg-blue-50/70 px-3.5 py-2 text-[13px] font-semibold text-[#16265E] transition-colors hover:bg-blue-100"
               title="ทำเนียบผู้ผ่านการอบรมย้อนหลัง และแดชบอร์ดประเมินโครงการ"

@@ -412,6 +412,18 @@ export function DigitalPassModal({
             <span>🖨️</span>
             <span>พิมพ์บัตร (PDF)</span>
           </button>
+
+          {/* Survey vote shortcut */}
+          <a
+            href="/survey"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-400/50 bg-emerald-600/30 px-3.5 py-2 text-xs font-bold text-emerald-200 hover:bg-emerald-600/50 transition-all"
+            title="ร่วมโหวตหลักสูตรที่คุณอยากเรียนรู้ต่อยอดกับ กกท."
+          >
+            <span>💡</span>
+            <span>โหวตหลักสูตรที่อยากเรียน</span>
+          </a>
         </div>
 
         {saveSuccess && (

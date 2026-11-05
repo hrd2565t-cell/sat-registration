@@ -218,6 +218,13 @@ function VerifyContent() {
         rightSlot={
           <div className="flex items-center gap-2">
             <Link
+              href="/survey"
+              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-100 transition-colors flex items-center gap-1 shadow-2xs"
+            >
+              <span>🗳️</span>
+              <span>โหวตหลักสูตร</span>
+            </Link>
+            <Link
               href="/alumni"
               className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
             >

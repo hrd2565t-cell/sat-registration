@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import Image from "next/image";
+import QRCode from "qrcode";
 import type { HistoricalTrainee } from "@/lib/alumni-store";
 import {
   FUTURE_PILLARS,
@@ -30,6 +32,9 @@ export function FutureCurriculumTab({ trainees }: FutureCurriculumTabProps) {
   // Modal states
   const [isSuggestModalOpen, setIsSuggestModalOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [surveyQrDataUrl, setSurveyQrDataUrl] = useState<string>("");
+  const [isCopiedSurveyLink, setIsCopiedSurveyLink] = useState(false);
   const [expandedCourseId, setExpandedCourseId] = useState<string | null>("course-future-1");
 
   // Suggest Form State
@@ -59,6 +64,17 @@ export function FutureCurriculumTab({ trainees }: FutureCurriculumTabProps) {
       }
     } catch {
       // ignore
+    }
+
+    if (typeof window !== "undefined") {
+      const origin = window.location.origin;
+      QRCode.toDataURL(`${origin}/survey`, {
+        width: 320,
+        margin: 2,
+        color: { dark: "#16265E", light: "#ffffff" },
+      })
+        .then((url) => setSurveyQrDataUrl(url))
+        .catch((e) => console.error("Error generating QR:", e));
     }
   }, []);
 
@@ -223,6 +239,16 @@ export function FutureCurriculumTab({ trainees }: FutureCurriculumTabProps) {
 
           {/* Action buttons */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsQrModalOpen(true)}
+              className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-4 py-2.5 text-xs sm:text-sm font-bold text-white transition-all shadow-md cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+              title="เปิด QR Code หน้าโหวตสำหรับฉายขึ้นจอโปรเจกเตอร์หรือให้ผู้เข้าอบรมสแกน"
+            >
+              <span>📲</span>
+              <span>QR Code หน้าโหวต (/survey)</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setIsSuggestModalOpen(true)}
@@ -910,6 +936,77 @@ export function FutureCurriculumTab({ trainees }: FutureCurriculumTabProps) {
           courses={PROPOSED_FUTURE_COURSES}
           traineesCount={distinctTraineesCount}
         />
+      )}
+
+      {/* 7. QR Code Projector & Share Modal */}
+      {isQrModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-gray-200 overflow-hidden text-center p-6 sm:p-8 space-y-5 animate-in fade-in">
+            <button
+              type="button"
+              onClick={() => setIsQrModalOpen(false)}
+              className="absolute right-4 top-4 text-gray-400 hover:text-gray-700 text-lg font-bold p-1 cursor-pointer"
+            >
+              ✕
+            </button>
+
+            <div className="space-y-1.5">
+              <span className="inline-block p-3 rounded-2xl bg-emerald-50 text-3xl">📲</span>
+              <h3 className="text-lg font-black text-[#16265E]">
+                QR Code สำหรับฉายขึ้นจอหรือให้สแกน
+              </h3>
+              <p className="text-xs text-gray-500">
+                เปิดภาพนี้ขึ้นจอโปรเจกเตอร์ในห้องอบรม เพื่อให้ผู้เข้ารับการอบรมสแกนร่วมโหวตจากสมาร์ตโฟนได้ทันที
+              </p>
+            </div>
+
+            {/* Large QR Display */}
+            {surveyQrDataUrl ? (
+              <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-2xl border border-gray-200">
+                <Image
+                  src={surveyQrDataUrl}
+                  alt="QR Code สำหรับโหวตหลักสูตร กกท."
+                  width={260}
+                  height={260}
+                  className="rounded-xl shadow-xs"
+                  unoptimized
+                />
+                <p className="text-[11px] font-mono font-bold text-gray-600 mt-2 bg-white px-3 py-1 rounded-full border border-gray-200">
+                  /survey
+                </p>
+              </div>
+            ) : (
+              <div className="h-64 flex items-center justify-center text-xs text-gray-400">
+                กำลังสร้าง QR Code...
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    navigator.clipboard.writeText(`${window.location.origin}/survey`);
+                    setIsCopiedSurveyLink(true);
+                    setTimeout(() => setIsCopiedSurveyLink(false), 2000);
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                <span>{isCopiedSurveyLink ? "✓ คัดลอกแล้ว" : "📋 คัดลอกลิงก์"}</span>
+              </button>
+
+              <a
+                href="/survey"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-[#16265E] hover:bg-[#1e3a8a] text-white py-2.5 text-xs font-bold transition-colors cursor-pointer"
+              >
+                <span>🌐 เปิดหน้าโหวตจริง</span>
+              </a>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
