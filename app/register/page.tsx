@@ -29,6 +29,7 @@ import {
 } from "@/lib/applications-store";
 import { ConflictDialog } from "@/components/register/conflict-dialog";
 import { isValidThaiIdCard } from "@/lib/validation";
+import { useAlumniStore } from "@/lib/alumni-store";
 
 const labelClass = "text-[12.5px] font-medium text-[#1f2937]";
 
@@ -81,16 +82,25 @@ function RegistrationContent() {
   const router = useRouter();
   const { courses } = useCourses();
   const { applications } = useApplications();
+  const { trainees } = useAlumniStore();
   const course =
     getCourseById(searchParams.get("course"), courses) ??
     getDefaultCourse(courses);
+
   const steps = [
-    { label: "1. เลือกหลักสูตร", href: `/?course=${course.id}` },
+    { label: "1. เลือกหลักสูตร", href: `/courses?course=${course.id}` },
     { label: "2. กรอกข้อมูลและส่งเอกสาร" },
     { label: "3. ส่งข้อมูลสมัคร" },
   ];
+
   const [name, setName] = useState("");
   const [idCard, setIdCard] = useState("");
+
+  const priorTraineeRecords = useMemo(() => {
+    const digits = idCard.replace(/\D/g, "");
+    if (digits.length !== 13) return [];
+    return trainees.filter((t) => t.idCard.replace(/\D/g, "") === digits);
+  }, [idCard, trainees]);
   const [affiliation, setAffiliation] = useState<string>(
     TARGET_GROUPS[0].label
   );
@@ -438,6 +448,25 @@ function RegistrationContent() {
                   <p className="mt-1 text-[11px] font-medium text-[#dc2626]">
                     ⚠️ หมายเลขบัตรประชาชนไม่ถูกต้องตามสูตรคำนวณของกรมการปกครอง (กรุณาตรวจสอบตัวเลขอีกครั้ง)
                   </p>
+                )}
+
+                {priorTraineeRecords.length > 0 && (
+                  <div className="mt-1 rounded-xl border border-emerald-300 bg-emerald-50/80 p-2.5 text-xs text-emerald-900 shadow-2xs animate-in fade-in">
+                    <p className="font-bold flex items-center gap-1.5 text-emerald-800">
+                      <span>🎉</span>
+                      <span>พบประวัติบุคลากรในทำเนียบ กกท. (สำเร็จการอบรมแล้ว {priorTraineeRecords.length} หลักสูตร)</span>
+                    </p>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {priorTraineeRecords.map((rec) => (
+                        <span key={rec.id} className="rounded-md bg-white px-2 py-0.5 text-[10.5px] font-semibold text-emerald-800 border border-emerald-200">
+                          ✓ {rec.courseTitle} ({rec.yearBE})
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-emerald-700 mt-1">
+                      * คุณสมบัติพื้นฐานและประวัติการพัฒนาบุคลากรกีฬาได้รับการรับรองแล้ว
+                    </p>
+                  </div>
                 )}
 
                 {!eligibility.allowed && eligibility.existingRecord && (

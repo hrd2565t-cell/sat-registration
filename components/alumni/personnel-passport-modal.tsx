@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   type HistoricalTrainee,
   type DutyRecord,
@@ -148,6 +148,22 @@ export function PersonnelPassportModal({
       ? `${cleanId.slice(0, 1)}-${cleanId.slice(1, 5)}-XXXXX-${cleanId.slice(10, 12)}-${cleanId.slice(12)}`
       : primary.idCard;
 
+  // PDPA Protection: Mask phone number for public visitors, reveal full number only to authenticated admins
+  const maskedPhone = useMemo(() => {
+    if (!primary.phone) return "";
+    if (isAdmin) return primary.phone;
+    const digits = primary.phone.replace(/\D/g, "");
+    if (digits.length === 10) {
+      return `${digits.slice(0, 3)}-XXX-${digits.slice(6)}`;
+    }
+    if (digits.length === 9) {
+      return `${digits.slice(0, 2)}-XXX-${digits.slice(5)}`;
+    }
+    return primary.phone.length > 5
+      ? `${primary.phone.slice(0, 3)}***${primary.phone.slice(-2)}`
+      : primary.phone;
+  }, [primary.phone, isAdmin]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/65 p-3 sm:p-5 backdrop-blur-xs"
@@ -216,7 +232,17 @@ export function PersonnelPassportModal({
                   </span>
                 )}
                 <span>📍 {primary.affiliation}</span>
-                {primary.phone && <span>📞 {primary.phone}</span>}
+                {primary.phone && (
+                  <span
+                    title={
+                      isAdmin
+                        ? "เบอร์โทรศัพท์ (เจ้าหน้าที่ผู้ดูแลระบบ)"
+                        : "เบอร์โทรศัพท์ (ซ่อนบางส่วนเพื่อความปลอดภัยตาม PDPA)"
+                    }
+                  >
+                    📞 {maskedPhone}
+                  </span>
+                )}
                 {isAdmin && (
                   <button
                     type="button"

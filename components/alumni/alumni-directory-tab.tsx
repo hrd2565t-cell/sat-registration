@@ -762,7 +762,10 @@ export function AlumniDirectoryTab({
         <div className="overflow-x-auto">
           {viewMode === "person" ? (
             /* ================= MODE 1: 1 PERSON PER ROW ================= */
-            <table className="w-full text-left text-xs">
+            <>
+              {/* Desktop Table View */}
+              <div className="hidden md:block">
+                <table className="w-full text-left text-xs">
               <thead className="bg-[#16265E] text-white">
                 <tr>
                   <th className="py-3 px-3.5 font-bold">#</th>
@@ -972,12 +975,12 @@ export function AlumniDirectoryTab({
                             >
                               🪪 พาสปอร์ต
                             </button>
-                            {p.records[0] && (
+                            {isAdmin && p.records[0] && (
                               <button
                                 type="button"
                                 onClick={() => onOpenDutyRecord(p.records[0])}
-                                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                                title="บันทึกการปฏิบัติหน้าที่"
+                                className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100 transition-colors cursor-pointer"
+                                title="บันทึกการปฏิบัติหน้าที่ (Admin)"
                               >
                                 + บันทึกงาน
                               </button>
@@ -990,8 +993,123 @@ export function AlumniDirectoryTab({
                 )}
               </tbody>
             </table>
-          ) : (
-            /* ================= MODE 2: CERTIFICATION RECORDS VIEW ================= */
+          </div>
+
+          {/* Mobile View Cards (Optimized for Phones) */}
+          <div className="block md:hidden divide-y divide-gray-100">
+            {pagedPersons.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                <span className="text-3xl">🔍</span>
+                <p className="mt-2 text-sm font-semibold">ไม่พบข้อมูลที่ตรงกับเงื่อนไขการค้นหา</p>
+                <p className="text-xs text-gray-400 mt-0.5">ลองปรับคำค้นหา หรือรีเซ็ตตัวกรองด้านบน</p>
+              </div>
+            ) : (
+              pagedPersons.map((p, index) => {
+                const globalIndex = startIndex + index + 1;
+                return (
+                  <div key={p.personnelId || globalIndex} className="p-4 bg-white hover:bg-blue-50/20 transition-colors space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#16265E] to-[#2563eb] font-bold text-white text-xs shadow-xs">
+                          {p.name.replace(/^(นาย|นางสาว|นาง|ดร\.|นาวาเอก|นาวาโท|นาวาตรี|เรือเอก|ร\.ต\.อ\.|พ\.จ\.ต\.|ส\.อ\.)\s*/, "").slice(0, 2)}
+                        </div>
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => onOpenPassport(p.personnelId)}
+                            className="text-left font-bold text-[#16265E] hover:underline text-sm leading-snug cursor-pointer"
+                          >
+                            {p.name}
+                          </button>
+                          <p className="text-[11px] text-gray-500 font-mono">
+                            #{globalIndex} · รหัส {p.personnelId} · {p.firstYearBE === p.latestYearBE ? p.latestYearBE : `${p.firstYearBE} – ${p.latestYearBE}`}
+                          </p>
+                        </div>
+                      </div>
+                      {p.status === "active" ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200 shrink-0">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Active ({p.totalDuties})
+                        </span>
+                      ) : p.status === "pending_verification" ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 border border-amber-200 shrink-0">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                          รอตรวจ
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 shrink-0">
+                          ไม่มีบันทึก
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Affiliation & Group */}
+                    <div className="rounded-xl bg-gray-50/80 p-2.5 text-xs text-gray-700 space-y-1 border border-gray-100">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[11px] text-gray-500">สังกัด / กลุ่มหน่วยงาน:</span>
+                        <span className={`inline-flex items-center rounded-md px-1.5 py-0.2 text-[10px] font-semibold border ${getGroupBadgeClass(p.affiliationGroup)}`}>
+                          {p.affiliationGroup || "หน่วยงานภายนอก"}
+                        </span>
+                      </div>
+                      <p className="font-semibold text-gray-800 line-clamp-2">
+                        🏛️ {p.affiliation}
+                      </p>
+                    </div>
+
+                    {/* Courses */}
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-gray-500 font-medium">หลักสูตรที่สำเร็จ ({p.records.length}):</p>
+                      <div className="flex flex-wrap gap-1">
+                        {p.records.map((r) => (
+                          <span key={r.id} className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-[#16265E] border border-blue-200">
+                            <span>🏅</span>
+                            <span>{r.courseTitle}</span>
+                            <span className="text-gray-400 font-normal">({r.yearBE})</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
+                      {onOpenDigitalPass && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenDigitalPass(p.personnelId)}
+                          className="flex-1 rounded-lg bg-amber-50 py-1.5 text-xs font-bold text-amber-900 border border-amber-300 hover:bg-amber-100 transition-colors text-center cursor-pointer shadow-2xs"
+                        >
+                          📱 บัตรดิจิทัล
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => onOpenPassport(p.personnelId)}
+                        className="flex-1 rounded-lg bg-[#16265E] py-1.5 text-xs font-semibold text-white hover:bg-[#1e3a8a] transition-colors text-center cursor-pointer shadow-2xs"
+                      >
+                        🪪 ดูพาสปอร์ต
+                      </button>
+                      {isAdmin && p.records[0] && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenDutyRecord(p.records[0])}
+                          className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 transition-colors cursor-pointer"
+                          title="บันทึกการปฏิบัติหน้าที่ (Admin)"
+                        >
+                          + บันทึกงาน
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </>
+      ) : (
+        /* ================= MODE 2: CERTIFICATION RECORDS VIEW ================= */
+        <>
+          {/* Desktop Table View */}
+          <div className="hidden md:block">
             <table className="w-full text-left text-xs">
               <thead className="bg-[#16265E] text-white">
                 <tr>
@@ -1178,14 +1296,16 @@ export function AlumniDirectoryTab({
                             >
                               🪪 พาสปอร์ต
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => onOpenDutyRecord(t)}
-                              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
-                              title="บันทึกการปฏิบัติหน้าที่"
-                            >
-                              + บันทึกงาน
-                            </button>
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenDutyRecord(t)}
+                                className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100 transition-colors cursor-pointer"
+                                title="บันทึกการปฏิบัติหน้าที่ (Admin)"
+                              >
+                                + บันทึกงาน
+                              </button>
+                            )}
                             {isAdmin && onDeleteTrainee && (
                               <button
                                 type="button"
@@ -1213,7 +1333,106 @@ export function AlumniDirectoryTab({
                 )}
               </tbody>
             </table>
-          )}
+          </div>
+
+          {/* Mobile View Cards Mode 2 (Optimized for Phones) */}
+          <div className="block md:hidden divide-y divide-gray-100">
+            {pagedRecords.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                <span className="text-3xl">🔍</span>
+                <p className="mt-2 text-sm font-semibold">ไม่พบข้อมูลที่ตรงกับเงื่อนไขการค้นหา</p>
+                <p className="text-xs text-gray-400 mt-0.5">ลองปรับคำค้นหา หรือรีเซ็ตตัวกรองด้านบน</p>
+              </div>
+            ) : (
+              pagedRecords.map((t, index) => {
+                const globalIndex = startIndex + index + 1;
+                const identifier = t.personnelId || t.idCard || t.id;
+                return (
+                  <div key={t.id} className="p-4 bg-white hover:bg-blue-50/20 transition-colors space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#16265E] to-[#2563eb] font-bold text-white text-xs shadow-xs">
+                          {t.name.slice(0, 2)}
+                        </div>
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => onOpenPassport(identifier)}
+                            className="text-left font-bold text-[#16265E] hover:underline text-sm leading-snug cursor-pointer"
+                          >
+                            {t.name}
+                          </button>
+                          <p className="text-[11px] text-gray-500 font-mono">
+                            #{globalIndex} · {t.personnelId ? `รหัส ${t.personnelId}` : identifier}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="rounded-md bg-blue-100 px-2 py-0.5 text-[11px] font-bold text-[#16265E] shrink-0">
+                        พ.ศ. {t.yearBE}
+                      </span>
+                    </div>
+
+                    {/* Course Info */}
+                    <div className="rounded-xl bg-blue-50/70 p-2.5 text-xs text-blue-900 border border-blue-100 space-y-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-bold">{t.courseTitle}</span>
+                        {t.courseCategory && (
+                          <span className="text-[10px] text-gray-500">
+                            ({t.courseCategory})
+                          </span>
+                        )}
+                      </div>
+                      {t.certNo && (
+                        <p className="text-[11px] text-gray-500 font-mono">
+                          วุฒิบัตร: {t.certNo}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Affiliation */}
+                    <div className="text-xs text-gray-600 flex items-center justify-between gap-2">
+                      <span className="truncate">🏛️ {t.affiliation}</span>
+                      <span className={`shrink-0 inline-flex items-center rounded-md px-1.5 py-0.2 text-[10px] font-semibold border ${getGroupBadgeClass(t.affiliationGroup)}`}>
+                        {t.affiliationGroup || "หน่วยงานภายนอก"}
+                      </span>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
+                      {onOpenDigitalPass && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenDigitalPass(identifier)}
+                          className="flex-1 rounded-lg bg-amber-50 py-1.5 text-xs font-bold text-amber-900 border border-amber-300 hover:bg-amber-100 transition-colors text-center cursor-pointer shadow-2xs"
+                        >
+                          📱 บัตรดิจิทัล
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => onOpenPassport(identifier)}
+                        className="flex-1 rounded-lg bg-[#16265E] py-1.5 text-xs font-semibold text-white hover:bg-[#1e3a8a] transition-colors text-center cursor-pointer shadow-2xs"
+                      >
+                        🪪 ดูพาสปอร์ต
+                      </button>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenDutyRecord(t)}
+                          className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 transition-colors cursor-pointer"
+                          title="บันทึกการปฏิบัติหน้าที่ (Admin)"
+                        >
+                          + บันทึกงาน
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
         </div>
 
         {/* Pagination Bar */}

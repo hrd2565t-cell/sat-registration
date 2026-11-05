@@ -6,6 +6,7 @@ import Image from "next/image";
 import QRCode from "qrcode";
 import { Header } from "@/components/layout/header";
 import { AppHeaderNav } from "@/components/layout/app-header-nav";
+import { SurveyLeaderboard } from "@/components/survey/survey-leaderboard";
 import {
   FUTURE_PILLARS,
   loadSurveyTopics,
@@ -380,6 +381,13 @@ function SurveyContent() {
             })}
           </div>
         </div>
+
+        {/* Live Leaderboard Card: Top 5 Trending Skills */}
+        <SurveyLeaderboard
+          topics={topics}
+          votedTopicIds={votedTopicIds}
+          onVote={handleVote}
+        />
 
         {/* Step 2: Filters & Search */}
         <div className="space-y-3">

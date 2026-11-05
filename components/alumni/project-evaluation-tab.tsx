@@ -19,6 +19,7 @@ import { loginAdmin } from "@/lib/admin-auth";
 import * as XLSX from "xlsx";
 import { MatrixReportPrintModal } from "./matrix-report-print-modal";
 import { AnnualCohortPrintModal } from "./annual-cohort-print-modal";
+import { ExecutiveBriefingPrintModal } from "./executive-briefing-print-modal";
 
 interface ProjectEvaluationTabProps {
   trainees: HistoricalTrainee[];
@@ -69,6 +70,7 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
   // Scoped Print Modal States
   const [isMatrixPrintModalOpen, setIsMatrixPrintModalOpen] = useState<boolean>(false);
   const [isAnnualCohortPrintModalOpen, setIsAnnualCohortPrintModalOpen] = useState<boolean>(false);
+  const [isExecutiveBriefingOpen, setIsExecutiveBriefingOpen] = useState<boolean>(false);
 
   // Dynamic categories from actual trainee data
   const allCategories = useMemo(() => {
@@ -772,6 +774,15 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
               >
                 <span>🖨️</span>
                 <span>พิมพ์รายงาน / PDF</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsExecutiveBriefingOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#16265E] px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-[#111e4a] transition-colors cursor-pointer"
+                title="เปิดเอกสารรายงานสรุปผลสัมฤทธิ์โครงการส่งผู้บริหาร กกท. (Executive Briefing A4)"
+              >
+                <span>📑</span>
+                <span>รายงานผู้บริหาร (Executive Briefing)</span>
               </button>
             </div>
           </div>
@@ -2285,6 +2296,18 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
           onClose={() => setIsAnnualCohortPrintModalOpen(false)}
           annualCohorts={annualCohorts}
           stats={stats}
+        />
+      )}
+
+      {/* Executive Briefing PDF & Print Modal */}
+      {isExecutiveBriefingOpen && (
+        <ExecutiveBriefingPrintModal
+          onClose={() => setIsExecutiveBriefingOpen(false)}
+          trainees={trainees}
+          matrixData={matrixData}
+          matrixTotals={matrixTotals}
+          cohortSummary={currentCohortSummary}
+          overallAchievementRate={overallAchievementRate}
         />
       )}
     </div>

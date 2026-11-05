@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useMemo, useSyncExternalStore } from "react";
 import { AiVerdictBadge } from "@/components/admin/ai-verdict-badge";
 import { DocumentPreviewDialog } from "@/components/admin/document-preview-dialog";
 import {
@@ -23,6 +23,7 @@ import {
 } from "@/lib/applications-store";
 import { adminUser } from "@/lib/admin-data";
 import { getDocumentFromStorage } from "@/lib/document-storage";
+import { useAlumniStore, addTrainee } from "@/lib/alumni-store";
 
 const emptySubscribe = () => () => {};
 
@@ -313,6 +314,64 @@ export function ApplicantDetail({
     setNotice("เพิ่มหมายเหตุเรียบร้อยแล้ว");
   };
 
+  const { trainees } = useAlumniStore();
+  const isAlreadyAlumni = useMemo(() => {
+    if (!applicant) return false;
+    return trainees.some(
+      (t) =>
+        (t.idCard === applicant.idCard || t.name === applicant.name) &&
+        t.courseTitle === applicant.courseTitle
+    );
+  }, [trainees, applicant]);
+
+  const handlePromoteToAlumni = () => {
+    if (!applicant) return;
+    if (isAlreadyAlumni) {
+      setNotice(`"${applicant.name}" ได้รับการบันทึกเข้าสู่ทำเนียบบุคลากรในหลักสูตรนี้เรียบร้อยแล้ว`);
+      return;
+    }
+    const currentYearBE = new Date().getFullYear() + 543;
+    const certCode = `SAT-${currentYearBE}-${applicant.ref.replace(/\D/g, "").slice(-4) || Math.floor(1000 + Math.random() * 9000)}`;
+
+    const match = applicant.name.match(
+      /^(นาย|นางสาว|นาง|ดร\.|นาวาเอก|นาวาโท|นาวาตรี|เรือเอก|พ\.ต\.อ\.|ร\.ต\.อ\.|พ\.จ\.ต\.|ส\.อ\.|ว่าที่ ร\.ต\.|ว่าที่ร้อยตรี)\s*(.*)$/
+    );
+    const detectedPrefix = match ? match[1] : "";
+    const nameWithoutPrefix = match ? match[2] : applicant.name;
+    const nameParts = nameWithoutPrefix.trim().split(/\s+/);
+    const firstName = nameParts[0] || applicant.name;
+    const lastName = nameParts.slice(1).join(" ") || "";
+
+    addTrainee({
+      name: applicant.name,
+      prefix: detectedPrefix,
+      firstName,
+      lastName,
+      idCard: applicant.idCard,
+      phone: applicant.phone,
+      email: applicant.email,
+      affiliation: applicant.affiliation || "การกีฬาแห่งประเทศไทย",
+      affiliationGroup: applicant.affiliation.includes("สมาคมกีฬาแห่งประเทศไทย")
+        ? "สมาคมกีฬาแห่งประเทศไทย"
+        : applicant.affiliation.includes("จังหวัด")
+        ? "สมาคมกีฬาแห่งจังหวัด"
+        : applicant.affiliation.includes("กกท") || applicant.affiliation.includes("การกีฬาแห่งประเทศไทย")
+        ? "การกีฬาแห่งประเทศไทย"
+        : "หน่วยงานภายนอก",
+      sportsType: "ทั่วไป",
+      yearBE: currentYearBE,
+      courseId: applicant.courseId,
+      courseTitle: applicant.courseTitle || applicant.course,
+      courseCategory: (applicant.courseTitle || applicant.course).includes("ผู้บริหาร") ? "ผู้บริหารกีฬา" : "ผู้ฝึกสอนกีฬา",
+      batch: `รุ่นปี พ.ศ. ${currentYearBE}`,
+      certNo: certCode,
+      passedDate: new Date().toISOString().split("T")[0],
+      status: "active",
+    });
+
+    setNotice(`🎉 ออกวุฒิบัตรเลขที่ ${certCode} และโอนย้าย "${applicant.name}" เข้าสู่ทำเนียบบุคลากรกีฬาสำเร็จ! พร้อมออกพาสปอร์ตดิจิทัลเรียบร้อย`);
+  };
+
   return (
     <div className="mx-auto w-full max-w-[1220px] pb-24 lg:pb-0">
       <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
@@ -340,14 +399,29 @@ export function ApplicantDetail({
             พิมพ์ใบสมัคร (A4)
           </a>
           {applicant.status === "approved" && (
-            <a
-              href={`/print/pass?ref=${encodeURIComponent(applicant.ref)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-8 items-center rounded-[5px] bg-[#059669] px-3 text-[11px] font-medium text-white transition-colors hover:bg-[#047857]"
-            >
-              พิมพ์บัตรเข้าร่วม (Pass)
-            </a>
+            <>
+              <a
+                href={`/print/pass?ref=${encodeURIComponent(applicant.ref)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-8 items-center rounded-[5px] bg-[#059669] px-3 text-[11px] font-medium text-white transition-colors hover:bg-[#047857]"
+              >
+                พิมพ์บัตรเข้าร่วม (Pass)
+              </a>
+              <button
+                type="button"
+                onClick={handlePromoteToAlumni}
+                disabled={isAlreadyAlumni}
+                className={`inline-flex h-8 items-center gap-1.5 rounded-[5px] px-3 text-[11px] font-bold shadow-xs transition-colors cursor-pointer ${
+                  isAlreadyAlumni
+                    ? "bg-purple-100 text-purple-800 border border-purple-300 cursor-default"
+                    : "bg-gradient-to-r from-purple-700 to-indigo-800 text-white hover:from-purple-800 hover:to-indigo-900"
+                }`}
+                title="ออกวุฒิบัตรและโอนย้ายเข้าทำเนียบบุคลากรกีฬา (Alumni Registry)"
+              >
+                <span>{isAlreadyAlumni ? "✓ อยู่ในทำเนียบแล้ว" : "🎓 ออกวุฒิบัตร & โอนเข้าทำเนียบ"}</span>
+              </button>
+            </>
           )}
         </div>
       </div>
