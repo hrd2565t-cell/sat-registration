@@ -8,7 +8,6 @@ import defaultTimelineSettings from "@/data/timeline-settings.json";
 import {
   formatCourseDateFields,
   getCourseScheduleDates,
-  getGlobalCourseSchedule,
   parseCourseDateFields,
   parseCourseDateSessions,
   type Course,
@@ -405,92 +404,6 @@ function Legend({
   );
 }
 
-function GlobalScheduleTrack({
-  registrationDate,
-  resultDate,
-}: {
-  registrationDate: string;
-  resultDate: string;
-}) {
-  const scheduleBars = buildScheduleBars(
-    registrationDate,
-    resultDate,
-    "กำหนดการกลางทุกหลักสูตร"
-  );
-  const regBar = scheduleBars[0];
-  const resBar = scheduleBars[1];
-
-  const regPlaceLeft = regBar ? regBar.left + regBar.width > 64 : false;
-  const resPlaceLeft = resBar ? resBar.left + resBar.width > 64 : false;
-
-  return (
-    <>
-      {/* Lane 1 (Top): Registration Period */}
-      {regBar && (
-        <>
-          <div
-            title={regBar.tooltip}
-            className="absolute top-[7px] z-20 flex h-[20px] items-center justify-center rounded-[4px] bg-gradient-to-r from-[#1869bc] to-[#1d4ed8] px-1.5 text-[9px] font-bold text-white shadow-[0_2px_4px_rgba(24,105,188,0.25)] ring-1 ring-white"
-            style={{ left: `${regBar.left}%`, width: `${regBar.width}%` }}
-          >
-            {regBar.width >= 4.2 ? (
-              <span className="truncate">📥 รับสมัคร</span>
-            ) : regBar.width >= 1.8 ? (
-              <span className="text-[9px]">📥</span>
-            ) : null}
-          </div>
-          <div
-            className="pointer-events-none absolute top-[7px] z-30 flex h-[20px] items-center whitespace-nowrap"
-            style={
-              regPlaceLeft
-                ? { right: `${100 - regBar.left + 0.5}%` }
-                : { left: `${regBar.left + regBar.width + 0.5}%` }
-            }
-          >
-            <span className="inline-flex items-center gap-1 rounded-md border border-[#bfdbfe] bg-[#eff6ff]/95 px-2 py-0.5 text-[9.5px] font-bold text-[#1e40af] shadow-2xs">
-              <span>เปิดรับสมัคร: {registrationDate}</span>
-            </span>
-          </div>
-        </>
-      )}
-
-      {/* Lane 2 (Bottom): Result Announcement Date */}
-      {resBar && (
-        <>
-          <div
-            title={resBar.tooltip}
-            className="absolute bottom-[7px] z-20 flex h-[20px] min-w-[10px] items-center justify-center rounded-[4px] bg-gradient-to-r from-[#dc2626] to-[#b91c1c] px-1 text-[9px] font-bold text-white shadow-[0_2px_4px_rgba(220,38,38,0.28)] ring-1 ring-white"
-            style={{
-              left: `${resBar.left}%`,
-              width: `${Math.max(1.0, resBar.width)}%`,
-            }}
-          >
-            {resBar.width >= 1.4 && (
-              <span className="text-[9px] leading-none">📣</span>
-            )}
-          </div>
-          <div
-            className="pointer-events-none absolute bottom-[7px] z-30 flex h-[20px] items-center whitespace-nowrap"
-            style={
-              resPlaceLeft
-                ? { right: `${100 - resBar.left + 0.5}%` }
-                : {
-                    left: `${
-                      resBar.left + Math.max(1.0, resBar.width) + 0.5
-                    }%`,
-                  }
-            }
-          >
-            <span className="inline-flex items-center gap-1 rounded-md border border-[#fecaca] bg-[#fef2f2]/95 px-2 py-0.5 text-[9.5px] font-bold text-[#991b1b] shadow-2xs">
-              <span>ประกาศผล: {resultDate}</span>
-            </span>
-          </div>
-        </>
-      )}
-    </>
-  );
-}
-
 function CourseTrainingTrack({
   row,
   showSubPhases,
@@ -508,36 +421,38 @@ function CourseTrainingTrack({
       ? `${row.title} — จัดอบรม ${row.sessions.length} ช่วง (รวม ${row.totalDays} วัน): ${sessionDetails}`
       : `${row.title} — จัดอบรม (${row.totalDays} วัน): ${row.dateSummary}`;
 
-  const showCustomPhase = showSubPhases && row.isCustomSchedule;
+  const showSubBars = showSubPhases && row.subPhaseBars.length > 0;
   const regBar = row.subPhaseBars[0];
   const resBar = row.subPhaseBars[1];
 
   return (
     <>
-      {/* Optional custom registration/result lane ONLY for courses that override the global schedule */}
-      {showCustomPhase && (
+      {/* Registration and result phase for this specific course */}
+      {showSubBars && (
         <>
           {regBar && (
             <div
-              title={regBar.tooltip}
-              className="absolute top-[5px] z-10 flex h-[16px] items-center justify-center rounded-[3px] bg-[#1869bc] px-1 text-[8px] font-bold text-white shadow-2xs"
-              style={{ left: `${regBar.left}%`, width: `${regBar.width}%` }}
+              title={`📥 รับสมัคร: ${row.registrationDate} (${row.title})`}
+              className="absolute top-[4px] z-10 flex h-[16px] items-center justify-center rounded-[3px] bg-[#1869bc] px-1 text-[8px] font-bold text-white shadow-2xs"
+              style={{ left: `${regBar.left}%`, width: `${Math.max(1.8, regBar.width)}%` }}
             >
-              {regBar.width >= 3.5 && (
+              {regBar.width >= 3.0 ? (
                 <span className="truncate">📥 รับสมัคร</span>
+              ) : (
+                <span className="leading-none text-[8.5px]">📥</span>
               )}
             </div>
           )}
           {resBar && (
             <div
-              title={resBar.tooltip}
-              className="absolute top-[5px] z-15 flex h-[16px] min-w-[8px] items-center justify-center rounded-[3px] bg-[#c4080f] px-0.5 text-[8px] font-bold text-white shadow-2xs"
+              title={`📣 ประกาศผล: ${row.resultDate} (${row.title})`}
+              className="absolute top-[4px] z-15 flex h-[16px] min-w-[8px] items-center justify-center rounded-[3px] bg-[#c4080f] px-0.5 text-[8px] font-bold text-white shadow-2xs"
               style={{
                 left: `${resBar.left}%`,
                 width: `${Math.max(0.9, resBar.width)}%`,
               }}
             >
-              {resBar.width >= 1.4 && <span>📣</span>}
+              <span className="leading-none text-[8.5px]">📣</span>
             </div>
           )}
         </>
@@ -548,7 +463,7 @@ function CourseTrainingTrack({
         <div
           title={fullTooltip}
           className={`absolute z-10 h-[8px] rounded-[2px] border border-[#16803c]/45 bg-[#bbf7d0]/85 ${
-            showCustomPhase ? "bottom-[12px]" : "top-1/2 -translate-y-1/2"
+            showSubBars ? "bottom-[12px]" : "top-1/2 -translate-y-1/2"
           }`}
           style={{ left: `${row.spanLeft}%`, width: `${row.spanWidth}%` }}
         />
@@ -563,7 +478,7 @@ function CourseTrainingTrack({
               : `${seg.label} (${row.title})`
           }
           className={`group absolute z-20 flex h-[22px] items-center justify-center overflow-hidden rounded-[4px] bg-gradient-to-r from-[#16a34a] to-[#15803d] px-1 text-[9px] font-bold text-white shadow-[0_1px_4px_rgba(22,163,74,0.28)] ring-1 ring-white transition-transform hover:z-30 hover:scale-105 ${
-            showCustomPhase ? "bottom-[5px]" : "top-1/2 -translate-y-1/2"
+            showSubBars ? "bottom-[4px]" : "top-1/2 -translate-y-1/2"
           }`}
           style={{ left: `${seg.left}%`, width: `${seg.width}%` }}
         >
@@ -579,8 +494,8 @@ function CourseTrainingTrack({
       <div
         title={fullTooltip}
         className={`pointer-events-none absolute z-30 whitespace-nowrap ${
-          showCustomPhase
-            ? "bottom-[5px] flex h-[22px] items-center"
+          showSubBars
+            ? "bottom-[4px] flex h-[22px] items-center"
             : "top-1/2 -translate-y-1/2"
         }`}
         style={
@@ -677,7 +592,6 @@ export function TimelineSchedule() {
 
   const canEdit = isAdmin && !previewAsApplicant;
   const effectiveHighlightFreeSlots = canEdit && highlightFreeSlots;
-  const globalSchedule = getGlobalCourseSchedule(courses);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1084,50 +998,6 @@ export function TimelineSchedule() {
               </thead>
 
               <tbody>
-                {/* Dedicated Global Registration & Result Schedule Summary Row */}
-                {showSubPhases && (
-                  <tr className="bg-gradient-to-r from-[#eff6ff]/70 to-[#fef2f2]/40">
-                    <th
-                      scope="row"
-                      className="border-b-2 border-r border-[#93c5fd] px-3 py-2 text-left align-middle text-[10.5px] leading-[1.35]"
-                    >
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex flex-wrap items-center gap-1">
-                          <span className="inline-flex items-center gap-1 rounded bg-[#1869bc] px-1.5 py-0.5 text-[9px] font-bold text-white">
-                            🌐 กำหนดการกลางทุกหลักสูตร
-                          </span>
-                        </div>
-                        <span className="mt-0.5 font-bold text-[#1e3a8a]">
-                          ช่วงเปิดรับสมัคร &amp; วันประกาศผลรายชื่อ
-                        </span>
-                        <div className="mt-0.5 flex flex-col gap-0.5 text-[9.5px]">
-                          <span className="font-semibold text-[#1869bc]">
-                            📥 เปิดรับสมัคร: {globalSchedule.registrationDate}
-                          </span>
-                          <span className="font-semibold text-[#c4080f]">
-                            📣 วันประกาศผล: {globalSchedule.resultDate}
-                          </span>
-                        </div>
-                      </div>
-                    </th>
-
-                    <td
-                      colSpan={16}
-                      className="relative border-b-2 border-[#93c5fd] p-0"
-                    >
-                      <div className="relative h-[58px] overflow-hidden">
-                        {/* 16 Month × 4 Week Grid Columns Background */}
-                        <MonthWeeklyGridBackground variant="global" />
-
-                        <GlobalScheduleTrack
-                          registrationDate={globalSchedule.registrationDate}
-                          resultDate={globalSchedule.resultDate}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                )}
-
                 {/* Courses Section Header */}
                 <tr className="bg-[#f0fdf4] text-[11px] font-bold text-[#166534]">
                   <th
@@ -1235,7 +1105,11 @@ export function TimelineSchedule() {
                       colSpan={16}
                       className="relative border-b border-[#cbd5e1] p-0"
                     >
-                      <div className="relative h-[50px] overflow-hidden">
+                      <div
+                        className={`relative overflow-hidden ${
+                          showSubPhases ? "h-[54px]" : "h-[44px]"
+                        }`}
+                      >
                         {/* 16 Month × 4 Week Grid Columns Background */}
                         <MonthWeeklyGridBackground variant="default" />
 
