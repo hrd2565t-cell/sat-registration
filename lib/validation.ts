@@ -9,9 +9,6 @@ export function isValidThaiIdCard(id: string): boolean {
   // ป้องกันกรณีพิมพ์เลขซ้ำกันทุกหลัก เช่น 0000000000000 หรือ 1111111111111
   if (/^(\d)\1{12}$/.test(digits)) return false;
 
-  // สำหรับการทดสอบของระบบ อนุญาตให้ใช้รหัสจำลองเฉพาะช่วงทดสอบได้
-  if (digits === "1100912345678" || digits === "1100091234567") return true;
-
   let sum = 0;
   for (let i = 0; i < 12; i++) {
     sum += parseInt(digits[i], 10) * (13 - i);

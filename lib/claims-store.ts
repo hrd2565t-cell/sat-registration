@@ -36,49 +36,10 @@ export type ProfileClaimInput = Omit<
   "id" | "status" | "submittedAt" | "reviewedAt" | "reviewedBy" | "rejectionReason"
 >;
 
-const STORAGE_KEY = "sat_alumni_claims_v1";
+const STORAGE_KEY = "sat_alumni_claims_prod_v1";
 
-// Seed initial claims so the Admin Review Queue demonstrates real-world capability immediately
-const INITIAL_CLAIMS: ProfileClaim[] = [
-  {
-    id: "CLM-2026-0001",
-    traineeId: "mock-claim-1",
-    traineePersonnelId: "USR-2026-0012",
-    traineeName: "นาย สมชาย กีฬาดี",
-    currentAffiliation: "สมาคมกีฬาฟุตบอลแห่งประเทศไทย ในพระบรมราชูปถัมภ์",
-    currentCourseTitle: "ICSC",
-    latestYearBE: 2567,
-    totalCoursesCount: 2,
-    claimantName: "นาย สมชาย กีฬาดี",
-    idCard: "1100401234567",
-    phone: "081-456-7890",
-    email: "somchai.coach@sat-sports.or.th",
-    newAffiliation: "สมาคมกีฬาฟุตบอลแห่งประเทศไทย ในพระบรมราชูปถัมภ์",
-    note: "ขอผูกสิทธิ์เข้าถึงพาสปอร์ตดิจิทัล และอัปเดตเบอร์โทรศัพท์สำหรับรับการแจ้งเตือนอบรมหลักสูตรขั้นสูง",
-    idCardPhotoUrl: "/assets/sat-logo.png",
-    status: "pending",
-    submittedAt: new Date(Date.now() - 3600 * 1000 * 14).toISOString(),
-  },
-  {
-    id: "CLM-2026-0002",
-    traineeId: "mock-claim-2",
-    traineePersonnelId: "USR-2026-0045",
-    traineeName: "นางสาว พิมลวรรณ สุวรรณรัตน์",
-    currentAffiliation: "สมาคมกีฬาวอลเลย์บอลแห่งประเทศไทย",
-    currentCourseTitle: "ICSM",
-    latestYearBE: 2568,
-    totalCoursesCount: 1,
-    claimantName: "นางสาว พิมลวรรณ สุวรรณรัตน์",
-    idCard: "3100200876543",
-    phone: "089-987-6543",
-    email: "pimonwan.ref@gmail.com",
-    newAffiliation: "สมาคมกีฬาวอลเลย์บอลแห่งประเทศไทย",
-    note: "เคยผ่านการอบรมผู้บริหารกีฬา ต้องการยืนยันสิทธิ์เพื่อส่งรายงานการปฏิบัติหน้าที่ระดับชาติ",
-    idCardPhotoUrl: "/assets/sat-logo.png",
-    status: "pending",
-    submittedAt: new Date(Date.now() - 3600 * 1000 * 28).toISOString(),
-  },
-];
+// Production empty claims queue waiting for real submissions from certified sports personnel
+const INITIAL_CLAIMS: ProfileClaim[] = [];
 
 interface ClaimsStoreState {
   claims: ProfileClaim[];

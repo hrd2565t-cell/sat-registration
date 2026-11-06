@@ -81,7 +81,7 @@ export const FUTURE_PILLARS = [
   },
 ] as const;
 
-// Initial pre-seeded survey responses from authentic SAT stakeholders (reflecting 5 agency groups)
+// Initial official blueprint topics from SAT stakeholders (reflecting 5 agency groups) - Ready for live public voting
 export const INITIAL_SKILL_TOPICS: SurveySkillTopic[] = [
   {
     id: "topic-1",
@@ -91,7 +91,7 @@ export const INITIAL_SKILL_TOPICS: SurveySkillTopic[] = [
     categoryIcon: "🤖",
     description: "การนำเครื่องมือ AI และ Video Analytics มาใช้ย่อยสถิติการเล่นเพื่อวางแผนแท็กติกสำหรับผู้ฝึกสอน",
     targetAudience: "ผู้ฝึกสอนกีฬา, ผู้ช่วยผู้ฝึกสอน, สมาคมกีฬาแห่งประเทศไทย",
-    votes: 342,
+    votes: 0,
     demandLevel: "high",
     suggestedBy: "นายสุรชัย (ผู้ฝึกสอน)",
     suggestedOrg: "สมาคมกีฬาแบดมินตันแห่งประเทศไทย",
@@ -106,7 +106,7 @@ export const INITIAL_SKILL_TOPICS: SurveySkillTopic[] = [
     categoryIcon: "💼",
     description: "วิธีเจรจาต่อรองกับแบรนด์เอกชน การร่างข้อเสนอสปอนเซอร์ และการประเมินมูลค่าสื่อ (Media Value)",
     targetAudience: "ผู้บริหารสมาคมกีฬา, คณะกรรมการบริหาร, เจ้าหน้าที่ฝ่ายสิทธิประโยชน์",
-    votes: 318,
+    votes: 0,
     demandLevel: "high",
     suggestedBy: "ดร.ศศิธร (กรรมการฝ่ายหารายได้)",
     suggestedOrg: "สมาคมกีฬาแห่งประเทศไทย",
@@ -121,7 +121,7 @@ export const INITIAL_SKILL_TOPICS: SurveySkillTopic[] = [
     categoryIcon: "⚖️",
     description: "แนวทาง Safe Sport สากล การป้องกันการคุกคามทุกรูปแบบ และการบริหารสัญญาที่เป็นธรรมต่อนักกีฬาและสมาคม",
     targetAudience: "ผู้บริหารสมาคมกีฬา, ผู้ฝึกสอน, เจ้าหน้าที่คุ้มครองสิทธินักกีฬา กกท.",
-    votes: 275,
+    votes: 0,
     demandLevel: "high",
     suggestedBy: "นิติกรประจำองค์กรกีฬา",
     suggestedOrg: "การกีฬาแห่งประเทศไทย",
@@ -136,7 +136,7 @@ export const INITIAL_SKILL_TOPICS: SurveySkillTopic[] = [
     categoryIcon: "🏟️",
     description: "การจัดผังสนาม การควบคุมฝูงชน ระบบรักษาความปลอดภัย การบริหารอาสาสมัคร และ Green Event (ESG)",
     targetAudience: "เจ้าหน้าที่จัดการแข่งขัน, สมาคมกีฬาแห่งจังหวัด, ผู้บริหารศูนย์กีฬา กกท.",
-    votes: 246,
+    votes: 0,
     demandLevel: "medium",
     suggestedBy: "ฝ่ายจัดมหกรรมกีฬา",
     suggestedOrg: "สมาคมกีฬาแห่งจังหวัดเชียงใหม่",
@@ -151,7 +151,7 @@ export const INITIAL_SKILL_TOPICS: SurveySkillTopic[] = [
     categoryIcon: "🌱",
     description: "การเชื่อมประสานโรงเรียน ชมรมกีฬา และสมาคมจังหวัด เพื่อสร้างไปป์ไลน์นักกีฬาตั้งแต่รุ่นอายุ 8-16 ปีอย่างเป็นระบบ",
     targetAudience: "สมาคมกีฬาแห่งจังหวัด, ผู้ฝึกสอนระดับเยาวชน, สำนักงาน กกท. จังหวัด",
-    votes: 289,
+    votes: 0,
     demandLevel: "high",
     suggestedBy: "ประธานชมรมกีฬาเยาวชน",
     suggestedOrg: "สมาคมกีฬาแห่งจังหวัดขอนแก่น",
@@ -451,7 +451,7 @@ export const PROPOSED_FUTURE_COURSES: ProposedCourseBlueprint[] = [
   },
 ];
 
-const LOCAL_STORAGE_KEY_TOPICS = "sat_future_survey_topics_v1";
+const LOCAL_STORAGE_KEY_TOPICS = "sat_future_survey_topics_prod_v1";
 
 export function loadSurveyTopics(): SurveySkillTopic[] {
   if (typeof window === "undefined") return INITIAL_SKILL_TOPICS;

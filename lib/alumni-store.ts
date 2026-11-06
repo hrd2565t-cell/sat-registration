@@ -327,7 +327,12 @@ function hydrate() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length >= SEED_TRAINEES.length) {
-        const result = standardizeAllTrainees(parsed, { reclassifyGroups: true });
+        // Strip any residual sample demo duties from previous prototype testing
+        const sanitizedList = parsed.map((t) => ({
+          ...t,
+          duties: (t.duties || []).filter((d: { id?: string }) => !d.id?.startsWith("duty-real-")),
+        }));
+        const result = standardizeAllTrainees(sanitizedList, { reclassifyGroups: true });
         state = {
           trainees: result.cleaned,
           revision: state.revision + 1,

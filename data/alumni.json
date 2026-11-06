@@ -14,30 +14,7 @@
     "batch": "รุ่นปี พ.ศ. 2566",
     "passedDate": "2023-09-30",
     "status": "active",
-    "duties": [
-      {
-        "id": "duty-real-009",
-        "eventName": "มหกรรมกีฬาคนพิการแห่งชาติ ครั้งที่ 39",
-        "role": "ผู้ฝึกสอนและผู้ช่วยเหลือนักกีฬาคนพิการ",
-        "startDate": "2025-01-20",
-        "endDate": "2025-01-27",
-        "organization": "ศูนย์การศึกษาพิเศษ ประจำจังหวัดสระแก้ว",
-        "location": "สนามกีฬา จ.กาญจนบุรี",
-        "achievement": "นำนักกีฬาคว้าเหรียญทอง บอคเซีย",
-        "knowledgeApplied": "นำหลักจิตวิทยาการสร้างแรงบันดาลใจและการปรับอุปกรณ์กีฬาให้เหมาะสมกับสมรรถภาพของคนพิการแต่ละประเภท",
-        "knowledgeDimensions": [
-          "psychology",
-          "science"
-        ],
-        "impactRating": 5,
-        "verified": true,
-        "verifiedBy": "กองพัฒนาบุคลากรกีฬา",
-        "verifiedAt": "2025-02-05",
-        "idCard": "USR-2026-0001",
-        "traineeId": "TR-00001",
-        "createdAt": "2023-10-01T08:00:00Z"
-      }
-    ],
+    "duties": [],
     "createdAt": "2023-10-01T08:00:00Z",
     "updatedAt": "2023-10-01T08:00:00Z",
     "firstName": "กชพัฒน์",
@@ -58,30 +35,7 @@
     "batch": "รุ่นปี พ.ศ. 2547",
     "passedDate": "2004-09-30",
     "status": "active",
-    "duties": [
-      {
-        "id": "duty-real-001",
-        "eventName": "การแข่งขันรักบี้ฟุตบอลชิงชนะเลิศแห่งประเทศไทย ประจำปี 2568",
-        "role": "หัวหน้าผู้ฝึกสอน",
-        "startDate": "2025-08-15",
-        "endDate": "2025-08-25",
-        "organization": "สมาคมกีฬารักบี้ฟุตบอลแห่งประเทศไทยฯ",
-        "location": "สนามกีฬาเฉลิมพระเกียรติ คลอง 6",
-        "achievement": "นำทีมคว้าแชมป์ดิวิชั่น 1",
-        "knowledgeApplied": "นำแบบแผนการวางโปรแกรมฝึกซ้อม Periodization และการซ้อมจำลองสถานการณ์คู่ต่อสู้ที่ได้รับจากการอบรม ICSC มาใช้วางแผนการเล่น",
-        "knowledgeDimensions": [
-          "planning",
-          "science"
-        ],
-        "impactRating": 5,
-        "verified": true,
-        "verifiedBy": "กองพัฒนาบุคลากรกีฬา",
-        "verifiedAt": "2025-09-01",
-        "idCard": "USR-2026-0002",
-        "traineeId": "TR-00002",
-        "createdAt": "2004-10-01T08:00:00Z"
-      }
-    ],
+    "duties": [],
     "createdAt": "2004-10-01T08:00:00Z",
     "updatedAt": "2004-10-01T08:00:00Z",
     "firstName": "กนก",
@@ -102,29 +56,7 @@
     "batch": "รุ่นปี พ.ศ. 2559",
     "passedDate": "2016-09-30",
     "status": "active",
-    "duties": [
-      {
-        "id": "duty-real-002",
-        "eventName": "การแข่งขันกรีฑาชิงชนะเลิศแห่งประเทศไทย และนานาชาติ ประจำปี 2568",
-        "role": "ผู้จัดการทีม",
-        "startDate": "2025-06-10",
-        "endDate": "2025-06-18",
-        "organization": "สมาคมกีฬากรีฑาแห่งประเทศไทยฯ",
-        "location": "ศูนย์ฝึกกรีฑาแห่งชาติ มธ.รังสิต",
-        "achievement": "บริหารจัดการทีมและระบบโลจิสติกส์นักกีฬาอย่างมีประสิทธิภาพ",
-        "knowledgeApplied": "นำหลักการบริหารจัดการองค์กรกีฬา (ICSM) และการจัดทำงบประมาณโครงการตามมาตรฐานสากลมาบริหารทีมชาติไทย",
-        "knowledgeDimensions": [
-          "management"
-        ],
-        "impactRating": 5,
-        "verified": true,
-        "verifiedBy": "กองพัฒนาบุคลากรกีฬา",
-        "verifiedAt": "2025-06-25",
-        "idCard": "USR-2026-0003",
-        "traineeId": "TR-00003",
-        "createdAt": "2016-10-01T08:00:00Z"
-      }
-    ],
+    "duties": [],
     "createdAt": "2016-10-01T08:00:00Z",
     "updatedAt": "2016-10-01T08:00:00Z",
     "firstName": "กนกนันทร์",
@@ -145,29 +77,7 @@
     "batch": "รุ่นปี พ.ศ. 2560",
     "passedDate": "2017-09-30",
     "status": "active",
-    "duties": [
-      {
-        "id": "duty-real-002",
-        "eventName": "การแข่งขันกรีฑาชิงชนะเลิศแห่งประเทศไทย และนานาชาติ ประจำปี 2568",
-        "role": "ผู้จัดการทีม",
-        "startDate": "2025-06-10",
-        "endDate": "2025-06-18",
-        "organization": "สมาคมกีฬากรีฑาแห่งประเทศไทยฯ",
-        "location": "ศูนย์ฝึกกรีฑาแห่งชาติ มธ.รังสิต",
-        "achievement": "บริหารจัดการทีมและระบบโลจิสติกส์นักกีฬาอย่างมีประสิทธิภาพ",
-        "knowledgeApplied": "นำหลักการบริหารจัดการองค์กรกีฬา (ICSM) และการจัดทำงบประมาณโครงการตามมาตรฐานสากลมาบริหารทีมชาติไทย",
-        "knowledgeDimensions": [
-          "management"
-        ],
-        "impactRating": 5,
-        "verified": true,
-        "verifiedBy": "กองพัฒนาบุคลากรกีฬา",
-        "verifiedAt": "2025-06-25",
-        "idCard": "USR-2026-0003",
-        "traineeId": "TR-00004",
-        "createdAt": "2017-10-01T08:00:00Z"
-      }
-    ],
+    "duties": [],
     "createdAt": "2017-10-01T08:00:00Z",
     "updatedAt": "2017-10-01T08:00:00Z",
     "firstName": "กนกนันทร์",
@@ -188,29 +98,7 @@
     "batch": "รุ่นปี พ.ศ. 2560",
     "passedDate": "2017-09-30",
     "status": "active",
-    "duties": [
-      {
-        "id": "duty-real-002",
-        "eventName": "การแข่งขันกรีฑาชิงชนะเลิศแห่งประเทศไทย และนานาชาติ ประจำปี 2568",
-        "role": "ผู้จัดการทีม",
-        "startDate": "2025-06-10",
-        "endDate": "2025-06-18",
-        "organization": "สมาคมกีฬากรีฑาแห่งประเทศไทยฯ",
-        "location": "ศูนย์ฝึกกรีฑาแห่งชาติ มธ.รังสิต",
-        "achievement": "บริหารจัดการทีมและระบบโลจิสติกส์นักกีฬาอย่างมีประสิทธิภาพ",
-        "knowledgeApplied": "นำหลักการบริหารจัดการองค์กรกีฬา (ICSM) และการจัดทำงบประมาณโครงการตามมาตรฐานสากลมาบริหารทีมชาติไทย",
-        "knowledgeDimensions": [
-          "management"
-        ],
-        "impactRating": 5,
-        "verified": true,
-        "verifiedBy": "กองพัฒนาบุคลากรกีฬา",
-        "verifiedAt": "2025-06-25",
-        "idCard": "USR-2026-0003",
-        "traineeId": "TR-00005",
-        "createdAt": "2017-10-01T08:00:00Z"
-      }
-    ],
+    "duties": [],
     "createdAt": "2017-10-01T08:00:00Z",
     "updatedAt": "2017-10-01T08:00:00Z",
     "firstName": "กนกนันทร์",
@@ -294,30 +182,7 @@
     "batch": "รุ่นปี พ.ศ. 2555",
     "passedDate": "2012-09-30",
     "status": "active",
-    "duties": [
-      {
-        "id": "duty-real-003",
-        "eventName": "การแข่งขันยิงปืนชิงแชมป์เอเชีย (Asian Shooting Championships 2025)",
-        "role": "ผู้ฝึกสอนและผู้ควบคุมเทคนิค",
-        "startDate": "2025-07-02",
-        "endDate": "2025-07-12",
-        "organization": "สมาคมกีฬายิงปืนแห่งประเทศไทยฯ",
-        "location": "สนามกีฬายิงปืนแห่งชาติ หัวหมาก",
-        "achievement": "นักกีฬาทำคะแนนผ่านเกณฑ์มาตรฐานคว้าโควตาเวิลด์คัพ",
-        "knowledgeApplied": "นำเทคนิคจิตวิทยาการกีฬาและการฝึกสมาธิ (Sport Psychology) จากการอบรม ICSC มาฝึกซ้อมการควบคุมลมหายใจและความกดดันในรอบไฟนอล",
-        "knowledgeDimensions": [
-          "psychology",
-          "science"
-        ],
-        "impactRating": 5,
-        "verified": true,
-        "verifiedBy": "กองพัฒนาบุคลากรกีฬา",
-        "verifiedAt": "2025-07-15",
-        "idCard": "USR-2026-0005",
-        "traineeId": "TR-00009",
-        "createdAt": "2012-10-01T08:00:00Z"
-      }
-    ],
+    "duties": [],
     "createdAt": "2012-10-01T08:00:00Z",
     "updatedAt": "2012-10-01T08:00:00Z",
     "firstName": "กนกวรรณ",
@@ -338,30 +203,7 @@
     "batch": "รุ่นปี พ.ศ. 2554",
     "passedDate": "2011-09-30",
     "status": "active",
-    "duties": [
-      {
-        "id": "duty-real-003",
-        "eventName": "การแข่งขันยิงปืนชิงแชมป์เอเชีย (Asian Shooting Championships 2025)",
-        "role": "ผู้ฝึกสอนและผู้ควบคุมเทคนิค",
-        "startDate": "2025-07-02",
-        "endDate": "2025-07-12",
-        "organization": "สมาคมกีฬายิงปืนแห่งประเทศไทยฯ",
-        "location": "สนามกีฬายิงปืนแห่งชาติ หัวหมาก",
-        "achievement": "นักกีฬาทำคะแนนผ่านเกณฑ์มาตรฐานคว้าโควตาเวิลด์คัพ",
-        "knowledgeApplied": "นำเทคนิคจิตวิทยาการกีฬาและการฝึกสมาธิ (Sport Psychology) จากการอบรม ICSC มาฝึกซ้อมการควบคุมลมหายใจและความกดดันในรอบไฟนอล",
-        "knowledgeDimensions": [
-          "psychology",
-          "science"
-        ],
-        "impactRating": 5,
-        "verified": true,
-        "verifiedBy": "กองพัฒนาบุคลากรกีฬา",
-        "verifiedAt": "2025-07-15",
-        "idCard": "USR-2026-0005",
-        "traineeId": "TR-00010",
-        "createdAt": "2011-10-01T08:00:00Z"
-      }
-    ],
+    "duties": [],
     "createdAt": "2011-10-01T08:00:00Z",
     "updatedAt": "2011-10-01T08:00:00Z",
     "firstName": "กนกวรรณ",
@@ -382,30 +224,7 @@
     "batch": "รุ่นปี พ.ศ. 2556",
     "passedDate": "2013-09-30",
     "status": "active",
-    "duties": [
-      {
-        "id": "duty-real-003",
-        "eventName": "การแข่งขันยิงปืนชิงแชมป์เอเชีย (Asian Shooting Championships 2025)",
-        "role": "ผู้ฝึกสอนและผู้ควบคุมเทคนิค",
-        "startDate": "2025-07-02",
-        "endDate": "2025-07-12",
-        "organization": "สมาคมกีฬายิงปืนแห่งประเทศไทยฯ",
-        "location": "สนามกีฬายิงปืนแห่งชาติ หัวหมาก",
-        "achievement": "นักกีฬาทำคะแนนผ่านเกณฑ์มาตรฐานคว้าโควตาเวิลด์คัพ",
-        "knowledgeApplied": "นำเทคนิคจิตวิทยาการกีฬาและการฝึกสมาธิ (Sport Psychology) จากการอบรม ICSC มาฝึกซ้อมการควบคุมลมหายใจและความกดดันในรอบไฟนอล",
-        "knowledgeDimensions": [
-          "psychology",
-          "science"
-        ],
-        "impactRating": 5,
-        "verified": true,
-        "verifiedBy": "กองพัฒนาบุคลากรกีฬา",
-        "verifiedAt": "2025-07-15",
-        "idCard": "USR-2026-0005",
-        "traineeId": "TR-00011",
-        "createdAt": "2013-10-01T08:00:00Z"
-      }
-    ],
+    "duties": [],
     "createdAt": "2013-10-01T08:00:00Z",
     "updatedAt": "2013-10-01T08:00:00Z",
     "firstName": "กนกวรรณ",
@@ -468,30 +287,7 @@
     "batch": "รุ่นปี พ.ศ. 2553",
     "passedDate": "2010-09-30",
     "status": "active",
-    "duties": [
-      {
-        "id": "duty-real-004",
-        "eventName": "การแข่งขันฮอกกี้ชิงชนะเลิศแห่งประเทศไทย ประจำปี 2568",
-        "role": "หัวหน้าผู้ฝึกสอน",
-        "startDate": "2025-05-18",
-        "endDate": "2025-05-28",
-        "organization": "สมาคมกีฬาฮอกกี้แห่งประเทศไทย",
-        "location": "สนามฮอกกี้ มวกเหล็ก จ.สระบุรี",
-        "achievement": "นำทีมคว้าเหรียญเงิน รุ่นทั่วไป",
-        "knowledgeApplied": "นำแบบฝึกซ้อมเฉพาะตำแหน่งและการฟื้นฟูกล้ามเนื้อด้วยวิทยาศาสตร์การกีฬามาประยุกต์ใช้",
-        "knowledgeDimensions": [
-          "planning",
-          "science"
-        ],
-        "impactRating": 5,
-        "verified": true,
-        "verifiedBy": "กองพัฒนาบุคลากรกีฬา",
-        "verifiedAt": "2025-06-01",
-        "idCard": "USR-2026-0007",
-        "traineeId": "TR-00014",
-        "createdAt": "2010-10-01T08:00:00Z"
-      }
-    ],
+    "duties": [],
     "createdAt": "2010-10-01T08:00:00Z",
     "updatedAt": "2010-10-01T08:00:00Z",
     "firstName": "กมลชัย",
@@ -512,30 +308,7 @@
     "batch": "รุ่นปี พ.ศ. 2563",
     "passedDate": "2020-09-30",
     "status": "active",
-    "duties": [
-      {
-        "id": "duty-real-004",
-        "eventName": "การแข่งขันฮอกกี้ชิงชนะเลิศแห่งประเทศไทย ประจำปี 2568",
-        "role": "หัวหน้าผู้ฝึกสอน",
-        "startDate": "2025-05-18",
-        "endDate": "2025-05-28",
-        "organization": "สมาคมกีฬาฮอกกี้แห่งประเทศไทย",
-        "location": "สนามฮอกกี้ มวกเหล็ก จ.สระบุรี",
-        "achievement": "นำทีมคว้าเหรียญเงิน รุ่นทั่วไป",
-        "knowledgeApplied": "นำแบบฝึกซ้อมเฉพาะตำแหน่งและการฟื้นฟูกล้ามเนื้อด้วยวิทยาศาสตร์การกีฬามาประยุกต์ใช้",
-        "knowledgeDimensions": [
-          "planning",
-          "science"
-        ],
-        "impactRating": 5,
-        "verified": true,
-        "verifiedBy": "กองพัฒนาบุคลากรกีฬา",
-        "verifiedAt": "2025-06-01",
-        "idCard": "USR-2026-0007",
-        "traineeId": "TR-00015",
-        "createdAt": "2020-10-01T08:00:00Z"
-      }
-    ],
+    "duties": [],
     "createdAt": "2020-10-01T08:00:00Z",
     "updatedAt": "2020-10-01T08:00:00Z",
     "firstName": "กมลชัย",
@@ -556,30 +329,7 @@
     "batch": "รุ่นปี พ.ศ. 2551",
     "passedDate": "2008-09-30",
     "status": "active",
-    "duties": [
-      {
-        "id": "duty-real-005",
-        "eventName": "เซปักตะกร้อชิงแชมป์โลก คิงส์คัพ ครั้งที่ 37",
-        "role": "ผู้จัดการทีมชาติไทย",
-        "startDate": "2024-09-01",
-        "endDate": "2024-09-08",
-        "organization": "สมาคมกีฬาตะกร้อแห่งประเทศไทย",
-        "location": "ศูนย์การค้าแฟชั่นไอส์แลนด์",
-        "achievement": "ทีมชาติไทยคว้าแชมป์ทุกประเภทที่ส่งเข้าแข่งขัน",
-        "knowledgeApplied": "นำหลักการบริหารจัดการองค์กรกีฬาสมัยใหม่และการสื่อสารภาวะผู้นำ (TSLP) มาบริหารนักกีฬาและสต๊าฟโค้ช",
-        "knowledgeDimensions": [
-          "management",
-          "psychology"
-        ],
-        "impactRating": 5,
-        "verified": true,
-        "verifiedBy": "กองพัฒนาบุคลากรกีฬา",
-        "verifiedAt": "2024-09-12",
-        "idCard": "USR-2026-0008",
-        "traineeId": "TR-00016",
-        "createdAt": "2008-10-01T08:00:00Z"
-      }
-    ],
+    "duties": [],
     "createdAt": "2008-10-01T08:00:00Z",
     "updatedAt": "2008-10-01T08:00:00Z",
     "firstName": "กมล",
@@ -600,30 +350,7 @@
     "batch": "รุ่นปี พ.ศ. 2552",
     "passedDate": "2009-09-30",
     "status": "active",
-    "duties": [
-      {
-        "id": "duty-real-005",
-        "eventName": "เซปักตะกร้อชิงแชมป์โลก คิงส์คัพ ครั้งที่ 37",
-        "role": "ผู้จัดการทีมชาติไทย",
-        "startDate": "2024-09-01",
-        "endDate": "2024-09-08",
-        "organization": "สมาคมกีฬาตะกร้อแห่งประเทศไทย",
-        "location": "ศูนย์การค้าแฟชั่นไอส์แลนด์",
-        "achievement": "ทีมชาติไทยคว้าแชมป์ทุกประเภทที่ส่งเข้าแข่งขัน",
-        "knowledgeApplied": "นำหลักการบริหารจัดการองค์กรกีฬาสมัยใหม่และการสื่อสารภาวะผู้นำ (TSLP) มาบริหารนักกีฬาและสต๊าฟโค้ช",
-        "knowledgeDimensions": [
-          "management",
-          "psychology"
-        ],
-        "impactRating": 5,
-        "verified": true,
-        "verifiedBy": "กองพัฒนาบุคลากรกีฬา",
-        "verifiedAt": "2024-09-12",
-        "idCard": "USR-2026-0008",
-        "traineeId": "TR-00017",
-        "createdAt": "2009-10-01T08:00:00Z"
-      }
-    ],
+    "duties": [],
     "createdAt": "2009-10-01T08:00:00Z",
     "updatedAt": "2009-10-01T08:00:00Z",
     "firstName": "กมล",
@@ -686,30 +413,7 @@
     "batch": "รุ่นปี พ.ศ. 2561",
     "passedDate": "2018-09-30",
     "status": "active",
-    "duties": [
-      {
-        "id": "duty-real-006",
-        "eventName": "การแข่งขันบาสเกตบอลลีกอาชีพแห่งประเทศไทย (TBL 2025)",
-        "role": "ผู้ตัดสินเทคนิคสากล",
-        "startDate": "2025-07-10",
-        "endDate": "2025-08-30",
-        "organization": "สมาคมกีฬาบาสเกตบอลแห่งประเทศไทย",
-        "location": "อาคารนิมิบุตร สนามกีฬาแห่งชาติ",
-        "achievement": "ตัดสินเกมรอบชิงชนะเลิศได้อย่างยุติธรรมและไร้ข้อร้องเรียน",
-        "knowledgeApplied": "นำกติกาสากลและจริยธรรมผู้ตัดสินจากหลักสูตร Olympic มาใช้ควบคุมเกมการแข่งขันที่มีความกดดันสูง",
-        "knowledgeDimensions": [
-          "rules",
-          "psychology"
-        ],
-        "impactRating": 5,
-        "verified": true,
-        "verifiedBy": "กองพัฒนาบุคลากรกีฬา",
-        "verifiedAt": "2025-09-05",
-        "idCard": "USR-2026-0010",
-        "traineeId": "TR-00020",
-        "createdAt": "2018-10-01T08:00:00Z"
-      }
-    ],
+    "duties": [],
     "createdAt": "2018-10-01T08:00:00Z",
     "updatedAt": "2018-10-01T08:00:00Z",
     "firstName": "กรกต",
@@ -898,30 +602,7 @@
     "batch": "รุ่นปี พ.ศ. 2561",
     "passedDate": "2018-09-30",
     "status": "active",
-    "duties": [
-      {
-        "id": "duty-real-007",
-        "eventName": "โครงการจัดการแข่งขันกีฬาเยาวชนแห่งชาติ ครั้งที่ 40",
-        "role": "หัวหน้าฝ่ายบริหารงบประมาณและตรวจสอบพัสดุ",
-        "startDate": "2025-03-20",
-        "endDate": "2025-04-05",
-        "organization": "ฝ่ายการคลัง การกีฬาแห่งประเทศไทย",
-        "location": "จ.ชลบุรี",
-        "achievement": "บริหารงบประมาณโครงการกว่า 80 ล้านบาทอย่างโปร่งใส ตรวจสอบได้ 100%",
-        "knowledgeApplied": "นำหลักธรรมาภิบาลและการบริหารงบประมาณกีฬา (TSLP) มาควบคุมการจัดซื้อจัดจ้างให้เป็นไปตามระเบียบพัสดุภาครัฐ",
-        "knowledgeDimensions": [
-          "management",
-          "rules"
-        ],
-        "impactRating": 5,
-        "verified": true,
-        "verifiedBy": "กองพัฒนาบุคลากรกีฬา",
-        "verifiedAt": "2025-04-10",
-        "idCard": "USR-2026-0015",
-        "traineeId": "TR-00029",
-        "createdAt": "2018-10-01T08:00:00Z"
-      }
-    ],
+    "duties": [],
     "createdAt": "2018-10-01T08:00:00Z",
     "updatedAt": "2018-10-01T08:00:00Z",
     "firstName": "กรรณิกา",
@@ -1026,31 +707,7 @@
     "batch": "รุ่นปี พ.ศ. 2550",
     "passedDate": "2007-09-30",
     "status": "active",
-    "duties": [
-      {
-        "id": "duty-real-008",
-        "eventName": "การแข่งขันกีฬาแห่งชาติ ครั้งที่ 49",
-        "role": "ผู้อำนวยการฝ่ายเทคนิคและพัฒนากีฬาจังหวัด",
-        "startDate": "2024-12-09",
-        "endDate": "2024-12-20",
-        "organization": "สมาคมกีฬาแห่งจังหวัดจันทบุรี",
-        "location": "สนามกีฬา จ.จันทบุรี",
-        "achievement": "จังหวัดจันทบุรีขยับขึ้นสู่อันดับท็อป 10 ตารางเหรียญรางวัล",
-        "knowledgeApplied": "จัดทำแผนยุทธศาสตร์พัฒนานักกีฬาและวิทยาศาสตร์การกีฬาของจังหวัดตามโมเดล GGE",
-        "knowledgeDimensions": [
-          "planning",
-          "science",
-          "management"
-        ],
-        "impactRating": 5,
-        "verified": true,
-        "verifiedBy": "กองพัฒนาบุคลากรกีฬา",
-        "verifiedAt": "2024-12-25",
-        "idCard": "USR-2026-0019",
-        "traineeId": "TR-00034",
-        "createdAt": "2007-10-01T08:00:00Z"
-      }
-    ],
+    "duties": [],
     "createdAt": "2007-10-01T08:00:00Z",
     "updatedAt": "2007-10-01T08:00:00Z",
     "firstName": "กฤดาคุณ",
@@ -1071,31 +728,7 @@
     "batch": "รุ่นปี พ.ศ. 2555",
     "passedDate": "2012-09-30",
     "status": "active",
-    "duties": [
-      {
-        "id": "duty-real-008",
-        "eventName": "การแข่งขันกีฬาแห่งชาติ ครั้งที่ 49",
-        "role": "ผู้อำนวยการฝ่ายเทคนิคและพัฒนากีฬาจังหวัด",
-        "startDate": "2024-12-09",
-        "endDate": "2024-12-20",
-        "organization": "สมาคมกีฬาแห่งจังหวัดจันทบุรี",
-        "location": "สนามกีฬา จ.จันทบุรี",
-        "achievement": "จังหวัดจันทบุรีขยับขึ้นสู่อันดับท็อป 10 ตารางเหรียญรางวัล",
-        "knowledgeApplied": "จัดทำแผนยุทธศาสตร์พัฒนานักกีฬาและวิทยาศาสตร์การกีฬาของจังหวัดตามโมเดล GGE",
-        "knowledgeDimensions": [
-          "planning",
-          "science",
-          "management"
-        ],
-        "impactRating": 5,
-        "verified": true,
-        "verifiedBy": "กองพัฒนาบุคลากรกีฬา",
-        "verifiedAt": "2024-12-25",
-        "idCard": "USR-2026-0019",
-        "traineeId": "TR-00035",
-        "createdAt": "2012-10-01T08:00:00Z"
-      }
-    ],
+    "duties": [],
     "createdAt": "2012-10-01T08:00:00Z",
     "updatedAt": "2012-10-01T08:00:00Z",
     "firstName": "กฤดาคุณ",
@@ -57081,30 +56714,7 @@
     "batch": "รุ่นปี พ.ศ. 2569",
     "passedDate": "2026-09-30",
     "status": "active",
-    "duties": [
-      {
-        "id": "duty-real-007",
-        "eventName": "โครงการจัดการแข่งขันกีฬาเยาวชนแห่งชาติ ครั้งที่ 40",
-        "role": "หัวหน้าฝ่ายบริหารงบประมาณและตรวจสอบพัสดุ",
-        "startDate": "2025-03-20",
-        "endDate": "2025-04-05",
-        "organization": "ฝ่ายการคลัง การกีฬาแห่งประเทศไทย",
-        "location": "จ.ชลบุรี",
-        "achievement": "บริหารงบประมาณโครงการกว่า 80 ล้านบาทอย่างโปร่งใส ตรวจสอบได้ 100%",
-        "knowledgeApplied": "นำหลักธรรมาภิบาลและการบริหารงบประมาณกีฬา (TSLP) มาควบคุมการจัดซื้อจัดจ้างให้เป็นไปตามระเบียบพัสดุภาครัฐ",
-        "knowledgeDimensions": [
-          "management",
-          "rules"
-        ],
-        "impactRating": 5,
-        "verified": true,
-        "verifiedBy": "กองพัฒนาบุคลากรกีฬา",
-        "verifiedAt": "2025-04-10",
-        "idCard": "USR-2026-0015",
-        "traineeId": "TR-02701",
-        "createdAt": "2026-10-01T08:00:00Z"
-      }
-    ],
+    "duties": [],
     "createdAt": "2026-10-01T08:00:00Z",
     "updatedAt": "2026-10-01T08:00:00Z",
     "firstName": "กรรณิกา",
