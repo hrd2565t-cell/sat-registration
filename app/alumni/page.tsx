@@ -16,6 +16,10 @@ import { DigitalPassModal } from "@/components/alumni/digital-pass-modal";
 import { DutyRecordModal } from "@/components/alumni/duty-record-modal";
 import { BulkImportModal } from "@/components/alumni/bulk-import-modal";
 import { AddTraineeModal } from "@/components/alumni/add-trainee-modal";
+import { ClaimProfileModal } from "@/components/alumni/claim-profile-modal";
+import { TraineePortalModal } from "@/components/alumni/trainee-portal-modal";
+import { ClaimsReviewTab } from "@/components/admin/claims-review-tab";
+import { usePendingClaimsCount } from "@/lib/claims-store";
 
 export default function AlumniPage() {
   return (
@@ -27,6 +31,7 @@ export default function AlumniPage() {
 
 function AlumniContent() {
   const isAdmin = useIsAdmin();
+  const pendingClaimsCount = usePendingClaimsCount();
   const {
     trainees,
     addDutyRecord,
@@ -37,11 +42,11 @@ function AlumniContent() {
     resetAlumniData,
   } = useAlumniStore();
 
-  const [activeTab, setActiveTab] = useState<"directory" | "duty" | "evaluation" | "timeline" | "future">("directory");
+  const [activeTab, setActiveTab] = useState<"directory" | "duty" | "evaluation" | "timeline" | "future" | "claims">("directory");
 
-  // Protect duty tab: If non-admin user lands on or switches to duty tab, smoothly redirect to directory
+  // Protect duty and claims tab: If non-admin user lands on or switches to admin tabs, smoothly redirect to directory
   useEffect(() => {
-    if (!isAdmin && activeTab === "duty") {
+    if (!isAdmin && (activeTab === "duty" || activeTab === "claims")) {
       setActiveTab("directory");
     }
   }, [isAdmin, activeTab]);
@@ -50,6 +55,17 @@ function AlumniContent() {
   const [dutyTargetTrainee, setDutyTargetTrainee] = useState<HistoricalTrainee | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isAddTraineeOpen, setIsAddTraineeOpen] = useState(false);
+  const [isTraineePortalOpen, setIsTraineePortalOpen] = useState(false);
+  const [claimTargetTrainee, setClaimTargetTrainee] = useState<{
+    id: string;
+    personnelId?: string;
+    name: string;
+    affiliation: string;
+    affiliationGroup?: string;
+    courseTitle: string;
+    latestYearBE?: number;
+    totalCoursesCount?: number;
+  } | null>(null);
 
   // Smart unified search (Name, ID Card, or Cert No)
   const [quickVerifyId, setQuickVerifyId] = useState("");
@@ -134,29 +150,43 @@ function AlumniContent() {
             </div>
 
             {/* Quick verify form */}
-            <form onSubmit={handleQuickVerify} className="w-full lg:max-w-md space-y-1.5">
-              <div className="flex items-center gap-2 rounded-xl bg-white/10 p-1.5 backdrop-blur-xs border border-white/20">
-                <input
-                  type="text"
-                  placeholder="พิมพ์ชื่อ-นามสกุล หรือเลขประจำตัวประชาชน..."
-                  value={quickVerifyId}
-                  onChange={(e) => {
-                    setQuickVerifyId(e.target.value);
-                    if (quickVerifyError) setQuickVerifyError("");
-                  }}
-                  className="w-full rounded-lg bg-white px-3.5 py-2 text-xs sm:text-sm font-medium text-gray-800 placeholder-gray-400 focus:outline-hidden"
-                />
+            <div className="w-full lg:max-w-md space-y-2">
+              <form onSubmit={handleQuickVerify} className="space-y-1.5">
+                <div className="flex items-center gap-2 rounded-xl bg-white/10 p-1.5 backdrop-blur-xs border border-white/20">
+                  <input
+                    type="text"
+                    placeholder="พิมพ์ชื่อ-นามสกุล หรือเลขประจำตัวประชาชน..."
+                    value={quickVerifyId}
+                    onChange={(e) => {
+                      setQuickVerifyId(e.target.value);
+                      if (quickVerifyError) setQuickVerifyError("");
+                    }}
+                    className="w-full rounded-lg bg-white px-3.5 py-2 text-xs sm:text-sm font-medium text-gray-800 placeholder-gray-400 focus:outline-hidden"
+                  />
+                  <button
+                    type="submit"
+                    className="shrink-0 rounded-lg bg-[#f59e0b] px-4 py-2 text-xs sm:text-sm font-bold text-[#1e1b4b] hover:bg-[#fbbf24] transition-colors shadow-xs cursor-pointer"
+                  >
+                    ค้นหาพาสปอร์ต
+                  </button>
+                </div>
+                {quickVerifyError && (
+                  <p className="text-xs text-amber-200 pl-1 font-medium">⚠️ {quickVerifyError}</p>
+                )}
+              </form>
+
+              <div className="flex items-center justify-end">
                 <button
-                  type="submit"
-                  className="shrink-0 rounded-lg bg-[#f59e0b] px-4 py-2 text-xs sm:text-sm font-bold text-[#1e1b4b] hover:bg-[#fbbf24] transition-colors shadow-xs cursor-pointer"
+                  type="button"
+                  onClick={() => setIsTraineePortalOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-blue-100 hover:text-white px-3 py-1 text-xs font-bold transition-all border border-white/20 cursor-pointer shadow-2xs"
+                  title="เข้าสู่ระบบด้วยเลขประจำตัวประชาชน 13 หลักเพื่อจัดการพาสปอร์ต แก้ไขข้อมูล หรือส่งรายงานการปฏิบัติหน้าที่"
                 >
-                  ค้นหาพาสปอร์ต
+                  <span>🪪</span>
+                  <span>พอร์ทัลบุคลากร (เข้าสู่ระบบด้วยเลข 13 หลัก) →</span>
                 </button>
               </div>
-              {quickVerifyError && (
-                <p className="text-xs text-amber-200 pl-1 font-medium">⚠️ {quickVerifyError}</p>
-              )}
-            </form>
+            </div>
           </div>
 
           {/* Multiple Candidates Selection Dropdown / Drawer */}
@@ -217,6 +247,28 @@ function AlumniContent() {
                       >
                         📱 บัตรดิจิทัล
                       </button>
+                      {(!person.idCard || person.idCard.startsWith("USR-")) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setClaimTargetTrainee({
+                              id: person.records[0].id,
+                              personnelId: person.personnelId,
+                              name: person.name,
+                              affiliation: person.affiliation,
+                              affiliationGroup: person.affiliationGroup,
+                              courseTitle: person.records[0].courseTitle,
+                              latestYearBE: person.latestYearBE,
+                              totalCoursesCount: person.records.length,
+                            });
+                            setSearchResults(null);
+                          }}
+                          className="rounded-lg bg-amber-400 px-2.5 py-1 text-[11px] font-black text-[#1e1b4b] hover:bg-amber-300 transition-colors cursor-pointer shadow-2xs"
+                          title="ยืนยันตัวตนเจ้าของประวัติเพื่อผูกเลขประจำตัวประชาชน 13 หลัก"
+                        >
+                          🪪 ยืนยันตัวตน
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -258,6 +310,26 @@ function AlumniContent() {
               <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 font-bold">
                 {trainees.reduce((sum, t) => sum + t.duties.length, 0)} ครั้ง
               </span>
+            </button>
+          )}
+
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("claims")}
+              className={`flex items-center gap-2 border-b-2 py-3 px-5 text-sm font-bold transition-all ${
+                activeTab === "claims"
+                  ? "border-amber-500 text-amber-700"
+                  : "border-transparent text-gray-500 hover:text-gray-800"
+              }`}
+            >
+              <span className="text-base">🪪</span>
+              <span>ตรวจสอบยืนยันตัวตน (Claims)</span>
+              {pendingClaimsCount > 0 && (
+                <span className="rounded-full bg-amber-500 text-slate-950 px-2 py-0.5 text-xs font-bold">
+                  {pendingClaimsCount}
+                </span>
+              )}
             </button>
           )}
 
@@ -343,6 +415,10 @@ function AlumniContent() {
           />
         )}
 
+        {isAdmin && activeTab === "claims" && (
+          <ClaimsReviewTab />
+        )}
+
         {activeTab === "future" && (
           <FutureCurriculumTab trainees={trainees} />
         )}
@@ -407,6 +483,33 @@ function AlumniContent() {
             setPassportIdCard(newTrainee.idCard);
           }}
           trainees={trainees}
+        />
+      )}
+
+      {/* 5. Sports Personnel Self-Service Portal Modal */}
+      {isTraineePortalOpen && (
+        <TraineePortalModal
+          onClose={() => setIsTraineePortalOpen(false)}
+          onOpenDigitalPass={(id) => {
+            setIsTraineePortalOpen(false);
+            setDigitalPassIdCard(id);
+          }}
+          onOpenPassport={(id) => {
+            setIsTraineePortalOpen(false);
+            setPassportIdCard(id);
+          }}
+        />
+      )}
+
+      {/* 6. Claim Profile Modal */}
+      {claimTargetTrainee && (
+        <ClaimProfileModal
+          trainee={claimTargetTrainee}
+          onClose={() => setClaimTargetTrainee(null)}
+          onSuccess={(claimId) => {
+            alert(`✓ ส่งคำขอยืนยันตัวตนเรียบร้อยแล้ว (รหัสอ้างอิง: ${claimId})\nเจ้าหน้าที่ กกท. จะทำการตรวจสอบและอนุมัติสิทธิ์ให้ท่านโดยเร็ว`);
+            setClaimTargetTrainee(null);
+          }}
         />
       )}
     </div>

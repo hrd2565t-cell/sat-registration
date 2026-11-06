@@ -11,6 +11,7 @@ import {
   AFFILIATION_GROUPS,
 } from "@/lib/alumni-store";
 import { loginAdmin } from "@/lib/admin-auth";
+import { ClaimProfileModal } from "@/components/alumni/claim-profile-modal";
 
 interface PersonnelPassportModalProps {
   idCard: string;
@@ -48,6 +49,7 @@ export function PersonnelPassportModal({
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
 
   const { primary, records, allDuties, isActive } = passport || {
     primary: undefined as unknown as HistoricalTrainee,
@@ -243,7 +245,7 @@ export function PersonnelPassportModal({
                     📞 {maskedPhone}
                   </span>
                 )}
-                {isAdmin && (
+                {isAdmin ? (
                   <button
                     type="button"
                     onClick={handleStartEditProfile}
@@ -253,8 +255,42 @@ export function PersonnelPassportModal({
                     <span>✏️</span>
                     <span>แก้ไขข้อมูลบุคลากร (Admin)</span>
                   </button>
+                ) : cleanId.length === 13 ? (
+                  <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/20 text-emerald-300 px-2.5 py-1 text-[11px] font-bold border border-emerald-400/30">
+                    <span>✓</span>
+                    <span>ยืนยันตัวตนแล้ว</span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsClaimModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 text-[#1e1b4b] px-3 py-1 text-xs font-black border border-amber-200 transition-all cursor-pointer shadow-md"
+                    title="ท่านคือเจ้าของชื่อนี้? คลิกเพื่อยืนยันตัวตนด้วยเลขบัตร ปชช. 13 หลัก"
+                  >
+                    <span>🪪</span>
+                    <span>ท่านคือเจ้าของประวัตินี้? ยืนยันตัวตน</span>
+                  </button>
                 )}
               </div>
+
+              {/* Trainee Identity Claim Callout for Non-Admins */}
+              {!isAdmin && cleanId.length !== 13 && (
+                <div className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-2xl bg-amber-400/15 border border-amber-300/30 p-3 text-xs text-amber-200 backdrop-blur-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📢</span>
+                    <span className="leading-relaxed">
+                      ประวัตินี้ยังไม่ได้ผูกกับเลขประจำตัวประชาชน 13 หลัก หากท่านคือ <strong>{primary.name}</strong> สามารถยืนยันตัวตนเพื่อรับสิทธิ์เข้าถึงพาสปอร์ตดิจิทัลและส่งรายงานผลงาน
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsClaimModalOpen(true)}
+                    className="shrink-0 rounded-xl bg-amber-400 px-3.5 py-1.5 text-xs font-black text-[#1e1b4b] hover:bg-amber-300 transition-all shadow-md cursor-pointer self-start sm:self-auto"
+                  >
+                    ยืนยันตัวตน 🪪
+                  </button>
+                </div>
+              )}
 
               {/* Toast inside Passport */}
               {toastMessage && (
@@ -764,6 +800,26 @@ export function PersonnelPassportModal({
             </form>
           </div>
         </div>
+      )}
+      {/* Claim Profile Modal */}
+      {isClaimModalOpen && primary && (
+        <ClaimProfileModal
+          trainee={{
+            id: primary.id,
+            personnelId: primary.personnelId,
+            name: primary.name,
+            affiliation: primary.affiliation,
+            affiliationGroup: primary.affiliationGroup,
+            courseTitle: primary.courseTitle,
+            latestYearBE: primary.yearBE,
+            totalCoursesCount: records.length,
+          }}
+          onClose={() => setIsClaimModalOpen(false)}
+          onSuccess={(claimId) => {
+            setToastMessage(`✓ ส่งคำขอยืนยันตัวตนเรียบร้อยแล้ว (รหัส: ${claimId})`);
+            setTimeout(() => setToastMessage(null), 5000);
+          }}
+        />
       )}
     </div>
   );

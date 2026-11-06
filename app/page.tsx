@@ -10,6 +10,7 @@ import { useCourses } from "@/lib/courses-store";
 import { useIsAdmin } from "@/lib/admin-auth";
 import { PersonnelPassportModal } from "@/components/alumni/personnel-passport-modal";
 import { DigitalPassModal } from "@/components/alumni/digital-pass-modal";
+import { TraineePortalModal } from "@/components/alumni/trainee-portal-modal";
 
 export default function HomePage() {
   return (
@@ -30,6 +31,7 @@ function HomeContent() {
   const [searchResults, setSearchResults] = useState<TraineeSearchResult[] | null>(null);
   const [passportIdCard, setPassportIdCard] = useState<string | null>(null);
   const [digitalPassIdCard, setDigitalPassIdCard] = useState<string | null>(null);
+  const [isTraineePortalOpen, setIsTraineePortalOpen] = useState(false);
 
   // Active courses count
   const openCoursesCount = useMemo(() => {
@@ -327,6 +329,21 @@ function HomeContent() {
                       </div>
                     </div>
                   )}
+
+                  {/* Sports Personnel Portal Entry */}
+                  <div className="flex items-center justify-between pt-1 text-xs border-t border-purple-200/60">
+                    <span className="text-[11px] text-gray-500">
+                      มีเลขบัตร 13 หลักในระบบแล้ว?
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsTraineePortalOpen(true)}
+                      className="text-xs font-bold text-purple-900 hover:text-purple-700 underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>🪪</span>
+                      <span>พอร์ทัลบุคลากร (เข้าสู่ระบบด้วยเลข 13 หลัก) →</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -406,6 +423,21 @@ function HomeContent() {
           idCard={digitalPassIdCard}
           allTrainees={trainees}
           onClose={() => setDigitalPassIdCard(null)}
+        />
+      )}
+
+      {/* Trainee Self-Service Portal Modal */}
+      {isTraineePortalOpen && (
+        <TraineePortalModal
+          onClose={() => setIsTraineePortalOpen(false)}
+          onOpenDigitalPass={(id) => {
+            setIsTraineePortalOpen(false);
+            setDigitalPassIdCard(id);
+          }}
+          onOpenPassport={(id) => {
+            setIsTraineePortalOpen(false);
+            setPassportIdCard(id);
+          }}
         />
       )}
 

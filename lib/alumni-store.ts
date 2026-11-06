@@ -77,6 +77,8 @@ export interface HistoricalTrainee {
   certNo?: string; // Optional
   passedDate: string; // e.g. "2023-09-30"
   status: "active" | "inactive" | "pending_verification";
+  isVerified?: boolean;
+  verifiedAt?: string;
   avatarUrl?: string;
   duties: DutyRecord[];
   createdAt: string;
@@ -623,6 +625,9 @@ export interface UpdatePersonProfileInput {
   affiliation?: string;
   personnelId?: string;
   idCard?: string;
+  phone?: string;
+  email?: string;
+  isVerified?: boolean;
   status?: "active" | "inactive" | "pending_verification";
 }
 
@@ -686,6 +691,14 @@ export function updatePersonProfile(
         sportsType: updates.affiliation !== undefined && updates.affiliation.trim() ? updates.affiliation.trim() : t.sportsType,
         personnelId: updates.personnelId !== undefined && updates.personnelId.trim() ? updates.personnelId.trim() : t.personnelId,
         idCard: updates.idCard !== undefined && updates.idCard.trim() ? updates.idCard.trim() : t.idCard,
+        phone: updates.phone !== undefined ? updates.phone.trim() : t.phone,
+        email: updates.email !== undefined ? updates.email.trim() : t.email,
+        isVerified:
+          updates.isVerified !== undefined
+            ? updates.isVerified
+            : updates.idCard && updates.idCard.replace(/\D/g, "").length === 13
+            ? true
+            : t.isVerified,
         status: updates.status || t.status,
         updatedAt: now,
       };
@@ -713,6 +726,45 @@ export function updatePersonProfile(
   }
 
   return updatedCount;
+}
+
+export interface BatchIdCardMatch {
+  name: string;
+  idCard: string;
+  phone?: string;
+  email?: string;
+}
+
+/**
+ * Batch update citizen IDs (from Excel Smart Matcher)
+ * Matches each person by name or personnelId and updates their 13-digit ID across all records.
+ */
+export function batchUpdateTraineeIdCards(matches: BatchIdCardMatch[]): {
+  matchedCount: number;
+  updatedRecordsCount: number;
+} {
+  let matchedCount = 0;
+  let totalRecordsUpdated = 0;
+
+  for (const m of matches) {
+    const cleanId = (m.idCard || "").replace(/\D/g, "");
+    if (!cleanId || cleanId.length !== 13) continue;
+
+    const count = updatePersonProfile(m.name, {
+      idCard: cleanId,
+      phone: m.phone,
+      email: m.email,
+      isVerified: true,
+      status: "active",
+    });
+
+    if (count > 0) {
+      matchedCount++;
+      totalRecordsUpdated += count;
+    }
+  }
+
+  return { matchedCount, updatedRecordsCount: totalRecordsUpdated };
 }
 
 /**

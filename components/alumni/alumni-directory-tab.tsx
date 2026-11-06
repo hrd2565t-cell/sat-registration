@@ -16,6 +16,7 @@ import { loginAdmin } from "@/lib/admin-auth";
 import * as XLSX from "xlsx";
 import { DataCleansingModal } from "./data-cleansing-modal";
 import { TopTraineesModal } from "./top-trainees-modal";
+import { SmartIdMatcherModal } from "./smart-id-matcher-modal";
 
 interface AlumniDirectoryTabProps {
   trainees: HistoricalTrainee[];
@@ -48,6 +49,7 @@ export function AlumniDirectoryTab({
   const [pageSize, setPageSize] = useState<number>(10);
   const [sortBy, setSortBy] = useState<"default" | "most_courses" | "least_courses" | "name_asc" | "latest_year">("default");
   const [isTopTraineesModalOpen, setIsTopTraineesModalOpen] = useState<boolean>(false);
+  const [isSmartMatcherOpen, setIsSmartMatcherOpen] = useState<boolean>(false);
 
   // Inline Quick Edit Group State
   const [editingGroupPersonId, setEditingGroupPersonId] = useState<string | null>(null);
@@ -517,6 +519,15 @@ export function AlumniDirectoryTab({
                 >
                   <span>🧹</span>
                   <span>จัดระเบียบข้อมูล</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsSmartMatcherOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-blue-300 bg-blue-50 px-3.5 py-2 text-xs font-bold text-[#16265E] shadow-xs hover:bg-blue-100 transition-colors cursor-pointer"
+                  title="ระบบจับคู่และอัปเดตเลขประจำตัวประชาชน 13 หลักจากไฟล์ Excel ของสมาคมอัตโนมัติ"
+                >
+                  <span>📑</span>
+                  <span>จับคู่เลข 13 หลัก</span>
                 </button>
               </>
             )}
@@ -1565,6 +1576,17 @@ export function AlumniDirectoryTab({
           uniquePersons={uniquePersons}
           onOpenPassport={onOpenPassport}
           onOpenDigitalPass={onOpenDigitalPass || (() => {})}
+        />
+      )}
+
+      {/* Smart ID Matcher Modal */}
+      {isSmartMatcherOpen && (
+        <SmartIdMatcherModal
+          onClose={() => setIsSmartMatcherOpen(false)}
+          onSuccess={(matched, records) => {
+            setToastMessage(`✓ จับคู่และอัปเดตเลข 13 หลักสำเร็จ ${matched} ท่าน (${records} รายการ)`);
+            setTimeout(() => setToastMessage(null), 5000);
+          }}
         />
       )}
     </div>

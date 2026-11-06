@@ -4,8 +4,9 @@ import { useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePendingCount } from "@/lib/applications-store";
+import { usePendingClaimsCount } from "@/lib/claims-store";
 
-export type AdminNavKey = "dashboard" | "courses" | "review" | "alumni" | "settings";
+export type AdminNavKey = "dashboard" | "courses" | "review" | "claims" | "alumni" | "settings";
 
 const navItems: {
   key: AdminNavKey;
@@ -15,6 +16,7 @@ const navItems: {
   { key: "dashboard", label: "แดชบอร์ด", href: "/admin" },
   { key: "courses", label: "จัดการหลักสูตร", href: "/admin/courses" },
   { key: "review", label: "ตรวจสอบคุณสมบัติ", href: "/admin/review" },
+  { key: "claims", label: "ยืนยันตัวตน", href: "/admin/claims" },
   { key: "alumni", label: "ทำเนียบ & ประเมิน", href: "/alumni" },
   { key: "settings", label: "ตั้งค่าระบบ", href: "/admin/settings" },
 ];
@@ -118,9 +120,26 @@ function AlumniIcon() {
   );
 }
 
+function ClaimIcon() {
+  return (
+    <svg
+      className="h-3.5 w-3.5 shrink-0"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2" strokeWidth="1.8" />
+      <circle cx="9" cy="10" r="2.5" strokeWidth="1.8" />
+      <path strokeLinecap="round" strokeWidth="1.8" d="M15 8h2M15 12h2M6 17c0-1.5 1.5-2.5 3-2.5s3 1 3 2.5" />
+    </svg>
+  );
+}
+
 function NavIcon({ itemKey }: { itemKey: (typeof navItems)[number]["key"] }) {
   if (itemKey === "courses") return <CalendarIcon />;
   if (itemKey === "review") return <DocumentIcon />;
+  if (itemKey === "claims") return <ClaimIcon />;
   if (itemKey === "alumni") return <AlumniIcon />;
   if (itemKey === "settings") return <SettingsIcon />;
   return null;
@@ -134,6 +153,7 @@ function SidebarContent({
   onNavigate?: () => void;
 }) {
   const pendingCount = usePendingCount();
+  const pendingClaimsCount = usePendingClaimsCount();
 
   return (
     <>
@@ -198,6 +218,18 @@ function SidebarContent({
                   }`}
                 >
                   {pendingCount > 99 ? "99+" : pendingCount}
+                </span>
+              )}
+              {item.key === "claims" && pendingClaimsCount > 0 && (
+                <span
+                  aria-label={`รอยืนยันตัวตน ${pendingClaimsCount} รายการ`}
+                  className={`inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[9px] font-bold leading-none ${
+                    active
+                      ? "bg-amber-400 text-[#0E2554]"
+                      : "bg-amber-500 text-slate-950"
+                  }`}
+                >
+                  {pendingClaimsCount > 99 ? "99+" : pendingClaimsCount}
                 </span>
               )}
             </Link>
