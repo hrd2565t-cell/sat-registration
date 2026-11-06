@@ -11,11 +11,14 @@ import {
 import {
   DEFAULT_TARGET_QUOTAS,
   TARGET_GROUPS,
+  balanceQuotasToCapacity,
   computeDefaultCourseScheduleFields,
   formatCourseDateFields,
   formatCourseDateSessions,
   getGlobalCourseSchedule,
+  getTotalTargetQuotas,
   isCourseDateOverlapping,
+  isLegacy50Quota,
   parseCourseDateFields,
   parseCourseDateSessions,
   getCourseDocumentConfig,
@@ -139,9 +142,14 @@ export function CourseEditDialog({
   const [expensesPolicy, setExpensesPolicy] = useState(
     course.expensesPolicy ?? ""
   );
-  const [quotas, setQuotas] = useState<TargetGroupQuotas>(
-    course.targetQuotas ?? { ...DEFAULT_TARGET_QUOTAS }
-  );
+  const [quotas, setQuotas] = useState<TargetGroupQuotas>(() => {
+    const parsedCap = Number(course.seats?.match(/\d+/)?.[0]) || course.capacity || 40;
+    const raw = course.targetQuotas ?? { ...DEFAULT_TARGET_QUOTAS };
+    if (isLegacy50Quota(raw)) {
+      return balanceQuotasToCapacity(parsedCap);
+    }
+    return raw;
+  });
   const [docConfig, setDocConfig] = useState<CourseDocumentConfig>(() =>
     getCourseDocumentConfig(course)
   );
@@ -923,60 +931,95 @@ export function CourseEditDialog({
             </div>
 
             {/* เป้าหมายสัดส่วนกลุ่มเป้าหมาย (5 กลุ่ม) */}
-            <div className="rounded-[7px] border border-[#dbe4ef] bg-[#f8fbff] p-3 text-[12px]">
-              <div className="flex flex-wrap items-center justify-between gap-1 border-b border-[#e2e8f0] pb-2">
-                <div>
-                  <h3 className="font-semibold text-[#1e3a8a] text-[12.5px]">
-                    เป้าหมายเชิงสัดส่วน 5 กลุ่มเป้าหมาย (คน)
-                  </h3>
-                  <p className="text-[10px] text-[#6b7280]">
-                    กำหนดเป้าหมายเพื่อช่วยมองเห็นภาพรวมและกำกับสัดส่วนการอนุมัติตัวจริง
-                  </p>
-                </div>
-                <span className="rounded bg-[#dbeafe] px-2 py-0.5 text-[11px] font-bold text-[#1e40af]">
-                  รวมเป้าหมาย:{" "}
-                  {quotas.sat +
-                    quotas.nationalAssoc +
-                    quotas.provincialAssoc +
-                    quotas.nsdf +
-                    quotas.external}{" "}
-                  คน
-                </span>
-              </div>
+            {(() => {
+              const currentCapacity =
+                Number(seats.match(/\d+/)?.[0]) || course.capacity || 40;
+              const totalQuotas = getTotalTargetQuotas(quotas);
+              const isQuotaMatched = totalQuotas === currentCapacity;
 
-              <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {TARGET_GROUPS.map((group) => (
-                  <div
-                    key={group.key}
-                    className="flex items-center justify-between gap-2 rounded bg-white px-2.5 py-1.5 border border-[#e5e7eb]"
-                  >
-                    <label
-                      htmlFor={`quota-${group.key}`}
-                      className="text-[11px] font-medium text-[#374151]"
-                    >
-                      {group.label}
-                    </label>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <input
-                        id={`quota-${group.key}`}
-                        type="number"
-                        min={0}
-                        value={quotas[group.key]}
-                        onChange={(e) => {
-                          const val = Math.max(
-                            0,
-                            parseInt(e.target.value, 10) || 0
-                          );
-                          setQuotas((prev) => ({ ...prev, [group.key]: val }));
-                        }}
-                        className="h-7 w-16 rounded border border-[#d1d5db] bg-white text-center text-[12px] font-semibold text-[#111827] outline-none focus:border-[#1e3a8a]"
-                      />
-                      <span className="text-[10px] text-[#6b7280]">คน</span>
+              return (
+                <div className="rounded-[7px] border border-[#dbe4ef] bg-[#f8fbff] p-3 text-[12px]">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-[#e2e8f0] pb-2">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <h3 className="font-semibold text-[#1e3a8a] text-[12.5px]">
+                          เป้าหมายเชิงสัดส่วน 5 กลุ่มเป้าหมาย (คน)
+                        </h3>
+                        {isQuotaMatched ? (
+                          <span className="inline-flex items-center gap-1 rounded bg-[#dcfce7] border border-[#86efac] px-2 py-0.5 text-[10px] font-bold text-[#166534]">
+                            <span>✓</span>
+                            <span>ตรงกับที่นั่ง ({currentCapacity} คน)</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded bg-[#fef3c7] border border-[#fcd34d] px-2 py-0.5 text-[10px] font-bold text-[#92400e]">
+                            <span>⚠️</span>
+                            <span>รวม {totalQuotas} คน (ไม่ตรงกับที่นั่ง {currentCapacity} คน)</span>
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-[10px] text-[#6b7280]">
+                        กำหนดเป้าหมายเพื่อช่วยมองเห็นภาพรวมและกำกับสัดส่วนการอนุมัติตัวจริง
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setQuotas(balanceQuotasToCapacity(currentCapacity))
+                        }
+                        className="inline-flex items-center gap-1 rounded border border-[#93c5fd] bg-white px-2 py-1 text-[10.5px] font-semibold text-[#1d4ed8] shadow-2xs hover:bg-[#eff6ff] transition"
+                        title={`ปรับเกลี่ยสัดส่วนให้เท่ากับ ${currentCapacity} ที่นั่งอัตโนมัติ`}
+                      >
+                        <span>⚡ ปรับสัดส่วนให้เท่ากับ {currentCapacity} ที่นั่ง</span>
+                      </button>
+                      <span
+                        className={`rounded px-2 py-0.5 text-[11px] font-bold ${
+                          isQuotaMatched
+                            ? "bg-[#dbeafe] text-[#1e40af]"
+                            : "bg-[#fee2e2] text-[#991b1b] border border-[#fca5a5]"
+                        }`}
+                      >
+                        รวมเป้าหมาย: {totalQuotas}/{currentCapacity} คน
+                      </span>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
+
+                  <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {TARGET_GROUPS.map((group) => (
+                      <div
+                        key={group.key}
+                        className="flex items-center justify-between gap-2 rounded bg-white px-2.5 py-1.5 border border-[#e5e7eb]"
+                      >
+                        <label
+                          htmlFor={`quota-${group.key}`}
+                          className="text-[11px] font-medium text-[#374151]"
+                        >
+                          {group.label}
+                        </label>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <input
+                            id={`quota-${group.key}`}
+                            type="number"
+                            min={0}
+                            value={quotas[group.key]}
+                            onChange={(e) => {
+                              const val = Math.max(
+                                0,
+                                parseInt(e.target.value, 10) || 0
+                              );
+                              setQuotas((prev) => ({ ...prev, [group.key]: val }));
+                            }}
+                            className="h-7 w-16 rounded border border-[#d1d5db] bg-white text-center text-[12px] font-semibold text-[#111827] outline-none focus:border-[#1e3a8a]"
+                          />
+                          <span className="text-[10px] text-[#6b7280]">คน</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div>
               <label htmlFor="course-warning" className={labelClass}>

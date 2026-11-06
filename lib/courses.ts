@@ -19,12 +19,73 @@ export const TARGET_GROUPS = [
 export type TargetGroupKey = (typeof TARGET_GROUPS)[number]["key"];
 
 export const DEFAULT_TARGET_QUOTAS: TargetGroupQuotas = {
-  sat: 10,
+  sat: 5,
   nationalAssoc: 15,
   provincialAssoc: 15,
-  nsdf: 5,
+  nsdf: 0,
   external: 5,
 };
+
+/**
+ * เกลี่ยสัดส่วน 5 กลุ่มเป้าหมายให้พอดีกับจำนวนที่นั่ง (capacity)
+ */
+export function balanceQuotasToCapacity(capacity: number): TargetGroupQuotas {
+  const cap = Math.max(0, capacity);
+  if (cap === 40) {
+    return {
+      sat: 5,
+      nationalAssoc: 15,
+      provincialAssoc: 15,
+      nsdf: 0,
+      external: 5,
+    };
+  }
+  const sat = Math.round(cap * 0.15);
+  const ext = Math.max(0, Math.round(cap * 0.15));
+  const remaining = Math.max(0, cap - sat - ext);
+  const national = Math.ceil(remaining / 2);
+  const provincial = remaining - national;
+  return {
+    sat,
+    nationalAssoc: national,
+    provincialAssoc: provincial,
+    nsdf: 0,
+    external: ext,
+  };
+}
+
+/**
+ * ตรวจสอบว่าโควตานี้เป็นค่าดั้งเดิม 50 คนที่ค้างมาจากระบบก่อนหน้าหรือไม่
+ * (sat: 10 + national: 15 + provincial: 15 + nsdf: 5 + ext: 5 = 50)
+ */
+export function isLegacy50Quota(
+  q?: TargetGroupQuotas | null
+): boolean {
+  if (!q) return false;
+  return (
+    q.sat === 10 &&
+    q.nationalAssoc === 15 &&
+    q.provincialAssoc === 15 &&
+    q.nsdf === 5 &&
+    q.external === 5
+  );
+}
+
+/**
+ * รวมผลรวมโควตา 5 กลุ่มเป้าหมาย
+ */
+export function getTotalTargetQuotas(
+  q?: TargetGroupQuotas | null
+): number {
+  if (!q) return 0;
+  return (
+    (q.sat || 0) +
+    (q.nationalAssoc || 0) +
+    (q.provincialAssoc || 0) +
+    (q.nsdf || 0) +
+    (q.external || 0)
+  );
+}
 
 export interface DocumentItemSetting {
   enabled: boolean;

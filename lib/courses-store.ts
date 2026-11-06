@@ -8,6 +8,8 @@ import {
   DEFAULT_SAT_SUPPORT,
   DEFAULT_EXPENSES_POLICY,
   getGlobalCourseSchedule,
+  balanceQuotasToCapacity,
+  isLegacy50Quota,
   type Course,
 } from "@/lib/courses";
 import { isSupabaseConfigured, getSupabaseClient } from "@/lib/supabase/client";
@@ -93,11 +95,17 @@ function mergeStoredCourses(stored: Course[]): Course[] {
         ? (seedDate || "20-22 ม.ค. 2570")
         : (saved.date || seedDate || "");
 
+    const cap = Number(saved.seats?.match(/\d+/)?.[0]) || saved.capacity || seed?.capacity || 40;
+    const seedQuotas = seed?.targetQuotas ?? balanceQuotasToCapacity(cap);
+    const isSaved50 = isLegacy50Quota(saved.targetQuotas);
+    const finalStoredQuotas = isSaved50 ? seedQuotas : (saved.targetQuotas ?? seedQuotas);
+
     return {
       ...(seed ?? {}),
       ...saved,
       id: saved.id,
       date: finalDate,
+      targetQuotas: finalStoredQuotas,
       image: customImage ?? seed?.image ?? "/assets/course-executive-management.jpg",
       imageAlt: saved.imageAlt || seed?.imageAlt || `${saved.title} - รูปประกอบ`,
       shortTitle:
@@ -114,7 +122,6 @@ function mergeStoredCourses(stored: Course[]): Course[] {
       resultDate: isCustom
         ? saved.resultDate || seed?.resultDate || globalSched.resultDate
         : globalSched.resultDate,
-      targetQuotas: saved.targetQuotas ?? seed?.targetQuotas ?? { ...DEFAULT_TARGET_QUOTAS },
       courseObjective:
         saved.courseObjective !== undefined
           ? saved.courseObjective
@@ -202,6 +209,18 @@ function mapCloudCourse(
   const finalLocation = preferLocal && existing?.location ? existing.location : c.location;
   const finalSeats = preferLocal && existing?.seats ? existing.seats : c.seats;
 
+  const rawCloudQuotas = (c as { target_quotas?: import("@/lib/courses").TargetGroupQuotas }).target_quotas;
+  const isCloud50 = isLegacy50Quota(rawCloudQuotas);
+  const isExisting50 = isLegacy50Quota(existing?.targetQuotas);
+  const finalQuotas =
+    preferLocal && existing?.targetQuotas && !isExisting50
+      ? existing.targetQuotas
+      : isCloud50
+      ? (existing?.targetQuotas && !isExisting50
+          ? existing.targetQuotas
+          : (seed?.targetQuotas ?? balanceQuotasToCapacity(cap)))
+      : (rawCloudQuotas || existing?.targetQuotas || seed?.targetQuotas || balanceQuotasToCapacity(cap));
+
   return {
     ...(seed ?? {}),
     ...(existing ?? {}),
@@ -224,9 +243,7 @@ function mapCloudCourse(
         : c.warning_message !== undefined
         ? (c.warning_message?.trim() || undefined)
         : existing?.warningMessage,
-    targetQuotas:
-      (c as { target_quotas?: import("@/lib/courses").TargetGroupQuotas })
-        .target_quotas || existing?.targetQuotas || seed?.targetQuotas,
+    targetQuotas: finalQuotas,
     documentConfig: (c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config
       ? {
           photo: {

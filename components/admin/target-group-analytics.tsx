@@ -8,6 +8,8 @@ import {
   type Course,
   type TargetGroupQuotas,
   DEFAULT_TARGET_QUOTAS,
+  balanceQuotasToCapacity,
+  isLegacy50Quota,
 } from "@/lib/courses";
 import type { ApplicantRecord } from "@/lib/applications-store";
 
@@ -34,12 +36,17 @@ export function TargetGroupAnalytics({
 
   // Combined quotas across all courses or specific course
   const totalQuotas: TargetGroupQuotas = useMemo(() => {
+    const resolveQuota = (c: Course): TargetGroupQuotas => {
+      const raw = c.targetQuotas || DEFAULT_TARGET_QUOTAS;
+      return isLegacy50Quota(raw) ? balanceQuotasToCapacity(c.capacity || 40) : raw;
+    };
+
     if (activeCourse) {
-      return activeCourse.targetQuotas || DEFAULT_TARGET_QUOTAS;
+      return resolveQuota(activeCourse);
     }
     return courses.reduce(
       (acc, c) => {
-        const q = c.targetQuotas || DEFAULT_TARGET_QUOTAS;
+        const q = resolveQuota(c);
         return {
           sat: acc.sat + (q.sat || 0),
           nationalAssoc: acc.nationalAssoc + (q.nationalAssoc || 0),

@@ -10,8 +10,10 @@ import {
   DEFAULT_SAT_SUPPORT,
   DEFAULT_TARGET_QUOTAS,
   TARGET_GROUPS,
+  balanceQuotasToCapacity,
   getCourseScheduleDates,
   getTargetGroupKey,
+  isLegacy50Quota,
   type Course,
 } from "@/lib/courses";
 import { useApplications } from "@/lib/applications-store";
@@ -322,7 +324,10 @@ export function CoursesAdmin() {
             (item) => item.status === "reserve"
           ).length;
 
-          const quotas = course.targetQuotas ?? DEFAULT_TARGET_QUOTAS;
+          const rawQuotas = course.targetQuotas ?? DEFAULT_TARGET_QUOTAS;
+          const quotas = isLegacy50Quota(rawQuotas)
+            ? balanceQuotasToCapacity(course.capacity || 40)
+            : rawQuotas;
           const groupStats = TARGET_GROUPS.map((g) => {
             const groupApps = courseApplications.filter(
               (a) => getTargetGroupKey(a.affiliation) === g.key
