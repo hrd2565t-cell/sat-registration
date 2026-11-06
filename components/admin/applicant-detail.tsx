@@ -342,7 +342,7 @@ export function ApplicantDetail({
     const firstName = nameParts[0] || applicant.name;
     const lastName = nameParts.slice(1).join(" ") || "";
 
-    addTrainee({
+    const createdTrainee = addTrainee({
       name: applicant.name,
       prefix: detectedPrefix,
       firstName,
@@ -369,7 +369,17 @@ export function ApplicantDetail({
       status: "active",
     });
 
-    setNotice(`🎉 ออกวุฒิบัตรเลขที่ ${certCode} และโอนย้าย "${applicant.name}" เข้าสู่ทำเนียบบุคลากรกีฬาสำเร็จ! พร้อมออกพาสปอร์ตดิจิทัลเรียบร้อย`);
+    const isExistingPersonnel = trainees.some(
+      (t) =>
+        t.personnelId === createdTrainee.personnelId &&
+        (t.idCard === applicant.idCard || t.name === applicant.name)
+    );
+
+    setNotice(
+      isExistingPersonnel
+        ? `🎉 ออกวุฒิบัตรเลขที่ ${certCode} และผูกเข้ากับรหัสบุคลากรเดิม "${createdTrainee.personnelId}" ของ "${applicant.name}" สำเร็จ!`
+        : `🎉 ออกวุฒิบัตรเลขที่ ${certCode} และสร้างรหัสบุคลากรใหม่ "${createdTrainee.personnelId}" ให้กับ "${applicant.name}" เข้าสู่ทำเนียบสำเร็จ!`
+    );
   };
 
   return (

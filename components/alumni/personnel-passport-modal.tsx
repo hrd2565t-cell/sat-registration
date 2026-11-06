@@ -105,7 +105,6 @@ export function PersonnelPassportModal({
       name: cleanFull,
       affiliationGroup: editGroup,
       affiliation: editAffiliationName.trim(),
-      personnelId: editPersonnelId.trim(),
       idCard: editIdCard.trim() || undefined,
       status: editStatus,
     });
@@ -389,18 +388,21 @@ export function PersonnelPassportModal({
                       />
                     </div>
 
-                    {/* Personnel ID */}
+                    {/* Personnel ID (Locked & Immutable UID) */}
                     <div>
-                      <label className="text-[11px] text-blue-200 font-semibold block mb-1">
-                        รหัสประจำตัวบุคลากร:
+                      <label className="text-[11px] text-blue-200 font-semibold block mb-1 flex items-center justify-between">
+                        <span>รหัสประจำตัวบุคลากร (System UID):</span>
+                        <span className="text-[10px] text-amber-300 font-bold flex items-center gap-1">
+                          <span>🔒</span>
+                          <span>ล็อคถาวร</span>
+                        </span>
                       </label>
-                      <input
-                        type="text"
-                        value={editPersonnelId}
-                        onChange={(e) => setEditPersonnelId(e.target.value)}
-                        placeholder="เช่น USR-2026-0001"
-                        className="w-full rounded-lg bg-white text-gray-900 p-2 text-xs font-mono font-semibold focus:outline-hidden"
-                      />
+                      <div className="w-full rounded-lg bg-black/40 border border-white/20 p-2 text-xs font-mono font-black text-amber-300 flex items-center justify-between shadow-inner">
+                        <span>🆔 {primary.personnelId || editPersonnelId || "–"}</span>
+                        <span className="text-[9.5px] bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded font-sans font-bold">
+                          ห้ามแก้ไข
+                        </span>
+                      </div>
                     </div>
 
                     {/* ID Card */}

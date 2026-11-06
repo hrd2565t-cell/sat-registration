@@ -498,12 +498,25 @@ export function useAlumniStore() {
 
 export function addTrainee(input: Omit<HistoricalTrainee, "id" | "createdAt" | "updatedAt" | "duties">): HistoricalTrainee {
   const now = new Date().toISOString();
-  const finalPersonnelId = input.personnelId || getNextPersonnelId(state.trainees);
+
+  // Deduplication Check: Look for existing trainee in state by 13-digit citizen ID, personnelId, or normalized full name
+  const cleanInputId = input.idCard ? input.idCard.replace(/\D/g, "") : "";
+  const existingPerson = state.trainees.find((t) => {
+    const cleanTId = t.idCard ? t.idCard.replace(/\D/g, "") : "";
+    const isIdMatch = cleanInputId && cleanInputId.length === 13 && cleanTId === cleanInputId;
+    const isPIdMatch = input.personnelId && t.personnelId && t.personnelId.toLowerCase() === input.personnelId.toLowerCase();
+    const isNameMatch = normalizeNameForMatching(t.name) === normalizeNameForMatching(input.name);
+    return isIdMatch || isPIdMatch || isNameMatch;
+  });
+
+  // Strict UID Enforcement: Reuse existing personnelId if person exists, or assign nextAutoId
+  const finalPersonnelId = existingPerson?.personnelId || input.personnelId || getNextPersonnelId(state.trainees);
+
   const newTrainee: HistoricalTrainee = {
     ...input,
     personnelId: finalPersonnelId,
     idCard: input.idCard || finalPersonnelId,
-    id: `trn-custom-${Date.now()}`,
+    id: `trn-custom-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     duties: [],
     createdAt: now,
     updatedAt: now,
@@ -694,7 +707,7 @@ export function updatePersonProfile(
         affiliationGroup: updates.affiliationGroup !== undefined && updates.affiliationGroup.trim() ? updates.affiliationGroup.trim() : t.affiliationGroup,
         affiliation: updates.affiliation !== undefined && updates.affiliation.trim() ? updates.affiliation.trim() : t.affiliation,
         sportsType: updates.affiliation !== undefined && updates.affiliation.trim() ? updates.affiliation.trim() : t.sportsType,
-        personnelId: updates.personnelId !== undefined && updates.personnelId.trim() ? updates.personnelId.trim() : t.personnelId,
+        personnelId: t.personnelId ? t.personnelId : (updates.personnelId !== undefined && updates.personnelId.trim() ? updates.personnelId.trim() : t.personnelId),
         idCard: updates.idCard !== undefined && updates.idCard.trim() ? updates.idCard.trim() : t.idCard,
         phone: updates.phone !== undefined ? updates.phone.trim() : t.phone,
         email: updates.email !== undefined ? updates.email.trim() : t.email,
