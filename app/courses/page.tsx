@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout/header";
@@ -9,7 +9,12 @@ import { Stepper } from "@/components/stepper/stepper";
 import { CourseCard } from "@/components/course/course-card";
 import { CourseDetailDialog } from "@/components/course/course-detail-dialog";
 import { TimelineSummary } from "@/components/timeline/timeline-summary";
-import { getCourseById, getDefaultCourse, type Course } from "@/lib/courses";
+import {
+  getCourseById,
+  getDefaultCourse,
+  sortCoursesChronologically,
+  type Course,
+} from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
 
 const steps = [
@@ -30,14 +35,17 @@ function CourseCatalogContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { courses } = useCourses();
+  const sortedCourses = useMemo(() => {
+    return sortCoursesChronologically(courses);
+  }, [courses]);
   const initialCourse =
-    getCourseById(searchParams.get("course"), courses) ??
-    getDefaultCourse(courses);
+    getCourseById(searchParams.get("course"), sortedCourses) ??
+    (sortedCourses.find((c) => c.status === "open") ?? getDefaultCourse(courses));
   const [selectedId, setSelectedId] = useState<number | null>(
     initialCourse.status === "open" ? initialCourse.id : null
   );
   const [detailCourse, setDetailCourse] = useState<Course | null>(null);
-  const selectedCourse = courses.find(
+  const selectedCourse = sortedCourses.find(
     (course) => course.id === selectedId && course.status === "open"
   );
   const activeId = selectedCourse?.id ?? null;
@@ -62,20 +70,27 @@ function CourseCatalogContent() {
 
         <Stepper currentStep={1} steps={steps} />
 
-        <div className="mb-5 mt-7">
-          <h2 className="text-[22px] font-bold leading-snug text-[#16265E]">
-            ขั้นตอนที่ 1: เลือกหลักสูตรที่ต้องการสมัคร
-          </h2>
-          <p className="mt-1 text-[13px] text-[#6b7280]">
-            *กรุณาตรวจสอบคุณสมบัติเฉพาะของแต่ละหลักสูตรก่อนตัดสินใจ (สามารถสมัครได้มากกว่า 1 หลักสูตร โดยช่วงเวลาการอบรมต้องไม่ซ้อนทับกัน)
-          </p>
+        <div className="mb-5 mt-7 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2.5">
+          <div>
+            <h2 className="text-[22px] font-bold leading-snug text-[#16265E]">
+              ขั้นตอนที่ 1: เลือกหลักสูตรที่ต้องการสมัคร
+            </h2>
+            <p className="mt-1 text-[13px] text-[#6b7280]">
+              *จัดเรียงตามลำดับกำหนดการเริ่มอบรมจริง (สามารถสมัครได้มากกว่า 1 หลักสูตร โดยช่วงเวลาการอบรมต้องไม่ซ้อนทับกัน)
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-800 shrink-0 shadow-2xs">
+            <span>🗓️</span>
+            <span>เรียงตามลำดับวันจัดอบรม</span>
+          </span>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {courses.map((course) => (
+          {sortedCourses.map((course, idx) => (
             <CourseCard
               key={course.id}
               {...course}
+              scheduleOrder={idx + 1}
               selected={course.id === activeId}
               onSelect={setSelectedId}
               onViewDetails={() => setDetailCourse(course)}

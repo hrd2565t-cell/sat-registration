@@ -20,6 +20,7 @@ export interface CourseCardProps {
   seats: string;
   warningMessage?: string;
   selected?: boolean;
+  scheduleOrder?: number;
   onSelect?: (id: number) => void;
   onViewDetails?: () => void;
 }
@@ -133,6 +134,7 @@ export function CourseCard({
   seats,
   warningMessage,
   selected = false,
+  scheduleOrder,
   onSelect,
   onViewDetails,
 }: CourseCardProps) {
@@ -177,6 +179,14 @@ export function CourseCard({
           className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
           sizes="(max-width: 768px) 100vw, (max-width: 1280px) 33vw, 20vw"
         />
+        {typeof scheduleOrder === "number" && (
+          <div className="absolute left-2 top-2 z-10">
+            <span className="inline-flex items-center gap-1 rounded-md bg-[#16265E]/90 px-2 py-1 text-[10.5px] font-bold text-white shadow-sm backdrop-blur-xs">
+              <span>📅</span>
+              <span>อบรมลำดับที่ {scheduleOrder}</span>
+            </span>
+          </div>
+        )}
         <div className="absolute right-2 top-2 z-10">{badge}</div>
       </div>
 

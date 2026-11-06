@@ -432,6 +432,26 @@ export function formatCourseDateSessions(
 }
 
 /**
+ * คำนวณ Timestamp (ms) ของวันเริ่มการอบรมช่วงแรกสุดของหลักสูตร
+ */
+export function getCourseEarliestStartTime(course: Course): number {
+  const sessions = parseCourseDateSessions(course.date);
+  if (!sessions || sessions.length === 0) return Infinity;
+  const first = sessions[0];
+  const yearCE = first.yearBE - 543;
+  return new Date(yearCE, first.startMonth, first.startDay).getTime();
+}
+
+/**
+ * จัดเรียงหลักสูตรตามลำดับเวลาเริ่มจัดอบรมจริง (เร็วที่สุด -> ช้าที่สุด)
+ */
+export function sortCoursesChronologically(courseList: Course[]): Course[] {
+  return [...courseList].sort(
+    (a, b) => getCourseEarliestStartTime(a) - getCourseEarliestStartTime(b)
+  );
+}
+
+/**
  * คำนวณค่าเริ่มต้นของ "ช่วงวันเปิดรับสมัคร" และ "วันประกาศผลผู้มีสิทธิ์เข้าอบรม"
  * อัตโนมัติจากวันเริ่มการอบรมช่วงแรก
  */
