@@ -224,11 +224,20 @@ function HomeContent() {
                 </Link>
 
                 <Link
+                  href="/timeline"
+                  className="flex items-center justify-center gap-1.5 rounded-xl border border-blue-200 hover:border-blue-400 bg-blue-50/70 hover:bg-blue-100/70 text-[#16265E] py-3.5 px-4 text-xs font-bold transition-colors shrink-0 shadow-2xs"
+                  title="ดูแผนกำหนดการและปฏิทินการจัดอบรม 16 เดือน"
+                >
+                  <span>📅</span>
+                  <span>ปฏิทิน Timeline</span>
+                </Link>
+
+                <Link
                   href="/status"
                   className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 hover:border-gray-400 bg-white hover:bg-gray-50 text-gray-700 py-3.5 px-4 text-xs font-bold transition-colors shrink-0 shadow-2xs"
                 >
                   <span>📄</span>
-                  <span>ตรวจสอบสถานะการสมัคร</span>
+                  <span>ตรวจสอบสถานะ</span>
                 </Link>
               </div>
             </div>
@@ -456,6 +465,10 @@ function HomeContent() {
           <div className="flex flex-wrap items-center justify-center gap-4 text-gray-600">
             <Link href="/courses" className="hover:text-[#16265E] transition-colors">
               หลักสูตรอบรม
+            </Link>
+            <span>·</span>
+            <Link href="/timeline" className="hover:text-[#16265E] transition-colors">
+              แผนกำหนดการ (Timeline)
             </Link>
             <span>·</span>
             <Link href="/status" className="hover:text-[#16265E] transition-colors">

@@ -289,6 +289,15 @@ function SurveyContent() {
 
       {/* Main Container */}
       <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 space-y-6">
+        {/* Breadcrumb Navigation */}
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+          <Link href="/" className="hover:text-[#16265E] transition-colors">
+            หน้าแรก
+          </Link>
+          <span>/</span>
+          <span className="font-bold text-[#16265E]">สำรวจความคิดเห็นและเสนอหลักสูตร</span>
+        </div>
+
         {/* Hero Section */}
         <div className="rounded-3xl bg-gradient-to-br from-[#16265E] via-[#1e3a8a] to-[#0f172a] text-white p-6 sm:p-8 shadow-xl relative overflow-hidden text-center sm:text-left">
           <div className="absolute -right-12 -top-12 w-64 h-64 rounded-full bg-blue-400/10 blur-3xl pointer-events-none"></div>
@@ -591,6 +600,26 @@ function SurveyContent() {
             <span>✍️</span>
             <span>พิมพ์เสนอหัวข้อใหม่</span>
           </button>
+        </div>
+
+        {/* Banner Link to Current Courses */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50/70 p-4 shadow-xs">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#16265E] text-white text-lg">
+              🎓
+            </span>
+            <div>
+              <p className="text-xs font-bold text-[#16265E]">สนใจสมัครหลักสูตรที่มีการเปิดสอนในปัจจุบัน?</p>
+              <p className="text-[11px] text-gray-600">ตรวจสอบ 4 หลักสูตรประจำปีงบประมาณ 2570 และสมัครออนไลน์ได้ทันที</p>
+            </div>
+          </div>
+          <Link
+            href="/courses"
+            className="inline-flex h-8.5 shrink-0 items-center gap-1.5 rounded-lg bg-[#16265E] px-4 text-xs font-semibold text-white shadow-xs transition hover:bg-[#1e3a8a] active:scale-[0.98]"
+          >
+            <span>ดูหลักสูตรเปิดรับสมัคร</span>
+            <span>→</span>
+          </Link>
         </div>
       </main>
 

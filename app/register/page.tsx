@@ -412,7 +412,7 @@ function RegistrationContent() {
               ไม่สามารถส่งใบสมัครได้ กรุณาเลือกหลักสูตรอื่น
             </span>
             <Link
-              href="/"
+              href="/courses"
               className="inline-flex h-8 w-fit shrink-0 items-center justify-center rounded-[5px] bg-[#9e2a30] px-3 text-[11px] font-semibold text-white transition-colors hover:bg-[#842228]"
             >
               กลับไปเลือกหลักสูตร
@@ -755,7 +755,7 @@ function RegistrationContent() {
             href={`/courses?course=${course.id}`}
             className="inline-flex h-[34px] items-center justify-center rounded bg-[#d1d5db] px-5 text-[13px] font-semibold text-[#4b5563] transition-colors hover:bg-[#c3c9d1]"
           >
-            ย้อนกลับไปหน้าแก้ไข
+            ← ย้อนกลับไปเลือกหลักสูตร
           </Link>
           <Button
             type="submit"

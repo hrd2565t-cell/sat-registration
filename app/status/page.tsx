@@ -241,7 +241,7 @@ function StatusContent() {
                     <span>ค้นหาจากชื่อ-นามสกุลในทำเนียบย้อนหลัง</span>
                   </Link>
                   <Link
-                    href="/"
+                    href="/courses"
                     className="inline-flex h-8 items-center rounded-[5px] border border-gray-300 bg-white px-3.5 text-[11px] font-semibold text-gray-700 transition-colors hover:bg-gray-50"
                   >
                     เลือกหลักสูตรและสมัครใหม่
@@ -447,13 +447,28 @@ function StatusContent() {
           ข้อมูลส่วนบุคคลของท่านจะถูกเก็บรักษาความลับตามกฎหมาย PDPA
         </p>
 
-        <Link
-          href="/"
-          className="mt-2.5 inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-3 text-[11px] font-medium text-[#4b5563] transition-colors hover:bg-[#f8fafc]"
-        >
-          <ArrowLeftIcon className="h-3.5 w-3.5 shrink-0" />
-          กลับสู่หน้าหลัก
-        </Link>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Link
+            href="/"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e5e7eb] bg-white px-3 text-[11.5px] font-medium text-[#4b5563] transition-colors hover:bg-[#f8fafc]"
+          >
+            <ArrowLeftIcon className="h-3.5 w-3.5 shrink-0" />
+            กลับสู่หน้าหลัก
+          </Link>
+          <Link
+            href="/courses"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#16265E] px-3.5 text-[11.5px] font-semibold text-white shadow-xs transition hover:bg-[#1e3a8a]"
+          >
+            <span>🎓 เลือกดูหลักสูตรที่เปิดรับสมัคร</span>
+            <span>→</span>
+          </Link>
+          <Link
+            href="/timeline"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#cbd5e1] bg-white px-3 text-[11.5px] font-medium text-[#16265E] transition hover:bg-[#f1f5f9]"
+          >
+            <span>📅 แผนกำหนดการ (Timeline)</span>
+          </Link>
+        </div>
       </main>
 
       {/* Digital Pass Modal */}

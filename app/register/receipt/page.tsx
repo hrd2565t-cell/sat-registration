@@ -360,6 +360,23 @@ function ReceiptContent() {
           </Link>
         </div>
 
+        {/* Next Step Navigation Links */}
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+          <Link
+            href="/courses"
+            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-[5px] bg-[#16265E] px-3.5 text-[11px] font-semibold text-white shadow-xs transition-colors hover:bg-[#1e3a8a]"
+          >
+            <span>🎓 สมัครหลักสูตรอื่นเพิ่มเติม</span>
+            <span>→</span>
+          </Link>
+          <Link
+            href="/"
+            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-[5px] border border-[#d1d5db] bg-white px-3 text-[11px] font-medium text-[#4b5563] transition-colors hover:bg-[#f9fafb]"
+          >
+            <span>🏠 กลับสู่หน้าแรก</span>
+          </Link>
+        </div>
+
         <p className="mt-5 text-center text-[10.5px] text-[#6b7280]">
           ข้อมูลส่วนบุคคลของท่านจะถูกเก็บรักษาความลับตามกฎหมาย PDPA
         </p>

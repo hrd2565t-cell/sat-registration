@@ -200,7 +200,7 @@ export function ConflictDialog({
             ปิดหน้าต่าง
           </button>
           <Link
-            href="/"
+            href="/courses"
             className="inline-flex h-9 items-center justify-center rounded-[5px] border border-[#c7d7ea] bg-white px-3.5 text-[11.5px] font-semibold text-[#1e3a8a] transition-colors hover:bg-[#eff6ff]"
           >
             เลือกหลักสูตรอื่น

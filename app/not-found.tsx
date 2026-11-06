@@ -28,6 +28,12 @@ export default function NotFound() {
             🏠 กลับหน้าหลัก
           </Link>
           <Link
+            href="/courses"
+            className="inline-flex h-9 items-center justify-center rounded-[5px] border border-[#d1d5db] bg-white px-4 text-[12.5px] font-medium text-[#374151] shadow-2xs transition hover:bg-[#f8fafc]"
+          >
+            🎓 เลือกหลักสูตรอบรม
+          </Link>
+          <Link
             href="/status"
             className="inline-flex h-9 items-center justify-center rounded-[5px] border border-[#d1d5db] bg-white px-4 text-[12.5px] font-medium text-[#374151] shadow-2xs transition hover:bg-[#f8fafc]"
           >
