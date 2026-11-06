@@ -170,8 +170,10 @@ CREATE POLICY "Public can read courses"
     USING (true);
 
 -- ผู้ดูแลระบบ (หรือ Service Role / Admin Client) สามารถเพิ่ม/แก้ไข/ลบหลักสูตรได้
+DROP POLICY IF EXISTS "Admin can modify courses" ON public.courses;
 CREATE POLICY "Admin can modify courses" 
     ON public.courses FOR ALL 
+    TO anon, authenticated
     USING (true)
     WITH CHECK (true);
 
@@ -279,7 +281,7 @@ VALUES
     3,
     'หลักสูตร การบริหารจัดการงบประมาณและการจัดซื้อจัดจ้างภาครัฐ',
     'งบประมาณและพัสดุ',
-    '1-3 ธ.ค. 2569',
+    '20-22 ม.ค. 2570',
     'กรุงเทพมหานคร',
     'จำนวนที่นั่ง 40 คน',
     49,

@@ -87,11 +87,17 @@ function mergeStoredCourses(stored: Course[]): Course[] {
         ? saved.image
         : undefined;
     const isCustom = Boolean(saved.useCustomSchedule ?? seed?.useCustomSchedule);
+    const seedDate = seed?.date;
+    const finalDate =
+      saved.id === 3 && saved.date === "1-3 ธ.ค. 2569"
+        ? (seedDate || "20-22 ม.ค. 2570")
+        : (saved.date || seedDate || "");
 
     return {
       ...(seed ?? {}),
       ...saved,
       id: saved.id,
+      date: finalDate,
       image: customImage ?? seed?.image ?? "/assets/course-executive-management.jpg",
       imageAlt: saved.imageAlt || seed?.imageAlt || `${saved.title} - รูปประกอบ`,
       shortTitle:
@@ -180,19 +186,36 @@ function mapCloudCourse(
   const seed = getSeedCourse(c.id);
   const existing = existingCourses.find((item) => item.id === c.id);
 
+  // Safe Sync: If a course was modified locally by admin (has updatedAt) and the cloud row
+  // does not have a newer timestamp (e.g. cloud update was blocked by RLS), protect local edits!
+  const hasLocalEdit = Boolean(existing?.updatedAt);
+  const cloudUpdatedAt = (c as { updated_at?: string }).updated_at;
+  const preferLocal =
+    hasLocalEdit &&
+    (!cloudUpdatedAt || new Date(existing!.updatedAt!).getTime() >= new Date(cloudUpdatedAt).getTime());
+
+  const isOldCloudMock = c.id === 3 && c.date === "1-3 ธ.ค. 2569";
+  const finalDate = preferLocal && existing?.date
+    ? existing.date
+    : (isOldCloudMock ? (seed?.date || "20-22 ม.ค. 2570") : c.date);
+  const finalTitle = preferLocal && existing?.title ? existing.title : c.title;
+  const finalLocation = preferLocal && existing?.location ? existing.location : c.location;
+  const finalSeats = preferLocal && existing?.seats ? existing.seats : c.seats;
+
   return {
     ...(seed ?? {}),
     ...(existing ?? {}),
     id: c.id,
-    title: c.title,
+    title: finalTitle,
     shortTitle:
       (c as { short_title?: string }).short_title || existing?.shortTitle || seed?.shortTitle,
-    date: c.date,
-    location: c.location,
-    seats: c.seats,
+    date: finalDate,
+    location: finalLocation,
+    seats: finalSeats,
     capacity: cap,
     seatsLeft: c.status === "full" ? undefined : Math.min(cap, c.seats_left ?? cap),
     status: c.status === "full" ? "full" : "open",
+    updatedAt: preferLocal ? existing?.updatedAt : (cloudUpdatedAt || existing?.updatedAt),
     image: c.image || existing?.image || seed?.image || "/assets/course-executive-management.jpg",
     imageAlt: c.image_alt || existing?.imageAlt || seed?.imageAlt || `${c.title} - รูปประกอบ`,
     warningMessage:
@@ -428,6 +451,7 @@ export function updateCourse(
       id: course.id,
       capacity: updatedCapacity,
       seatsLeft: remaining,
+      updatedAt: new Date().toISOString(),
       image: nextImage,
       imageAlt: course.imageAlt,
       shortTitle:
@@ -522,7 +546,19 @@ export function updateCourse(
         document_config: (updated.documentConfig as unknown as import("@/lib/supabase/types").Json) ?? null,
       })
       .eq("id", id)
-      .then();
+      .select()
+      .then(
+        (res) => {
+          if (res.error) {
+            console.warn("Supabase course update error:", res.error.message);
+          } else if (!res.data || res.data.length === 0) {
+            console.warn("Supabase course update warning: 0 rows modified (check RLS policy on courses table).");
+          }
+        },
+        (err: unknown) => {
+          console.warn("Supabase course update failed:", err);
+        }
+      );
   }
 
   return { course: updated, persisted };

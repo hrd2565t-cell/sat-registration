@@ -150,6 +150,7 @@ export interface Course {
   satSupport?: string[];
   expensesPolicy?: string;
   documentConfig?: CourseDocumentConfig;
+  updatedAt?: string;
 }
 
 export const DEFAULT_GLOBAL_REGISTRATION_DATE = "6-22 ม.ค. 2570";

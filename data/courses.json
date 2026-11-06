@@ -151,15 +151,15 @@
     "shortTitle": "งบประมาณและพัสดุ",
     "registrationDate": "9 พ.ย. - 31 ม.ค. 2570",
     "resultDate": "1 ก.พ. 2570",
-    "date": "1-3 ธ.ค. 2569",
+    "date": "20-22 ม.ค. 2570",
     "location": "กรุงเทพมหานคร",
     "seats": "จำนวนที่นั่ง 40 คน",
     "targetQuotas": {
       "sat": 10,
-      "nationalAssoc": 20,
-      "provincialAssoc": 0,
-      "nsdf": 10,
-      "external": 0
+      "nationalAssoc": 15,
+      "provincialAssoc": 15,
+      "nsdf": 5,
+      "external": 5
     },
     "courseObjective": "เพื่อสร้างความรู้ความเข้าใจพื้นฐานด้านวิทยาศาสตร์การกีฬา สรีรวิทยา โภชนาการ และการป้องกันการบาดเจ็บเพื่อนำไปประยุกต์ใช้กับนักกีฬาอย่างถูกต้อง",
     "qualifications": [
