@@ -1207,15 +1207,25 @@ export function TimelineSchedule() {
                           <span className="text-[9.5px] font-semibold text-[#166534]">
                             🎓 อบรม: {row.dateSummary}
                           </span>
-                          {canEdit && (
-                            <button
-                              type="button"
-                              onClick={() => setEditingCourse(row.course)}
-                              className="inline-flex items-center gap-0.5 rounded border border-[#cbd5e1] bg-white px-1.5 py-0.5 text-[9px] font-semibold text-[#16265E] transition hover:border-[#16265E] hover:bg-[#eef2f9]"
+                          <div className="flex items-center gap-1">
+                            <Link
+                              href={`/courses?course=${row.course.id}`}
+                              className="inline-flex items-center gap-0.5 rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 text-[9px] font-bold text-[#16265E] transition hover:bg-blue-100 hover:border-blue-300"
+                              title={`เลือกและสมัครหลักสูตร "${row.title}"`}
                             >
-                              <span>✏️ แก้ไข</span>
-                            </button>
-                          )}
+                              <span>สมัคร</span>
+                              <span>→</span>
+                            </Link>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => setEditingCourse(row.course)}
+                                className="inline-flex items-center gap-0.5 rounded border border-[#cbd5e1] bg-white px-1.5 py-0.5 text-[9px] font-semibold text-[#16265E] transition hover:border-[#16265E] hover:bg-[#eef2f9]"
+                              >
+                                <span>✏️ แก้ไข</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </th>
@@ -1513,9 +1523,18 @@ export function TimelineSchedule() {
                           <p className="mt-0.5 text-[11px] font-semibold text-[#15803d]">
                             🎓 อบรม: {row.dateSummary} ({row.sessionSummary})
                           </p>
-                          <p className="mt-0.5 text-[10.5px] font-medium text-[#475569]">
-                            📍 {row.location} • 👥 {row.compactSeats}
-                          </p>
+                          <div className="mt-1 flex items-center justify-between gap-1 border-t border-emerald-200/60 pt-1.5">
+                            <p className="text-[10px] text-[#475569]">
+                              📍 {row.location} • 👥 {row.compactSeats}
+                            </p>
+                            <Link
+                              href={`/courses?course=${row.course.id}`}
+                              className="inline-flex items-center gap-1 rounded bg-[#16265E] px-2 py-0.5 text-[9.5px] font-bold text-white transition hover:bg-[#1e3a8a]"
+                            >
+                              <span>เลือกสมัคร</span>
+                              <span>→</span>
+                            </Link>
+                          </div>
                         </div>
                       ))}
 

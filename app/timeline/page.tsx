@@ -4,7 +4,7 @@ import { Header } from "@/components/layout/header";
 import { AdminNavButton } from "@/components/layout/admin-nav-button";
 import { TimelineSchedule } from "@/components/timeline/timeline-schedule";
 import { TimelineShareButton } from "@/components/timeline/timeline-share-button";
-import { ArrowLeftIcon, CalendarIcon } from "@/components/ui/icons";
+import { ArrowLeftIcon, ArrowRightIcon, CalendarIcon } from "@/components/ui/icons";
 
 export const metadata: Metadata = {
   title: "Timeline แผนกำหนดการอบรม (พ.ศ. 2570 – 2571)",
@@ -35,7 +35,7 @@ export default function TimelinePage() {
 
       <main className="mx-auto w-full max-w-[864px] px-4 pb-[10px] pt-2 sm:px-0 xl:max-w-[clamp(1040px,78vw,1360px)] xl:pb-4 xl:pt-3">
         <Link
-          href="/"
+          href="/courses"
           className="inline-flex h-7 items-center gap-1.5 rounded-[5px] bg-[#e5e9ec] px-3 text-[11px] font-medium text-[#374151] transition-colors hover:bg-[#dbe0e4] xl:h-[clamp(32px,2.4vw,38px)] xl:gap-2 xl:rounded-md xl:px-[clamp(12px,1vw,18px)] xl:text-[clamp(12px,0.8vw,14px)]"
         >
           <ArrowLeftIcon className="h-[1.1em] w-[1.1em] shrink-0" />
@@ -55,6 +55,32 @@ export default function TimelinePage() {
         </div>
 
         <TimelineSchedule />
+
+        {/* CTA to proceed to Course Selection */}
+        <div className="mx-auto mt-3 w-full max-w-[960px] xl:max-w-[clamp(1060px,80vw,1400px)]">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-xl border border-blue-200/80 bg-gradient-to-r from-blue-50 via-indigo-50/70 to-blue-50 px-4 py-3 shadow-[0_1px_4px_rgba(16,24,40,0.05)]">
+            <div className="flex items-center gap-3 text-left">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#16265E] text-base text-white shadow-xs">
+                🎓
+              </span>
+              <div>
+                <p className="text-[12.5px] font-bold text-[#16265E]">
+                  พร้อมสมัครเข้ารับการอบรมแล้วหรือยัง?
+                </p>
+                <p className="text-[11px] text-[#4b5563]">
+                  ตรวจสอบคุณสมบัติและเลือกหลักสูตรที่ต้องการ เพื่อเริ่มต้นขั้นตอนการสมัครอบรม
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/courses"
+              className="inline-flex h-8.5 shrink-0 items-center gap-1.5 rounded-lg bg-[#16265E] px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-[#1e3a8a] active:scale-[0.98]"
+            >
+              <span>ไปที่หน้าเลือกหลักสูตร</span>
+              <ArrowRightIcon className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </div>
 
         <div className="mx-auto mt-2.5 grid w-full max-w-[920px] grid-cols-1 gap-3 md:grid-cols-[1fr_240px] xl:mt-[clamp(10px,0.8vw,14px)] xl:max-w-[clamp(1020px,76vw,1340px)] xl:grid-cols-[minmax(0,1fr)_30%] xl:gap-[clamp(14px,1.2vw,20px)]">
           <section className="rounded-lg border border-[#e0e5e8] bg-white px-3 pb-2.5 pt-2 shadow-[0_1px_4px_rgba(16,24,40,0.05)] xl:rounded-xl xl:px-4 xl:py-3">
