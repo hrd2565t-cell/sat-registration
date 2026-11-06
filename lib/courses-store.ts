@@ -7,12 +7,55 @@ import {
   DEFAULT_DOCUMENT_CONFIG,
   DEFAULT_SAT_SUPPORT,
   DEFAULT_EXPENSES_POLICY,
+  DEFAULT_GLOBAL_REGISTRATION_DATE,
+  DEFAULT_GLOBAL_RESULT_DATE,
   getGlobalCourseSchedule,
   balanceQuotasToCapacity,
   isLegacy50Quota,
   type Course,
+  type TargetGroupQuotas,
 } from "@/lib/courses";
 import { isSupabaseConfigured, getSupabaseClient } from "@/lib/supabase/client";
+
+interface EmbeddedSchedule {
+  registrationDate?: string;
+  resultDate?: string;
+  useCustomSchedule?: boolean;
+  updatedAt?: string;
+}
+
+export function sanitizeQuotas(raw?: unknown, fallbackCap = 40): TargetGroupQuotas {
+  if (!raw || typeof raw !== "object") return balanceQuotasToCapacity(fallbackCap);
+  const q = raw as Record<string, unknown>;
+  const sat = typeof q.sat === "number" ? q.sat : 5;
+  const nationalAssoc = typeof q.nationalAssoc === "number" ? q.nationalAssoc : 15;
+  const provincialAssoc = typeof q.provincialAssoc === "number" ? q.provincialAssoc : 15;
+  const nsdf = typeof q.nsdf === "number" ? q.nsdf : 0;
+  const external = typeof q.external === "number" ? q.external : 5;
+  return { sat, nationalAssoc, provincialAssoc, nsdf, external };
+}
+
+export function buildQuotasPayload(
+  quotas: TargetGroupQuotas | undefined,
+  schedule: {
+    registrationDate?: string;
+    resultDate?: string;
+    useCustomSchedule?: boolean;
+    updatedAt?: string;
+  },
+  capacity = 40
+): Record<string, unknown> {
+  const cleanQ = sanitizeQuotas(quotas, capacity);
+  return {
+    ...cleanQ,
+    _schedule: {
+      registrationDate: schedule.registrationDate?.trim() || DEFAULT_GLOBAL_REGISTRATION_DATE,
+      resultDate: schedule.resultDate?.trim() || DEFAULT_GLOBAL_RESULT_DATE,
+      useCustomSchedule: Boolean(schedule.useCustomSchedule),
+      updatedAt: schedule.updatedAt || new Date().toISOString(),
+    },
+  };
+}
 
 interface CoursesState {
   courses: Course[];
@@ -209,8 +252,42 @@ function mapCloudCourse(
   const finalLocation = preferLocal && existing?.location ? existing.location : c.location;
   const finalSeats = preferLocal && existing?.seats ? existing.seats : c.seats;
 
-  const rawCloudQuotas = (c as { target_quotas?: import("@/lib/courses").TargetGroupQuotas }).target_quotas;
-  const isCloud50 = isLegacy50Quota(rawCloudQuotas);
+  const rawCloudQuotas = (c as { target_quotas?: any }).target_quotas;
+  const cloudSchedule = rawCloudQuotas?._schedule as EmbeddedSchedule | undefined;
+
+  const colRegDate = (c as { registration_date?: string }).registration_date;
+  const colResDate = (c as { result_date?: string }).result_date;
+  const colUseCustom = (c as { use_custom_schedule?: boolean }).use_custom_schedule;
+
+  const cloudSchedReg = colRegDate || cloudSchedule?.registrationDate;
+  const cloudSchedRes = colResDate || cloudSchedule?.resultDate;
+  const cloudSchedCustom =
+    colUseCustom !== undefined ? colUseCustom : cloudSchedule?.useCustomSchedule;
+  const cloudSchedUpdatedAt = cloudSchedule?.updatedAt || cloudUpdatedAt;
+
+  const isLocalScheduleNewer =
+    Boolean(existing?.updatedAt && cloudSchedUpdatedAt) &&
+    new Date(existing!.updatedAt!).getTime() > new Date(cloudSchedUpdatedAt!).getTime();
+
+  const finalRegDate =
+    isLocalScheduleNewer && existing?.registrationDate
+      ? existing.registrationDate
+      : cloudSchedReg || existing?.registrationDate || seed?.registrationDate || DEFAULT_GLOBAL_REGISTRATION_DATE;
+
+  const finalResDate =
+    isLocalScheduleNewer && existing?.resultDate
+      ? existing.resultDate
+      : cloudSchedRes || existing?.resultDate || seed?.resultDate || DEFAULT_GLOBAL_RESULT_DATE;
+
+  const finalUseCustom =
+    isLocalScheduleNewer && existing?.useCustomSchedule !== undefined
+      ? existing.useCustomSchedule
+      : cloudSchedCustom !== undefined
+      ? cloudSchedCustom
+      : Boolean(existing?.useCustomSchedule ?? seed?.useCustomSchedule);
+
+  const cleanCloudQ = sanitizeQuotas(rawCloudQuotas, cap);
+  const isCloud50 = isLegacy50Quota(cleanCloudQ);
   const isExisting50 = isLegacy50Quota(existing?.targetQuotas);
   const finalQuotas =
     preferLocal && existing?.targetQuotas && !isExisting50
@@ -219,7 +296,7 @@ function mapCloudCourse(
       ? (existing?.targetQuotas && !isExisting50
           ? existing.targetQuotas
           : (seed?.targetQuotas ?? balanceQuotasToCapacity(cap)))
-      : (rawCloudQuotas || existing?.targetQuotas || seed?.targetQuotas || balanceQuotasToCapacity(cap));
+      : (cleanCloudQ || existing?.targetQuotas || seed?.targetQuotas || balanceQuotasToCapacity(cap));
 
   return {
     ...(seed ?? {}),
@@ -243,7 +320,10 @@ function mapCloudCourse(
         : c.warning_message !== undefined
         ? (c.warning_message?.trim() || undefined)
         : existing?.warningMessage,
-    targetQuotas: finalQuotas,
+    targetQuotas: sanitizeQuotas(finalQuotas, cap),
+    registrationDate: finalRegDate,
+    resultDate: finalResDate,
+    useCustomSchedule: finalUseCustom,
     documentConfig: (c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config
       ? {
           photo: {
@@ -276,6 +356,68 @@ function mapCloudCourse(
   };
 }
 
+let realtimeSubscribed = false;
+
+function subscribeToCoursesRealtime() {
+  if (realtimeSubscribed || typeof window === "undefined" || !isSupabaseConfigured()) return;
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+
+  try {
+    realtimeSubscribed = true;
+    supabase
+      .channel("sat-courses-realtime-channel")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "courses" },
+        (payload) => {
+          if (payload.eventType === "UPDATE") {
+            const row = payload.new as import("./supabase/types").Database["public"]["Tables"]["courses"]["Row"];
+            if (!row || typeof row.id !== "number") return;
+            const updated = mapCloudCourse(row, state.courses);
+            state = {
+              courses: state.courses.map((c) => (c.id === updated.id ? updated : c)),
+              revision: state.revision + 1,
+            };
+            try {
+              window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.courses));
+            } catch {}
+            emit();
+          } else if (payload.eventType === "INSERT") {
+            const row = payload.new as import("./supabase/types").Database["public"]["Tables"]["courses"]["Row"];
+            if (!row || typeof row.id !== "number") return;
+            if (!state.courses.some((c) => c.id === row.id)) {
+              const inserted = mapCloudCourse(row, state.courses);
+              state = {
+                courses: [...state.courses, inserted],
+                revision: state.revision + 1,
+              };
+              try {
+                window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.courses));
+              } catch {}
+              emit();
+            }
+          } else if (payload.eventType === "DELETE") {
+            const oldId = (payload.old as { id?: number })?.id;
+            if (typeof oldId === "number") {
+              state = {
+                courses: state.courses.filter((c) => c.id !== oldId),
+                revision: state.revision + 1,
+              };
+              try {
+                window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.courses));
+              } catch {}
+              emit();
+            }
+          }
+        }
+      )
+      .subscribe();
+  } catch (err) {
+    console.warn("Failed to subscribe to courses realtime:", err);
+  }
+}
+
 function hydrate() {
   if (hydrateStarted || typeof window === "undefined") return;
   hydrateStarted = true;
@@ -296,10 +438,14 @@ function hydrate() {
                 courses: cloudCourses,
                 revision: state.revision + 1,
               };
+              try {
+                window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.courses));
+              } catch {}
               emit();
             }
           });
       }
+      subscribeToCoursesRealtime();
       return;
     }
 
@@ -346,10 +492,15 @@ function hydrate() {
             courses: [...cloudCourses, ...localOnly],
             revision: state.revision + 1,
           };
+          try {
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.courses));
+          } catch {}
           emit();
         }
       });
   }
+
+  subscribeToCoursesRealtime();
 }
 
 function subscribe(listener: () => void) {
@@ -547,6 +698,17 @@ export function updateCourse(
 
   if (isSupabaseConfigured()) {
     const supabase = getSupabaseClient();
+    const quotasPayload = buildQuotasPayload(
+      updated.targetQuotas,
+      {
+        registrationDate: updated.registrationDate,
+        resultDate: updated.resultDate,
+        useCustomSchedule: updated.useCustomSchedule,
+        updatedAt: updated.updatedAt,
+      },
+      updated.capacity || 40
+    );
+
     supabase
       ?.from("courses")
       .update({
@@ -559,8 +721,8 @@ export function updateCourse(
         status: updated.status,
         image: updated.image,
         warning_message: updated.warningMessage && updated.warningMessage.trim() ? updated.warningMessage.trim() : null,
-        target_quotas: (updated.targetQuotas as unknown as import("@/lib/supabase/types").Json) ?? null,
-        document_config: (updated.documentConfig as unknown as import("@/lib/supabase/types").Json) ?? null,
+        target_quotas: quotasPayload as unknown as import("@/lib/supabase/types").Json,
+        updated_at: updated.updatedAt,
       })
       .eq("id", id)
       .select()
@@ -576,6 +738,31 @@ export function updateCourse(
           console.warn("Supabase course update failed:", err);
         }
       );
+
+    if (syncGlobalSchedule) {
+      nextCourses.forEach((other) => {
+        if (other.id !== id && !other.useCustomSchedule) {
+          const otherPayload = buildQuotasPayload(
+            other.targetQuotas,
+            {
+              registrationDate: other.registrationDate,
+              resultDate: other.resultDate,
+              useCustomSchedule: false,
+              updatedAt: updated!.updatedAt,
+            },
+            other.capacity || 40
+          );
+          supabase
+            ?.from("courses")
+            .update({
+              target_quotas: otherPayload as unknown as import("@/lib/supabase/types").Json,
+              updated_at: updated!.updatedAt,
+            })
+            .eq("id", other.id)
+            .then();
+        }
+      });
+    }
   }
 
   return { course: updated, persisted };
@@ -667,6 +854,17 @@ export function addCourse(
 
   if (isSupabaseConfigured()) {
     const supabase = getSupabaseClient();
+    const quotasPayload = buildQuotasPayload(
+      newCourse.targetQuotas,
+      {
+        registrationDate: newCourse.registrationDate,
+        resultDate: newCourse.resultDate,
+        useCustomSchedule: newCourse.useCustomSchedule,
+        updatedAt: newCourse.updatedAt,
+      },
+      newCourse.capacity || 40
+    );
+
     supabase
       ?.from("courses")
       .upsert(
@@ -681,8 +879,7 @@ export function addCourse(
           status: newCourse.status,
           image: newCourse.image,
           warning_message: newCourse.warningMessage ?? null,
-          target_quotas: (newCourse.targetQuotas as unknown as import("@/lib/supabase/types").Json) ?? null,
-          document_config: (newCourse.documentConfig as unknown as import("@/lib/supabase/types").Json) ?? null,
+          target_quotas: quotasPayload as unknown as import("@/lib/supabase/types").Json,
         },
         { onConflict: "id" }
       )
@@ -699,6 +896,7 @@ export function updateGlobalCourseSchedule(
 ): { updatedCount: number; persisted: boolean } {
   const reg = registrationDate.trim();
   const res = resultDate.trim();
+  const now = new Date().toISOString();
   let updatedCount = 0;
 
   const nextCourses = state.courses.map((course) => {
@@ -711,6 +909,7 @@ export function updateGlobalCourseSchedule(
       useCustomSchedule: false,
       registrationDate: reg,
       resultDate: res,
+      updatedAt: now,
     };
   });
 
@@ -720,6 +919,33 @@ export function updateGlobalCourseSchedule(
   };
   const persisted = persist();
   emit();
+
+  // Sync each affected course immediately to Supabase
+  if (isSupabaseConfigured()) {
+    const supabase = getSupabaseClient();
+    nextCourses.forEach((c) => {
+      const payload = buildQuotasPayload(
+        c.targetQuotas,
+        {
+          registrationDate: c.registrationDate,
+          resultDate: c.resultDate,
+          useCustomSchedule: false,
+          updatedAt: now,
+        },
+        c.capacity || 40
+      );
+
+      supabase
+        ?.from("courses")
+        .update({
+          target_quotas: payload as unknown as import("@/lib/supabase/types").Json,
+          updated_at: now,
+        })
+        .eq("id", c.id)
+        .then();
+    });
+  }
+
   return { updatedCount, persisted };
 }
 

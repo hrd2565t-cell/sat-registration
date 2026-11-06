@@ -59,6 +59,33 @@ export async function POST(request: Request) {
             if (typeof c.id === "number") {
               const warningText =
                 typeof c.warningMessage === "string" ? c.warningMessage.trim() : "";
+              const targetQ =
+                (c.targetQuotas as Record<string, unknown>) ?? {
+                  sat: 5,
+                  nationalAssoc: 15,
+                  provincialAssoc: 15,
+                  nsdf: 0,
+                  external: 5,
+                };
+              const quotasPayload = {
+                ...targetQ,
+                _schedule: {
+                  registrationDate:
+                    typeof c.registrationDate === "string" && c.registrationDate.trim()
+                      ? c.registrationDate.trim()
+                      : "9 พ.ย. - 31 ม.ค. 2570",
+                  resultDate:
+                    typeof c.resultDate === "string" && c.resultDate.trim()
+                      ? c.resultDate.trim()
+                      : "1 ก.พ. 2570",
+                  useCustomSchedule: Boolean(c.useCustomSchedule),
+                  updatedAt:
+                    typeof c.updatedAt === "string"
+                      ? c.updatedAt
+                      : new Date().toISOString(),
+                },
+              };
+
               await supabase
                 .from("courses")
                 .upsert(
@@ -73,8 +100,11 @@ export async function POST(request: Request) {
                     status: c.status,
                     image: c.image,
                     warning_message: warningText ? warningText : null,
-                    target_quotas: c.targetQuotas ?? null,
-                    document_config: c.documentConfig ?? null,
+                    target_quotas: quotasPayload,
+                    updated_at:
+                      typeof c.updatedAt === "string"
+                        ? c.updatedAt
+                        : new Date().toISOString(),
                   },
                   { onConflict: "id" }
                 );

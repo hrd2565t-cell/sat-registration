@@ -214,8 +214,8 @@ export interface Course {
   updatedAt?: string;
 }
 
-export const DEFAULT_GLOBAL_REGISTRATION_DATE = "6-22 ม.ค. 2570";
-export const DEFAULT_GLOBAL_RESULT_DATE = "29 ม.ค. 2570";
+export const DEFAULT_GLOBAL_REGISTRATION_DATE = "9 พ.ย. - 31 ม.ค. 2570";
+export const DEFAULT_GLOBAL_RESULT_DATE = "1 ก.พ. 2570";
 
 export const DEFAULT_SAT_SUPPORT: string[] = [
   "ที่พักตลอดระยะเวลาการอบรม (ห้องพักคู่ตามหลักเกณฑ์ระเบียบ กกท.)",
