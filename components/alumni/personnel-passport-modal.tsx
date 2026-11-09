@@ -696,6 +696,28 @@ export function PersonnelPassportModal({
                           )}
                         </div>
                       )}
+
+                      {duty.attachmentName && (
+                        <div className="sm:col-span-2 pt-0.5">
+                          {duty.attachmentUrl ? (
+                            <a
+                              href={duty.attachmentUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/80 px-2.5 py-1 text-[11px] font-semibold text-[#1e40af] hover:bg-blue-100 transition-colors shadow-2xs"
+                              title="คลิกเพื่อดูไฟล์หลักฐาน / ภาพถ่าย"
+                            >
+                              <span>📎</span>
+                              <span className="truncate max-w-[200px] sm:max-w-xs">หลักฐาน/ภาพถ่าย: {duty.attachmentName}</span>
+                              <span>↗</span>
+                            </a>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200">
+                              📎 เอกสาร/ภาพถ่าย: {duty.attachmentName}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))

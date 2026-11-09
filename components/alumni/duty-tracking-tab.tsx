@@ -329,9 +329,23 @@ export function DutyTrackingTab({
                 </div>
 
                 {duty.attachmentName && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
-                    📎 เอกสาร/ภาพถ่าย: {duty.attachmentName}
-                  </span>
+                  duty.attachmentUrl ? (
+                    <a
+                      href={duty.attachmentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1 rounded-lg transition-colors shadow-2xs"
+                      title="คลิกเพื่อดูไฟล์หลักฐาน / ภาพถ่าย"
+                    >
+                      <span>📎</span>
+                      <span className="truncate max-w-[200px]">หลักฐาน: {duty.attachmentName}</span>
+                      <span>↗</span>
+                    </a>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
+                      📎 เอกสาร/ภาพถ่าย: {duty.attachmentName}
+                    </span>
+                  )
                 )}
               </div>
 
