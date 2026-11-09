@@ -25,24 +25,24 @@ const ROLE_SUGGESTIONS = [
 
 const STARTER_PROMPTS = [
   {
-    label: "⚙️ Periodization วางตารางซ้อม",
-    text: "นำหลักการวางแผน Periodization มาจัดตารางฝึกซ้อมล่วงหน้า โดยแบ่งช่วงเตรียมความพร้อมและช่วงแข่งขันจริง ทำให้นักกีฬามีสมรรถภาพสูงสุดในวันแข่ง",
+    label: "🏛️ บริหารองค์กรสู่ความเป็นเลิศ",
+    text: "นำองค์ความรู้การบริหารจัดการองค์กรกีฬาเพื่อความเป็นเลิศมาปรับปรุงโครงสร้างการทำงาน การประสานงานระหว่างฝ่าย และการกำกับติดตามเป้าหมายขององค์กร/สมาคมกีฬาให้มีประสิทธิภาพสูงขึ้น",
   },
   {
-    label: "⚖️ กฎกติกา & Fair Play",
-    text: "นำกติกามาตรฐานสากลและหลักความยุติธรรมมาใช้ในการตัดสิน ควบคุมเกมได้อย่างราบรื่นและลดข้อขัดแย้งระหว่างการแข่งขัน",
+    label: "⚖️ ธรรมาภิบาลโอลิมปิก & จริยธรรม",
+    text: "นำหลักธรรมาภิบาลตามแนวทางโอลิมปิกสากลและความซื่อสัตย์สุจริตมาใช้กำกับดูแลทีมงานและนักกีฬา ปลูกฝังค่านิยมเคารพกติกา Fair Play และป้องกันผลประโยชน์ทับซ้อน",
   },
   {
-    label: "🔬 วิทย์กีฬาฟื้นฟูร่างกาย",
-    text: "ประยุกต์ใช้วิทยาศาสตร์การกีฬา การอบอุ่นร่างกาย และการฟื้นฟูกล้ามเนื้อหลังแข่ง ทำให้นักกีฬาลดอาการบาดเจ็บและฟื้นตัวได้เร็วยิ่งขึ้น",
+    label: "💰 งบประมาณ & จัดซื้อจัดจ้างภาครัฐ",
+    text: "นำระเบียบการบริหารงบประมาณและการจัดซื้อจัดจ้างภาครัฐมาวางแผนเบิกจ่ายงบประมาณโครงการฝึกซ้อมและจัดแข่งขันอย่างถูกต้อง รัดกุม โปร่งใส ตรวจสอบได้ตามระเบียบราชการ",
   },
   {
-    label: "🧠 จิตวิทยาและสร้างแรงจูงใจ",
-    text: "นำเทคนิคจิตวิทยาการกีฬาและการสร้างแรงจูงใจมาใช้สื่อสารกับนักกีฬา ช่วยให้นักกีฬามีสมาธิและควบคุมความกดดันในรอบสำคัญได้ดี",
+    label: "🌐 บริหารจัดการกีฬานานาชาติ",
+    text: "นำมาตรฐานการบริหารจัดการกีฬาระดับนานาชาติ การประสานงานสหพันธ์กีฬา และขั้นตอน Protocol การจัดอีเวนต์มาใช้ในการจัดแข่งขันได้อย่างราบรื่นตามมาตรฐานสากล",
   },
   {
-    label: "📊 บริหารจัดการและงบประมาณ",
-    text: "นำหลักการบริหารจัดการองค์กรกีฬาและการวางแผนงบประมาณมาใช้จัดระบบทีมงานอย่างเป็นระเบียบ โปร่งใส และมีประสิทธิภาพ",
+    label: "🎯 วางแผนพัฒนาศักยภาพนักกีฬา",
+    text: "นำหลักการวางแผนพัฒนาสมรรถภาพนักกีฬาสู่ความเป็นเลิศ การวิเคราะห์จุดแข็งจุดอ่อน และการประเมินผลเชิงสถิติมาใช้ในการฝึกซ้อมจริงจนบรรลุเป้าหมายการแข่งขัน",
   },
 ];
 
@@ -129,7 +129,8 @@ export function DutyRecordModal({
   const [location, setLocation] = useState("");
   const [achievement, setAchievement] = useState("");
   const [knowledgeApplied, setKnowledgeApplied] = useState("");
-  const [knowledgeDimensions, setKnowledgeDimensions] = useState<string[]>(["planning"]);
+  const [knowledgeDimensions, setKnowledgeDimensions] = useState<string[]>(["governance"]);
+  const [customDimension, setCustomDimension] = useState("");
   const [impactRating, setImpactRating] = useState<number>(5);
   const [hoverRating, setHoverRating] = useState<number | null>(null);
   const [verified, setVerified] = useState(isAdmin);
@@ -240,6 +241,10 @@ export function DutyRecordModal({
 
     const effectiveEnd = isSingleDay || !endDate ? startDate : endDate;
 
+    const effectiveDimensions = knowledgeDimensions.map((k) =>
+      k === "other" && customDimension.trim() ? `other:${customDimension.trim()}` : k
+    );
+
     onSave({
       idCard: trainee.idCard,
       eventName: eventName.trim(),
@@ -250,7 +255,7 @@ export function DutyRecordModal({
       location: location.trim() || undefined,
       achievement: achievement.trim() || undefined,
       knowledgeApplied: knowledgeApplied.trim(),
-      knowledgeDimensions: knowledgeDimensions.length > 0 ? knowledgeDimensions : undefined,
+      knowledgeDimensions: effectiveDimensions.length > 0 ? effectiveDimensions : undefined,
       impactRating,
       attachmentName: attachmentName || undefined,
       attachmentUrl: attachmentUrl || undefined,
@@ -511,6 +516,22 @@ export function DutyRecordModal({
                     );
                   })}
                 </div>
+
+                {/* ระบุเพิ่มเติมเมื่อเลือก "อื่นๆ" */}
+                {knowledgeDimensions.includes("other") && (
+                  <div className="mt-2.5 rounded-xl border border-blue-200 bg-blue-50/70 p-2.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <label className="block text-[11px] font-bold text-[#16265E] mb-1">
+                      ระบุความรู้/ทักษะอื่นๆ เพิ่มเติม (ไม่บังคับ):
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="เช่น การเจรจาสิทธิประโยชน์ทางการกีฬา, วิทยาศาสตร์การกีฬา, เวชศาสตร์การกีฬา"
+                      value={customDimension}
+                      onChange={(e) => setCustomDimension(e.target.value)}
+                      className="w-full rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 focus:border-[#16265E] focus:outline-hidden focus:ring-2 focus:ring-[#16265E]/20"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* ข้อความการนำความรู้ไปใช้จริง พร้อมปุ่มลัด Starter Prompts */}
@@ -542,7 +563,7 @@ export function DutyRecordModal({
                 <textarea
                   rows={3}
                   required
-                  placeholder="เช่น นำหลักการ Periodization มาวางตารางฝึกซ้อม 8 สัปดาห์ และนำวิทยาศาสตร์การกีฬามาวิเคราะห์สมรรถภาพนักกีฬา ทำให้สามารถลดอาการบาดเจ็บและเพิ่มความอึดของนักกีฬาได้ในรอบชิง..."
+                  placeholder="เช่น นำระเบียบการจัดซื้อจัดจ้างภาครัฐและการบริหารงบประมาณมาใช้จัดซื้ออุปกรณ์ฝึกซ้อมได้อย่างถูกต้อง รวดเร็ว ตรวจสอบได้ตามระเบียบ / นำหลักธรรมาภิบาลโอลิมปิกมาใช้กำกับวินัยทีมงาน..."
                   value={knowledgeApplied}
                   onChange={(e) => setKnowledgeApplied(e.target.value)}
                   className="w-full rounded-xl border border-gray-300 bg-white p-3 text-xs leading-relaxed text-gray-900 focus:border-[#16265E] focus:outline-hidden focus:ring-2 focus:ring-[#16265E]/20"

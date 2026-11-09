@@ -48,11 +48,36 @@ export interface KnowledgeDimension {
 }
 
 export const KNOWLEDGE_DIMENSIONS: KnowledgeDimension[] = [
-  { key: "planning", label: "การวางแผนและโปรแกรมการฝึกซ้อม (Periodization & Planning)", icon: "⚙️" },
-  { key: "rules", label: "กฎ กติกามาตรฐานสากลและความยุติธรรม (Rules & Fair Play)", icon: "⚖️" },
-  { key: "science", label: "วิทยาศาสตร์การกีฬา โภชนาการ และการป้องกันบาดเจ็บ (Sports Science)", icon: "🔬" },
-  { key: "psychology", label: "จิตวิทยาการกีฬาและการสร้างแรงจูงใจ (Sport Psychology)", icon: "🧠" },
-  { key: "management", label: "การบริหารจัดการองค์กรกีฬาและงบประมาณ (Sports Management)", icon: "📊" },
+  {
+    key: "governance",
+    label: "การบริหารจัดการองค์กรกีฬาเพื่อความเป็นเลิศ (Sports Organization Excellence)",
+    icon: "🏛️",
+  },
+  {
+    key: "olympic_ethics",
+    label: "ธรรมาภิบาล จริยธรรมกีฬา และคุณค่าโอลิมปิกสากล (Good Governance & Olympic Values)",
+    icon: "⚖️",
+  },
+  {
+    key: "procurement_budget",
+    label: "การบริหารงบประมาณ การเงิน และการจัดซื้อจัดจ้างภาครัฐ (Public Procurement & Budgeting)",
+    icon: "💰",
+  },
+  {
+    key: "international_events",
+    label: "การบริหารจัดการกีฬาระดับนานาชาติ และการจัดอีเวนต์ (International Sports & Mega Events)",
+    icon: "🌐",
+  },
+  {
+    key: "coaching_development",
+    label: "การวางแผนและพัฒนาศักยภาพนักกีฬาสู่ความเป็นเลิศ (Elite Coaching & Athlete Development)",
+    icon: "🎯",
+  },
+  {
+    key: "other",
+    label: "อื่นๆ ที่เกี่ยวข้องกับการพัฒนาบุคลากรกีฬา (Other Relevant Knowledge)",
+    icon: "✨",
+  },
 ];
 
 export interface HistoricalTrainee {
@@ -1193,13 +1218,10 @@ export function computeEvaluationStats(trainees: HistoricalTrainee[]): Evaluatio
   const courseCatMap: Record<string, { count: number; activeCount: number }> = {};
   const courseMap: Record<string, { count: number; activeCount: number; category?: string }> = {};
 
-  const dimensionCounts: Record<string, number> = {
-    planning: 0,
-    rules: 0,
-    science: 0,
-    psychology: 0,
-    management: 0,
-  };
+  const dimensionCounts: Record<string, number> = {};
+  for (const dim of KNOWLEDGE_DIMENSIONS) {
+    dimensionCounts[dim.key] = 0;
+  }
   let totalRatingSum = 0;
   let totalRatingsCount = 0;
   const qualitativeHighlights: QualitativeHighlight[] = [];
@@ -1259,7 +1281,20 @@ export function computeEvaluationStats(trainees: HistoricalTrainee[]): Evaluatio
     // Aggregate Kirkpatrick Knowledge Transfer Metrics from duties
     for (const d of t.duties) {
       if (Array.isArray(d.knowledgeDimensions)) {
-        for (const dimKey of d.knowledgeDimensions) {
+        for (const rawDimKey of d.knowledgeDimensions) {
+          // Normalize legacy keys and custom "other:..."
+          let dimKey = rawDimKey;
+          if (rawDimKey.startsWith("other:")) {
+            dimKey = "other";
+          } else if (rawDimKey === "management") {
+            dimKey = "governance";
+          } else if (rawDimKey === "rules") {
+            dimKey = "olympic_ethics";
+          } else if (rawDimKey === "planning") {
+            dimKey = "coaching_development";
+          } else if (rawDimKey === "science" || rawDimKey === "psychology") {
+            dimKey = "coaching_development";
+          }
           if (dimKey in dimensionCounts) {
             dimensionCounts[dimKey] += 1;
           }

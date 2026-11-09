@@ -483,7 +483,10 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
       การแข่งขันหรือกิจกรรมที่ปฏิบัติหน้าที่: q.eventName,
       บทบาทหน้าที่: q.role,
       มิติความรู้ที่นำไปใช้: q.dimensions
-        .map((d) => KNOWLEDGE_DIMENSIONS.find((k) => k.key === d)?.label.split(" (")[0] || d)
+        .map((d) => {
+          if (d.startsWith("other:")) return d.slice(6);
+          return KNOWLEDGE_DIMENSIONS.find((k) => k.key === d)?.label.split(" (")[0] || d;
+        })
         .join(", "),
       "การนำความรู้ไปใช้จริง (คำตอบผู้รับการอบรม)": q.text,
       "ระดับประสิทธิผล (1-5 ดาว)": q.rating,
@@ -1795,7 +1798,7 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
               <h4 className="text-xs font-bold text-[#16265E]">
                 📊 สัดส่วนมิติองค์ความรู้ที่นำไปประยุกต์ใช้สูงสุด
               </h4>
-              <span className="text-[11px] text-gray-500">จำแนกตาม 5 สมรรถนะบุคลากรกีฬา</span>
+              <span className="text-[11px] text-gray-500">จำแนกตามมิติองค์ความรู้หลักสูตร กกท.</span>
             </div>
 
             <div className="space-y-3 pt-1">
@@ -1907,13 +1910,17 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                 <div className="mt-3 pt-2.5 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-1">
                     {q.dimensions.map((dKey) => {
-                      const dInfo = KNOWLEDGE_DIMENSIONS.find((k) => k.key === dKey);
+                      const isCustom = dKey.startsWith("other:");
+                      const customLabel = isCustom ? dKey.slice(6) : undefined;
+                      const dInfo = KNOWLEDGE_DIMENSIONS.find(
+                        (k) => k.key === (isCustom ? "other" : dKey)
+                      );
                       return (
                         <span
                           key={dKey}
                           className="rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-[#16265E] border border-blue-100"
                         >
-                          {dInfo?.icon} {dInfo?.label.split(" (")[0] || dKey}
+                          {dInfo?.icon || "🏷️"} {customLabel || dInfo?.label.split(" (")[0] || dKey}
                         </span>
                       );
                     })}

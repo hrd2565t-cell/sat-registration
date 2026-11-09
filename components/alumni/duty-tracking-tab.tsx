@@ -375,14 +375,18 @@ export function DutyTrackingTab({
                   {duty.knowledgeDimensions && duty.knowledgeDimensions.length > 0 && (
                     <div className="mt-2 flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-blue-100 pl-5">
                       {duty.knowledgeDimensions.map((dimKey) => {
-                        const dimInfo = KNOWLEDGE_DIMENSIONS.find((k) => k.key === dimKey);
+                        const isCustom = dimKey.startsWith("other:");
+                        const customLabel = isCustom ? dimKey.slice(6) : undefined;
+                        const dimInfo = KNOWLEDGE_DIMENSIONS.find(
+                          (k) => k.key === (isCustom ? "other" : dimKey)
+                        );
                         return (
                           <span
                             key={dimKey}
                             className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-0.5 text-[10px] font-semibold text-blue-900 border border-blue-200 shadow-2xs"
                           >
                             <span>{dimInfo?.icon || "🏷️"}</span>
-                            <span>{dimInfo?.label.split(" (")[0] || dimKey}</span>
+                            <span>{customLabel || dimInfo?.label.split(" (")[0] || dimKey}</span>
                           </span>
                         );
                       })}
