@@ -179,7 +179,7 @@ export function ClaimProfileModal({
                   รหัสอ้างอิงคำขอ: <span className="text-[#16265E] font-mono">{submittedClaimId}</span>
                 </h4>
                 <p className="text-xs text-gray-500 max-w-md mx-auto">
-                  ระบบได้บันทึกคำขอยืนยันตัวตนของ <strong>{trainee.name}</strong> เข้าสู่คิวตรวจสอบของเจ้าหน้าที่ฝ่ายพัฒนาบุคลากรกีฬา กกท. เรียบร้อยแล้ว
+                  ระบบได้บันทึกคำขอยืนยันตัวตนของ <strong>{trainee.name}</strong> เข้าสู่คิวตรวจสอบของเจ้าหน้าที่กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ กกท. เรียบร้อยแล้ว
                 </p>
               </div>
 

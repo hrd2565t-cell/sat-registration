@@ -117,7 +117,7 @@ export function ExecutiveBriefingPrintModal({
                     การกีฬาแห่งประเทศไทย (กกท.)
                   </h1>
                   <p className="text-sm font-bold text-gray-800">
-                    ฝ่ายพัฒนาบุคลากรกีฬา · กองพัฒนาบุคลากรกีฬา
+                    กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ
                   </p>
                   <p className="text-xs text-gray-500">
                     รายงานสรุปผลสัมฤทธิ์โครงการพัฒนาบุคลากรกีฬาระดับชาติ (National Sports Human Capital Report)
@@ -293,20 +293,20 @@ export function ExecutiveBriefingPrintModal({
                 <p className="text-gray-600">ผู้จัดทำและรวบรวมข้อมูล</p>
                 <div className="mt-10 border-b border-gray-400 mx-auto w-48" />
                 <p className="mt-1.5 font-bold text-gray-800">( เจ้าหน้าที่วิเคราะห์นโยบายและแผน )</p>
-                <p className="text-gray-500">กองพัฒนาบุคลากรกีฬา กกท.</p>
+                <p className="text-gray-500">กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ กกท.</p>
               </div>
 
               <div>
                 <p className="text-gray-600">ผู้ตรวจและรับรองรายงาน</p>
                 <div className="mt-10 border-b border-gray-400 mx-auto w-48" />
-                <p className="mt-1.5 font-bold text-gray-800">( ผู้อำนวยการฝ่ายพัฒนาบุคลากรกีฬา )</p>
+                <p className="mt-1.5 font-bold text-gray-800">( ผู้อำนวยการฝ่ายพัฒนากีฬาเป็นเลิศ )</p>
                 <p className="text-gray-500">การกีฬาแห่งประเทศไทย</p>
               </div>
             </div>
 
             {/* Footer Notice */}
             <div className="mt-8 border-t border-gray-200 pt-2 text-center text-[10px] text-gray-400">
-              ระบบฐานข้อมูลทะเบียนและติดตามประเมินผลบุคลากรกีฬาแห่งชาติ (SAT Sports Personnel Registry) · ฝ่ายพัฒนาบุคลากรกีฬา กกท.
+              ระบบฐานข้อมูลทะเบียนและติดตามประเมินผลบุคลากรกีฬาแห่งชาติ (SAT Sports Personnel Registry) · กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ กกท.
             </div>
           </div>
         </div>

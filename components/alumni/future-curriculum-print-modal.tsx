@@ -183,7 +183,7 @@ export function FutureCurriculumPrintModal({
                 </div>
                 <div>
                   <h1 className="text-lg font-black text-[#16265E] tracking-tight">
-                    การกีฬาแห่งประเทศไทย (กกท.) · ฝ่ายพัฒนาบุคลากรกีฬา
+                    การกีฬาแห่งประเทศไทย (กกท.) · กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ
                   </h1>
                   <h2 className="text-sm font-bold text-gray-800">
                     เอกสารข้อเสนอเชิงยุทธศาสตร์: ทิศทางการพัฒนาและยกระดับหลักสูตรบุคลากรกีฬาสมัยใหม่ (พ.ศ. 2570 – 2572)
@@ -368,7 +368,7 @@ export function FutureCurriculumPrintModal({
                   <div className="h-10"></div>
                   <p className="border-b border-gray-400 mx-auto w-3/4"></p>
                   <p className="mt-1 font-medium">( ............................................................ )</p>
-                  <p className="text-[9px] text-gray-500">หัวหน้างานพัฒนาหลักสูตร ฝ่ายพัฒนาบุคลากรกีฬา</p>
+                  <p className="text-[9px] text-gray-500">หัวหน้างานพัฒนาหลักสูตร กองพัฒนาบุคลากรกีฬา</p>
                 </div>
 
                 <div>
@@ -376,7 +376,7 @@ export function FutureCurriculumPrintModal({
                   <div className="h-10"></div>
                   <p className="border-b border-gray-400 mx-auto w-3/4"></p>
                   <p className="mt-1 font-medium">( ............................................................ )</p>
-                  <p className="text-[9px] text-gray-500">ผู้อำนวยการฝ่ายพัฒนาบุคลากรกีฬา กกท.</p>
+                  <p className="text-[9px] text-gray-500">ผู้อำนวยการฝ่ายพัฒนากีฬาเป็นเลิศ กกท.</p>
                 </div>
 
                 <div>

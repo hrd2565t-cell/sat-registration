@@ -92,7 +92,7 @@ function HomeContent() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-amber-400/20 border border-amber-300/30 px-3.5 py-1 text-xs font-bold text-amber-300 flex items-center gap-1.5 shadow-2xs">
                   <span>🏛️</span>
-                  <span>การกีฬาแห่งประเทศไทย (กกท.) · ฝ่ายพัฒนาบุคลากรกีฬา</span>
+                  <span>การกีฬาแห่งประเทศไทย (กกท.) · กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ</span>
                 </span>
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-blue-200 backdrop-blur-xs">
                   National Sports Personnel Gateway
@@ -396,7 +396,7 @@ function HomeContent() {
 
               <p className="text-xs sm:text-sm text-slate-950/85 leading-relaxed font-medium">
                 ไม่ว่าท่านจะเป็นผู้สมัครใหม่หรือผู้มีชื่อในทำเนียบ เสียงสะท้อนของท่านคือหลักฐานสำคัญ
-                ที่ฝ่ายพัฒนาบุคลากรกีฬาจะนำไปสังเคราะห์เพื่อขอรับการจัดสรรงบประมาณเปิดสอนหลักสูตรจริง
+                ที่กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ จะนำไปสังเคราะห์เพื่อขอรับการจัดสรรงบประมาณเปิดสอนหลักสูตรจริง
               </p>
             </div>
 
@@ -455,10 +455,10 @@ function HomeContent() {
         <div className="mx-auto max-w-[1360px] px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="text-center md:text-left">
             <p className="font-bold text-gray-800">
-              การกีฬาแห่งประเทศไทย (กกท.) · ฝ่ายพัฒนาบุคลากรกีฬา
+              กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ · การกีฬาแห่งประเทศไทย (กกท.)
             </p>
             <p className="text-[11px] text-gray-400 mt-0.5">
-              286 ถนนรามคำแหง แขวงหัวหมาก เขตบางกะปิ กรุงเทพฯ 10240
+              286 ถนนรามคำแหง แขวงหัวหมาก เขตบางกะปิ กรุงเทพฯ 10240 • โทรศัพท์ 02-186-7111 ต่อ 8151
             </p>
           </div>
 

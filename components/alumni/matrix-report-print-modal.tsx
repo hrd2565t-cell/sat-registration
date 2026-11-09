@@ -270,7 +270,7 @@ export function MatrixReportPrintModal({
                       การกีฬาแห่งประเทศไทย (Sports Authority of Thailand)
                     </h1>
                     <p className="text-xs font-bold text-gray-700">
-                      ฝ่ายพัฒนาบุคลากรกีฬา • กองพัฒนาบุคลากรกีฬา
+                      กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ
                     </p>
                     <p className="text-xs font-semibold text-blue-900 mt-0.5">
                       รายงานผลสัมฤทธิ์หลักสูตรฝึกอบรม แยกจำนวนคนตามกลุ่มหน่วยงาน (Cross-Tabulation Matrix)
@@ -655,7 +655,7 @@ export function MatrixReportPrintModal({
             {/* 4. Document Footer & Sign-off */}
             <div className="pt-2 border-t border-gray-200 flex items-center justify-between text-[9px] text-gray-500">
               <p>
-                <strong>แหล่งข้อมูล:</strong> ระบบฐานข้อมูลทำเนียบบุคลากรกีฬาและประเมินผลโครงการ ฝ่ายพัฒนาบุคลากรกีฬา กกท. (SAT Personnel Directory & Project Evaluation)
+                <strong>แหล่งข้อมูล:</strong> ระบบฐานข้อมูลทำเนียบบุคลากรกีฬาและประเมินผลโครงการ กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ กกท. (SAT Personnel Directory & Project Evaluation)
               </p>
               <p className="font-semibold text-gray-700">
                 เอกสารอย่างเป็นทางการ • หน้า 1 จาก 1 (Page 1 of 1)

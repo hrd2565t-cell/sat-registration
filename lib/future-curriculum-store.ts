@@ -224,7 +224,7 @@ export const PROPOSED_FUTURE_COURSES: ProposedCourseBlueprint[] = [
     evidenceStat: "ได้รับคะแนนโหวตอันดับ 1 ในหมวดเทคโนโลยี (342 โหวต จาก 43 สมาคมกีฬา)",
     evidenceVotes: 342,
     strategicAlignment:
-      "ภารกิจฝ่ายพัฒนาบุคลากรกีฬาโดยตรง มุ่งพัฒนาสมรรถนะโค้ชด้านกลยุทธ์การแข่งขัน (Tactical & Pedagogical Intelligence)",
+      "ภารกิจกองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ มุ่งพัฒนาสมรรถนะโค้ชด้านกลยุทธ์การแข่งขัน (Tactical & Pedagogical Intelligence)",
     coreModules: [
       {
         moduleNo: 1,
@@ -273,7 +273,7 @@ export const PROPOSED_FUTURE_COURSES: ProposedCourseBlueprint[] = [
     evidenceStat: "ได้รับคะแนนโหวตอันดับ 2 ของระบบ (318 โหวต) และเป็นความต้องการเร่งด่วนของสมาคมกีฬา",
     evidenceVotes: 318,
     strategicAlignment:
-      "ภารกิจฝ่ายพัฒนาบุคลากรกีฬา ด้านการยกระดับผู้บริหารสมาคมกีฬาสู่การบริหารงานมืออาชีพ (Professional Sports Administration)",
+      "ภารกิจกองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ ด้านการยกระดับผู้บริหารสมาคมกีฬาสู่การบริหารงานมืออาชีพ (Professional Sports Administration)",
     coreModules: [
       {
         moduleNo: 1,
@@ -321,7 +321,7 @@ export const PROPOSED_FUTURE_COURSES: ProposedCourseBlueprint[] = [
     evidenceStat: "ได้รับ 275 โหวต โดยเฉพาะกลุ่มนักกีฬาหญิงและสมาคมกีฬาต่อสู้/ศิลปะป้องกันตัว",
     evidenceVotes: 275,
     strategicAlignment:
-      "ฝ่ายพัฒนาบุคลากรกีฬามีหน้าที่โดยตรงในการรับรองคุณวุฒิเจ้าหน้าที่คุ้มครองความปลอดภัยนักกีฬาและธรรมาภิบาลองค์กร",
+      "กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ มีหน้าที่โดยตรงในการรับรองคุณวุฒิเจ้าหน้าที่คุ้มครองความปลอดภัยนักกีฬาและธรรมาภิบาลองค์กร",
     coreModules: [
       {
         moduleNo: 1,

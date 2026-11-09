@@ -288,7 +288,7 @@ export function CourseTimelinePrintModal({
                       การกีฬาแห่งประเทศไทย (Sports Authority of Thailand)
                     </h1>
                     <p className="text-[11px] font-bold text-gray-700">
-                      ฝ่ายพัฒนาบุคลากรกีฬา • กองพัฒนาบุคลากรกีฬา
+                      กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ
                     </p>
                     <p className="text-[11px] font-semibold text-blue-900 mt-0.5">
                       รายงานแผนภูมิความต่อเนื่องของการพัฒนาหลักสูตรฝึกอบรม (Course Continuity Timeline Matrix พ.ศ. 2547 – 2569)
@@ -525,7 +525,7 @@ export function CourseTimelinePrintModal({
             {/* 5. Document Footer & Sign-off */}
             <div className="pt-1.5 border-t border-gray-200 flex items-center justify-between text-[8.5px] text-gray-500">
               <p>
-                <strong>แหล่งข้อมูล:</strong> ระบบฐานข้อมูลทำเนียบบุคลากรกีฬาและประเมินผลโครงการ ฝ่ายพัฒนาบุคลากรกีฬา กกท. (SAT Personnel Directory & Continuity System)
+                <strong>แหล่งข้อมูล:</strong> ระบบฐานข้อมูลทำเนียบบุคลากรกีฬาและประเมินผลโครงการ กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ กกท. (SAT Personnel Directory & Continuity System)
               </p>
               <p className="font-semibold text-gray-700">
                 เอกสารอย่างเป็นทางการ • หน้า 1 จาก 1 (Page 1 of 1)
