@@ -448,7 +448,7 @@ function RegistrationContent() {
 
     // 6. ตรวจสอบอีเมล
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setFormError("กรุณากรอกที่อยู่อีเมลให้ถูกต้อง (เช่น somsak@email.com) เพื่อรับใบเสร็จและแจ้งผล");
+      setFormError("กรุณากรอกที่อยู่อีเมลให้ถูกต้อง (เช่น somsak@email.com) เพื่อใช้แจ้งผลการสมัคร");
       return;
     }
 
@@ -837,7 +837,7 @@ function RegistrationContent() {
                       onChange={(event) => setEmail(event.target.value)}
                     />
                     <p className="text-[10.5px] text-[#64748b]">
-                      * สำหรับรับใบเสร็จและแจ้งผลการสมัคร
+                      * สำหรับแจ้งผลการสมัคร
                     </p>
                   </div>
                 </div>
@@ -875,7 +875,7 @@ function RegistrationContent() {
                     </div>
 
                     <div className="mb-2.5 rounded-md bg-[#eff6ff]/70 p-2 text-[10.5px] text-[#1e40af] border border-blue-100">
-                      <span>📐 <strong>คำแนะนำ:</strong> สัดส่วน 3:4 (รูปติดบัตร) • พื้นหลังสีขาวหรือสีฟ้า • สวมชุดสุภาพ ไม่สวมหมวก/แว่นตาดำ</span>
+                      <span>📸 <strong>คำแนะนำ:</strong> รูปถ่ายไม่เกิน 6 เดือน สวมชุดสุภาพ ไม่สวมหมวก/แว่นตาดำ</span>
                     </div>
 
                     <div className="flex items-start gap-3">
