@@ -43,10 +43,20 @@ export function buildQuotasPayload(
     useCustomSchedule?: boolean;
     updatedAt?: string;
   },
-  capacity = 40
+  capacity = 40,
+  metadata?: {
+    courseObjective?: string;
+    qualifications?: string[];
+    requiredDocuments?: string[];
+    evaluationCriteria?: string[];
+    satSupport?: string[];
+    expensesPolicy?: string;
+    documentConfig?: import("@/lib/courses").CourseDocumentConfig;
+    seatsLeft?: number;
+  }
 ): Record<string, unknown> {
   const cleanQ = sanitizeQuotas(quotas, capacity);
-  return {
+  const payload: Record<string, unknown> = {
     ...cleanQ,
     _schedule: {
       registrationDate: schedule.registrationDate?.trim() || DEFAULT_GLOBAL_REGISTRATION_DATE,
@@ -55,6 +65,19 @@ export function buildQuotasPayload(
       updatedAt: schedule.updatedAt || new Date().toISOString(),
     },
   };
+  if (metadata) {
+    payload._metadata = {
+      ...(metadata.courseObjective !== undefined ? { courseObjective: metadata.courseObjective } : {}),
+      ...(metadata.qualifications !== undefined ? { qualifications: metadata.qualifications } : {}),
+      ...(metadata.requiredDocuments !== undefined ? { requiredDocuments: metadata.requiredDocuments } : {}),
+      ...(metadata.evaluationCriteria !== undefined ? { evaluationCriteria: metadata.evaluationCriteria } : {}),
+      ...(metadata.satSupport !== undefined ? { satSupport: metadata.satSupport } : {}),
+      ...(metadata.expensesPolicy !== undefined ? { expensesPolicy: metadata.expensesPolicy } : {}),
+      ...(metadata.documentConfig !== undefined ? { documentConfig: metadata.documentConfig } : {}),
+      ...(metadata.seatsLeft !== undefined ? { seatsLeft: metadata.seatsLeft } : {}),
+    };
+  }
+  return payload;
 }
 
 interface CoursesState {
@@ -62,7 +85,7 @@ interface CoursesState {
   revision: number;
 }
 
-const STORAGE_KEY = "sat-courses-v5";
+const STORAGE_KEY = "sat-courses-v6";
 
 function cloneSeedCourses() {
   return seedCourses.map((course) => ({ ...course }));
@@ -223,6 +246,15 @@ function mergeStoredCourses(stored: Course[]): Course[] {
           ? (saved.warningMessage.trim() || undefined)
           : (saved.id === 1 ? undefined : seed?.warningMessage),
       status: saved.status === "full" ? "full" : "open",
+      capacity: cap,
+      seatsLeft:
+        saved.status === "full"
+          ? undefined
+          : typeof saved.seatsLeft === "number"
+          ? Math.min(cap, saved.seatsLeft)
+          : seed?.seatsLeft !== undefined
+          ? Math.min(cap, seed.seatsLeft)
+          : cap,
     };
   });
 }
@@ -254,6 +286,7 @@ function mapCloudCourse(
 
   const rawCloudQuotas = (c as { target_quotas?: any }).target_quotas;
   const cloudSchedule = rawCloudQuotas?._schedule as EmbeddedSchedule | undefined;
+  const cloudMeta = rawCloudQuotas?._metadata as Record<string, any> | undefined;
 
   const colRegDate = (c as { registration_date?: string }).registration_date;
   const colResDate = (c as { result_date?: string }).result_date;
@@ -298,6 +331,68 @@ function mapCloudCourse(
           : (seed?.targetQuotas ?? balanceQuotasToCapacity(cap)))
       : (cleanCloudQ || existing?.targetQuotas || seed?.targetQuotas || balanceQuotasToCapacity(cap));
 
+  const finalCourseObjective =
+    cloudMeta?.courseObjective !== undefined
+      ? cloudMeta.courseObjective
+      : preferLocal && existing?.courseObjective !== undefined
+      ? existing.courseObjective
+      : (c as { course_objective?: string }).course_objective !== undefined
+      ? (c as { course_objective?: string }).course_objective
+      : existing?.courseObjective !== undefined && existing.courseObjective !== seed?.courseObjective
+      ? existing.courseObjective
+      : seed?.courseObjective;
+
+  const finalQualifications =
+    cloudMeta?.qualifications !== undefined
+      ? cloudMeta.qualifications
+      : preferLocal && existing?.qualifications !== undefined
+      ? existing.qualifications
+      : (existing?.qualifications ?? seed?.qualifications ?? []);
+
+  const finalRequiredDocuments =
+    cloudMeta?.requiredDocuments !== undefined
+      ? cloudMeta.requiredDocuments
+      : preferLocal && existing?.requiredDocuments !== undefined
+      ? existing.requiredDocuments
+      : (existing?.requiredDocuments ?? seed?.requiredDocuments ?? []);
+
+  const finalEvaluationCriteria =
+    cloudMeta?.evaluationCriteria !== undefined
+      ? cloudMeta.evaluationCriteria
+      : preferLocal && existing?.evaluationCriteria !== undefined
+      ? existing.evaluationCriteria
+      : (existing?.evaluationCriteria ?? seed?.evaluationCriteria ?? []);
+
+  const finalSatSupport =
+    cloudMeta?.satSupport !== undefined
+      ? cloudMeta.satSupport
+      : preferLocal && existing?.satSupport !== undefined
+      ? existing.satSupport
+      : (existing?.satSupport ?? seed?.satSupport ?? [...DEFAULT_SAT_SUPPORT]);
+
+  const finalExpensesPolicy =
+    cloudMeta?.expensesPolicy !== undefined
+      ? cloudMeta.expensesPolicy
+      : preferLocal && existing?.expensesPolicy !== undefined
+      ? existing.expensesPolicy
+      : (existing?.expensesPolicy ?? seed?.expensesPolicy ?? DEFAULT_EXPENSES_POLICY);
+
+  const rawSeatsLeft =
+    typeof c.seats_left === "number"
+      ? c.seats_left
+      : typeof cloudMeta?.seatsLeft === "number"
+      ? cloudMeta.seatsLeft
+      : preferLocal && typeof existing?.seatsLeft === "number"
+      ? existing.seatsLeft
+      : typeof existing?.seatsLeft === "number"
+      ? existing.seatsLeft
+      : (seed?.seatsLeft ?? cap);
+  const finalSeatsLeft = c.status === "full" ? undefined : Math.min(cap, rawSeatsLeft);
+
+  const cloudDocConfig =
+    (c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config ||
+    cloudMeta?.documentConfig;
+
   return {
     ...(seed ?? {}),
     ...(existing ?? {}),
@@ -309,7 +404,7 @@ function mapCloudCourse(
     location: finalLocation,
     seats: finalSeats,
     capacity: cap,
-    seatsLeft: c.status === "full" ? undefined : Math.min(cap, c.seats_left ?? cap),
+    seatsLeft: finalSeatsLeft,
     status: c.status === "full" ? "full" : "open",
     updatedAt: preferLocal ? existing?.updatedAt : (cloudUpdatedAt || existing?.updatedAt),
     image: c.image || existing?.image || seed?.image || "/assets/course-executive-management.jpg",
@@ -324,32 +419,38 @@ function mapCloudCourse(
     registrationDate: finalRegDate,
     resultDate: finalResDate,
     useCustomSchedule: finalUseCustom,
-    documentConfig: (c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config
+    courseObjective: finalCourseObjective,
+    qualifications: finalQualifications,
+    requiredDocuments: finalRequiredDocuments,
+    evaluationCriteria: finalEvaluationCriteria,
+    satSupport: finalSatSupport,
+    expensesPolicy: finalExpensesPolicy,
+    documentConfig: cloudDocConfig
       ? {
           photo: {
             ...DEFAULT_DOCUMENT_CONFIG.photo,
             ...(seed?.documentConfig?.photo || {}),
-            ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.photo || {}),
+            ...(cloudDocConfig.photo || {}),
           },
           cover: {
             ...DEFAULT_DOCUMENT_CONFIG.cover,
             ...(seed?.documentConfig?.cover || {}),
-            ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.cover || {}),
+            ...(cloudDocConfig.cover || {}),
           },
           certificate: {
             ...DEFAULT_DOCUMENT_CONFIG.certificate,
             ...(seed?.documentConfig?.certificate || {}),
-            ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.certificate || {}),
+            ...(cloudDocConfig.certificate || {}),
           },
           idcard: {
             ...DEFAULT_DOCUMENT_CONFIG.idcard,
             ...(seed?.documentConfig?.idcard || {}),
-            ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.idcard || {}),
+            ...(cloudDocConfig.idcard || {}),
           },
           saka: {
             ...DEFAULT_DOCUMENT_CONFIG.saka,
             ...(seed?.documentConfig?.saka || {}),
-            ...((c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config?.saka || {}),
+            ...(cloudDocConfig.saka || {}),
           },
         }
       : (existing?.documentConfig ?? seed?.documentConfig),
@@ -706,7 +807,17 @@ export function updateCourse(
         useCustomSchedule: updated.useCustomSchedule,
         updatedAt: updated.updatedAt,
       },
-      updated.capacity || 40
+      updated.capacity || 40,
+      {
+        courseObjective: updated.courseObjective,
+        qualifications: updated.qualifications,
+        requiredDocuments: updated.requiredDocuments,
+        evaluationCriteria: updated.evaluationCriteria,
+        satSupport: updated.satSupport,
+        expensesPolicy: updated.expensesPolicy,
+        documentConfig: updated.documentConfig,
+        seatsLeft: updated.seatsLeft,
+      }
     );
 
     supabase
@@ -750,7 +861,17 @@ export function updateCourse(
               useCustomSchedule: false,
               updatedAt: updated!.updatedAt,
             },
-            other.capacity || 40
+            other.capacity || 40,
+            {
+              courseObjective: other.courseObjective,
+              qualifications: other.qualifications,
+              requiredDocuments: other.requiredDocuments,
+              evaluationCriteria: other.evaluationCriteria,
+              satSupport: other.satSupport,
+              expensesPolicy: other.expensesPolicy,
+              documentConfig: other.documentConfig,
+              seatsLeft: other.seatsLeft,
+            }
           );
           supabase
             ?.from("courses")

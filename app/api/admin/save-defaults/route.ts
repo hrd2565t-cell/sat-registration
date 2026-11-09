@@ -84,6 +84,16 @@ export async function POST(request: Request) {
                       ? c.updatedAt
                       : new Date().toISOString(),
                 },
+                _metadata: {
+                  courseObjective: c.courseObjective,
+                  qualifications: c.qualifications,
+                  requiredDocuments: c.requiredDocuments,
+                  evaluationCriteria: c.evaluationCriteria,
+                  satSupport: c.satSupport,
+                  expensesPolicy: c.expensesPolicy,
+                  documentConfig: c.documentConfig,
+                  seatsLeft: typeof c.seatsLeft === "number" ? c.seatsLeft : undefined,
+                },
               };
 
               await supabase
