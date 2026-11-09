@@ -4,6 +4,7 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { getCourseScheduleDates } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
+import { useApplications } from "@/lib/applications-store";
 
 export interface CourseCardProps {
   id: number;
@@ -139,8 +140,15 @@ export function CourseCard({
   onViewDetails,
 }: CourseCardProps) {
   const { courses } = useCourses();
-  const isFull = status === "full";
-  const isLow = (seatsLeft ?? 0) <= 5;
+  const { applications } = useApplications();
+  const isClosed = status === "full";
+  const matchCap = seats.match(/(\d+)/);
+  const cap = matchCap ? parseInt(matchCap[1], 10) : 40;
+  const applicantCount = applications.filter(
+    (a) => a.courseId === id && a.status !== "rejected"
+  ).length;
+  const isOver = applicantCount >= cap;
+
   const schedule = getCourseScheduleDates(
     {
       date,
@@ -151,17 +159,17 @@ export function CourseCard({
     courses
   );
 
-  const badge = isFull ? (
+  const badge = isClosed ? (
     <span className="inline-flex min-w-[76px] items-center justify-center rounded-md bg-[#dc2626] px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
-      เต็มแล้ว
+      ปิดรับสมัครแล้ว
+    </span>
+  ) : isOver ? (
+    <span className="inline-flex min-w-[88px] items-center justify-center rounded-md bg-[#16265E] px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
+      สมัครแล้ว {applicantCount}/{cap} คน
     </span>
   ) : (
-    <span
-      className={`inline-flex min-w-[88px] items-center justify-center rounded-md px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm ${
-        isLow ? "bg-[#d97706]" : "bg-[#078A43]"
-      }`}
-    >
-      เหลือ {seatsLeft} ที่นั่ง
+    <span className="inline-flex min-w-[88px] items-center justify-center rounded-md bg-[#078A43] px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
+      เปิดรับสมัคร ({applicantCount}/{cap} คน)
     </span>
   );
 
@@ -249,13 +257,13 @@ export function CourseCard({
         )}
 
         <div className="mt-auto pt-1">
-          {isFull ? (
+          {isClosed ? (
             <button
               type="button"
               disabled
               className="h-9 w-full cursor-not-allowed rounded-md bg-[#d1d5db] text-[13.5px] font-semibold text-[#6b7280]"
             >
-              เต็มแล้ว
+              ปิดรับสมัครแล้ว
             </button>
           ) : selected ? (
             <Button

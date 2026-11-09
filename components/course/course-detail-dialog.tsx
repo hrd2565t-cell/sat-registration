@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import type { Course } from "@/lib/courses";
 import { TARGET_GROUPS, getCourseScheduleDates } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
+import { useApplications } from "@/lib/applications-store";
 
 interface CourseDetailDialogProps {
   course: Course | null;
@@ -37,7 +38,14 @@ export function CourseDetailDialog({
 
   if (!course) return null;
 
-  const isFull = course.status === "full" || course.seatsLeft === 0;
+  const { applications } = useApplications();
+  const applicantCount = applications.filter(
+    (a) => a.courseId === course.id && a.status !== "rejected"
+  ).length;
+  const matchCap = course.seats.match(/(\d+)/);
+  const cap = matchCap ? parseInt(matchCap[1], 10) : 40;
+  const isClosed = course.status === "full";
+  const isOver = applicantCount >= cap;
   const schedule = getCourseScheduleDates(course, courses);
 
   return (
@@ -65,13 +73,17 @@ export function CourseDetailDialog({
                 <span className="inline-flex items-center rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-medium backdrop-blur-sm">
                   กกท. • SAT Course #{course.id}
                 </span>
-                {isFull ? (
+                {isClosed ? (
                   <span className="inline-flex items-center rounded-full bg-[#ef4444] px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
-                    ● ปิดรับสมัคร (เต็มแล้ว)
+                    ● ปิดรับสมัครแล้ว
+                  </span>
+                ) : isOver ? (
+                  <span className="inline-flex items-center rounded-full bg-blue-500/90 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+                    ● เปิดรับสมัครตามกำหนดเวลา (สมัครแล้ว {applicantCount}/{cap} คน)
                   </span>
                 ) : (
                   <span className="inline-flex items-center rounded-full bg-[#10b981] px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
-                    ● เปิดรับสมัคร {course.seatsLeft !== undefined ? `(เหลือ ${course.seatsLeft} ที่นั่ง)` : ""}
+                    ● เปิดรับสมัคร (สมัครแล้ว {applicantCount}/{cap} คน)
                   </span>
                 )}
               </div>
@@ -363,13 +375,13 @@ export function CourseDetailDialog({
             ปิดหน้าต่าง
           </button>
 
-          {isFull ? (
+          {isClosed ? (
             <button
               type="button"
               disabled
               className="h-9 cursor-not-allowed rounded-md bg-[#cbd5e1] px-5 text-[13px] font-semibold text-[#64748b]"
             >
-              หลักสูตรนี้เต็มแล้ว
+              ปิดรับสมัครแล้ว
             </button>
           ) : (
             <Link
@@ -378,7 +390,7 @@ export function CourseDetailDialog({
                 onSelectRegister?.(course.id);
                 onClose();
               }}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#dc2626] px-5 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-[#b91c1c] active:scale-[0.99]"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#16265E] px-5 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1e3a8a] active:scale-[0.99]"
             >
               <span>สมัครเข้ารับการอบรมนี้</span>
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">

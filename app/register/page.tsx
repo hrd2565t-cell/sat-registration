@@ -151,20 +151,20 @@ function RegistrationContent() {
   const [showPdpaModal, setShowPdpaModal] = useState(false);
   const hasAutofilledRef = useRef(false);
 
-  // คำนวณที่นั่งคงเหลือ
+  // คำนวณจำนวนผู้สมัครและสถานะการเปิดรับ (แนวทางที่ 1: เปิดรับตามกำหนดเวลา ไม่ปิดกั้นเมื่อเกินเป้าหมาย)
   const courseCapacity = useMemo(() => {
     const match = course.seats.match(/(\d+)/);
     return match ? parseInt(match[1], 10) : 40;
   }, [course.seats]);
 
-  const approvedOrPendingCount = useMemo(() => {
+  const applicantCount = useMemo(() => {
     return applications.filter(
       (a) => a.courseId === course.id && a.status !== "rejected"
     ).length;
   }, [applications, course.id]);
 
-  const dynamicSeatsLeft = Math.max(0, courseCapacity - approvedOrPendingCount);
-  const isCourseFull = course.status === "full" || dynamicSeatsLeft <= 0;
+  const isCourseClosed = course.status === "full";
+  const isOverCapacity = applicantCount >= courseCapacity;
 
   // ตรวจสอบความถูกต้องของการสมัคร (ห้ามวิชาเดิม และห้ามวันอบรมซ้อนทับกัน)
   const eligibility = useMemo(() => {
@@ -390,8 +390,8 @@ function RegistrationContent() {
     event.preventDefault();
     setFormError("");
 
-    if (isCourseFull) {
-      setFormError("หลักสูตรนี้เต็มแล้ว กรุณาเลือกหลักสูตรอื่น");
+    if (isCourseClosed) {
+      setFormError("หลักสูตรนี้ปิดรับสมัครแล้ว กรุณาเลือกหลักสูตรอื่น");
       return;
     }
 
@@ -554,16 +554,18 @@ function RegistrationContent() {
                 </span>
                 <span
                   className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10.5px] font-bold ${
-                    isCourseFull
+                    isCourseClosed
                       ? "border border-red-200 bg-red-100 text-red-700"
-                      : dynamicSeatsLeft <= 5
-                      ? "border border-amber-200 bg-amber-100 text-amber-800"
+                      : isOverCapacity
+                      ? "border border-blue-200 bg-blue-100 text-blue-900"
                       : "border border-emerald-200 bg-emerald-100 text-emerald-800"
                   }`}
                 >
-                  {isCourseFull
-                    ? "เต็มแล้ว"
-                    : `เหลือ ${dynamicSeatsLeft} ที่นั่ง (จาก ${courseCapacity} ที่นั่ง)`}
+                  {isCourseClosed
+                    ? "ปิดรับสมัครแล้ว"
+                    : isOverCapacity
+                    ? `เปิดรับสมัครตามกำหนดเวลา (สมัครแล้ว ${applicantCount}/${courseCapacity} คน)`
+                    : `เปิดรับสมัคร (สมัครแล้ว ${applicantCount}/${courseCapacity} คน)`}
                 </span>
               </div>
               <h1 className="mt-1 truncate text-[14.5px] font-bold text-[#16265E] sm:text-[15.5px]">
@@ -595,7 +597,7 @@ function RegistrationContent() {
       </div>
 
       <main className="mx-auto max-w-[1160px] px-4 pb-12 pt-4 sm:px-5">
-        {isCourseFull && (
+        {isCourseClosed ? (
           <div
             role="alert"
             className="mb-4 flex flex-col gap-2 rounded-xl border border-[#f0b5b8] bg-[#fff5f5] px-4 py-3 text-[12px] text-[#9e2a30] shadow-xs sm:flex-row sm:items-center sm:justify-between"
@@ -603,7 +605,7 @@ function RegistrationContent() {
             <span className="flex items-center gap-2">
               <span className="text-base">⚠️</span>
               <span>
-                <strong>หลักสูตรนี้เต็มแล้ว</strong>{" "}
+                <strong>หลักสูตรนี้ปิดรับสมัครแล้ว</strong>{" "}
                 ไม่สามารถส่งใบสมัครได้ กรุณาเลือกหลักสูตรอื่น
               </span>
             </span>
@@ -614,7 +616,16 @@ function RegistrationContent() {
               กลับไปเลือกหลักสูตร
             </Link>
           </div>
-        )}
+        ) : isOverCapacity ? (
+          <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50/90 via-indigo-50/50 to-white p-3.5 text-xs text-[#16265E] shadow-2xs">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#16265E] text-xs text-white">
+              ℹ️
+            </span>
+            <div className="leading-relaxed">
+              <strong>เปิดรับสมัครตามกำหนดเวลา:</strong> ขณะนี้มีผู้สมัครครบตามเป้าหมาย ({courseCapacity} คน) แล้ว แต่ระบบยังเปิดรับสมัครอย่างต่อเนื่องตามกำหนดการ คณะกรรมการจะพิจารณาคัดเลือกผู้มีคุณสมบัติตามเกณฑ์เป็น <strong>&ldquo;ตัวจริง&rdquo;</strong> ({courseCapacity} คน) และจัดลำดับ <strong>&ldquo;ตัวสำรอง&rdquo;</strong> ในวันประกาศผลรายชื่อ
+            </div>
+          </div>
+        ) : null}
 
         {/* Wrap the entire form to support native Enter submission and accessible form semantics */}
         <form onSubmit={handleSubmit} noValidate>
@@ -1080,7 +1091,7 @@ function RegistrationContent() {
             {/* Upgraded Primary Action Button: SAT Navy Blue instead of Red */}
             <button
               type="submit"
-              disabled={submitting || isCourseFull}
+              disabled={submitting || isCourseClosed}
               className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#16265E] px-7 text-[13.5px] font-bold text-white shadow-md transition-all hover:bg-[#1e3a8a] hover:shadow-lg active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               {submitting ? (
