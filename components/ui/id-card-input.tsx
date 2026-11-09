@@ -170,9 +170,15 @@ export function IdCardInput({
       >
         {digits.map((digit, index) => (
           <React.Fragment key={index}>
-            {separator && index === 4 && (
-              <span className="px-0.5 text-[13px] text-[#9ca3af]">-</span>
-            )}
+            {separator &&
+              (index === 1 ||
+                index === 5 ||
+                index === 10 ||
+                index === 12) && (
+                <span className="px-0.5 text-[13px] font-bold text-[#94a3b8] select-none">
+                  -
+                </span>
+              )}
             <input
               ref={(el) => {
                 refs.current[index] = el;
@@ -186,7 +192,7 @@ export function IdCardInput({
               onPaste={(e) => handlePaste(index, e)}
               onKeyDown={(e) => handleKeyDown(index, e)}
               onFocus={(e) => e.target.select()}
-              className={`h-[30px] w-[22px] shrink-0 border text-center text-[13px] font-semibold text-[#1f2937] transition-all focus:border-[#1e3a8a] focus:outline-none focus:ring-2 focus:ring-[#1e3a8a]/20 disabled:bg-[#f3f4f6] sm:h-[34px] sm:w-[30px] ${
+              className={`h-[30px] w-[20px] shrink-0 border text-center text-[12.5px] font-semibold text-[#1f2937] transition-all focus:border-[#1e3a8a] focus:outline-none focus:ring-2 focus:ring-[#1e3a8a]/20 disabled:bg-[#f3f4f6] sm:h-[34px] sm:w-[28px] sm:text-[13px] ${
                 tone === "highlight"
                   ? "rounded-[5px] border-[#d5cb84] bg-[#fff8ba]"
                   : "rounded-[3px] border-[#d1d5db] bg-white"
