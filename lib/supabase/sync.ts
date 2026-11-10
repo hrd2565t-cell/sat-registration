@@ -3,6 +3,65 @@ import type { ApplicantRecord, ApplicantDocument } from "@/lib/applications-stor
 import type { HistoricalTrainee, DutyRecord } from "@/lib/alumni-store";
 import type { Json, Database } from "./types";
 
+const storageUrlCache = new Map<string, string>();
+
+/**
+ * Resolves a document URL or DataURL. If it points to the private `sat-documents`
+ * Supabase Storage bucket, downloads the blob via the Supabase client SDK and
+ * converts it to a Data URL so browsers can render it in <img> and <iframe>.
+ */
+export async function resolveSupabaseDocumentUrl(
+  urlOrDataUrl: string | null | undefined
+): Promise<string | null> {
+  if (!urlOrDataUrl) return null;
+  if (urlOrDataUrl.startsWith("data:") || urlOrDataUrl.startsWith("blob:")) {
+    return urlOrDataUrl;
+  }
+  if (storageUrlCache.has(urlOrDataUrl)) {
+    return storageUrlCache.get(urlOrDataUrl)!;
+  }
+
+  const marker = "/sat-documents/";
+  const markerIdx = urlOrDataUrl.indexOf(marker);
+  if (markerIdx === -1) {
+    return urlOrDataUrl;
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) return urlOrDataUrl;
+
+  try {
+    const rawPath = urlOrDataUrl.slice(markerIdx + marker.length).split("?")[0];
+    const objectPath = decodeURIComponent(rawPath);
+    if (!objectPath) return urlOrDataUrl;
+
+    const { data, error } = await supabase.storage
+      .from("sat-documents")
+      .download(objectPath);
+
+    if (error || !data) {
+      console.warn("Supabase storage download error:", error?.message);
+      return null;
+    }
+
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === "string") resolve(reader.result);
+        else reject(new Error("Failed to convert blob to data URL"));
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(data);
+    });
+
+    storageUrlCache.set(urlOrDataUrl, dataUrl);
+    return dataUrl;
+  } catch (err) {
+    console.warn("Failed to resolve Supabase document URL:", err);
+    return null;
+  }
+}
+
 /**
  * Uploads a base64 DataURL or file to Supabase Storage bucket
  */
@@ -32,7 +91,7 @@ export async function uploadDocumentToSupabaseStorage(
     const { error } = await supabase.storage
       .from(bucket)
       .upload(path, blob, {
-        upsert: true,
+        upsert: false,
         contentType: mimeType,
       });
 
@@ -121,9 +180,9 @@ export async function syncApplicationToSupabase(
     if (record.documents && record.documents.length > 0) {
       for (const doc of record.documents) {
         let storagePath = null;
-        if (doc.dataUrl) {
+        if (doc.dataUrl && doc.dataUrl.startsWith("data:")) {
           const extension = doc.name.split(".").pop() || "bin";
-          const path = `${targetRef}/${doc.kind}-${doc.id}.${extension}`;
+          const path = `${targetRef}/${doc.kind}-${doc.id}-${Date.now()}.${extension}`;
           storagePath = await uploadDocumentToSupabaseStorage(
             "sat-documents",
             path,
@@ -135,14 +194,21 @@ export async function syncApplicationToSupabase(
         const dbKind = doc.kind === "idcard" ? "certificate" : doc.kind;
         const dbFileType = doc.kind === "idcard" ? `idcard:${doc.type || ""}` : (doc.type ?? null);
 
-        await supabase.from("application_documents").upsert({
+        // เก็บ Base64 data_url ไว้ในฐานข้อมูลเสมอสำหรับรูปถ่าย (photo) หรือไฟล์ขนาดเล็ก (< 500KB)
+        // เพื่อให้แสดงผลได้ทันทีแม้ถัง sat-documents จะตั้งค่าเป็น Private Bucket
+        const shouldKeepInlineDataUrl =
+          doc.kind === "photo" ||
+          !storagePath ||
+          Boolean(doc.dataUrl && doc.dataUrl.length < 500_000);
+
+        await supabase.from("application_documents").insert({
           application_ref: targetRef,
           kind: dbKind,
           name: doc.name,
           size: doc.size,
           file_type: dbFileType,
           storage_path: storagePath,
-          data_url: storagePath ? null : doc.dataUrl ?? null,
+          data_url: shouldKeepInlineDataUrl ? (doc.dataUrl ?? null) : null,
         });
       }
     }
@@ -241,7 +307,7 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
       .order("created_at", { ascending: true });
 
     return apps.map((app) => {
-      const docs = (allDocs || [])
+      const rawDocs = (allDocs || [])
         .filter((doc) => doc.application_ref === app.ref)
         .map((doc): ApplicantDocument => {
           const isIdCard =
@@ -254,15 +320,32 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
               ? doc.file_type.replace("idcard:", "")
               : (doc.file_type ?? undefined);
 
+          // ให้ความสำคัญกับ data_url (Base64) ก่อน storage_path เพราะถัง sat-documents อาจเป็น Private Bucket
           return {
             id: doc.id,
             kind: realKind,
             name: doc.name,
             size: doc.size,
             type: realType,
-            dataUrl: (doc.storage_path || doc.data_url) ?? undefined,
+            dataUrl: (doc.data_url || doc.storage_path) ?? undefined,
           };
         });
+
+      // กรองเอกสารซ้ำซ้อนในประเภทเดียวกัน โดยเลือกแถวที่มีข้อมูลไฟล์ (data: หรือ storage URL) ก่อนเสมอ
+      const docScore = (d: ApplicantDocument) => {
+        if (d.dataUrl?.startsWith("data:")) return 3;
+        if (d.dataUrl) return 2;
+        return 1;
+      };
+      const dedupedMap = new Map<string, ApplicantDocument>();
+      for (const d of rawDocs) {
+        const key = d.kind === "photo" || d.kind === "cover" || d.kind === "idcard" ? d.kind : `${d.kind}:${d.name}`;
+        const existing = dedupedMap.get(key);
+        if (!existing || docScore(d) >= docScore(existing)) {
+          dedupedMap.set(key, d);
+        }
+      }
+      const docs = Array.from(dedupedMap.values());
 
       const notes = (allNotes || [])
         .filter((note) => note.application_ref === app.ref)

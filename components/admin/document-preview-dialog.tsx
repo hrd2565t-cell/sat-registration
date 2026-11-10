@@ -8,6 +8,7 @@ import type {
 } from "@/lib/applications-store";
 import { getDocumentLabel } from "@/lib/applications-store";
 import { getDocumentFromStorage } from "@/lib/document-storage";
+import { resolveSupabaseDocumentUrl } from "@/lib/supabase/sync";
 
 function dataUrlToBlob(dataUrl: string): Blob | null {
   try {
@@ -35,21 +36,31 @@ export function DocumentPreviewDialog({
   applicant: ApplicantRecord;
   onClose: () => void;
 }) {
-  const [actualDataUrl, setActualDataUrl] = useState<string | null>(file?.dataUrl ?? null);
-  const [loading, setLoading] = useState<boolean>(!file?.dataUrl);
+  const [actualDataUrl, setActualDataUrl] = useState<string | null>(
+    file?.dataUrl?.startsWith("data:") ? file.dataUrl : null
+  );
+  const [loading, setLoading] = useState<boolean>(!file?.dataUrl?.startsWith("data:"));
 
   const [prevFileId, setPrevFileId] = useState(file?.id);
   if (file?.id !== prevFileId) {
     setPrevFileId(file?.id);
-    setActualDataUrl(file?.dataUrl ?? null);
-    setLoading(!file?.dataUrl);
+    setActualDataUrl(file?.dataUrl?.startsWith("data:") ? file.dataUrl : null);
+    setLoading(!file?.dataUrl?.startsWith("data:"));
   }
 
   useEffect(() => {
     if (!file) return;
 
     let isMounted = true;
-    if (!file.dataUrl) {
+    (async () => {
+      if (file.dataUrl?.startsWith("data:")) {
+        if (isMounted) {
+          setActualDataUrl(file.dataUrl);
+          setLoading(false);
+        }
+        return;
+      }
+
       if (typeof window !== "undefined") {
         const cached = sessionStorage.getItem(`sat-doc-${file.id}`);
         if (cached && isMounted) {
@@ -58,16 +69,30 @@ export function DocumentPreviewDialog({
           return;
         }
       }
-      getDocumentFromStorage(file.id).then((rec) => {
+
+      const rec = await getDocumentFromStorage(file.id, file.name);
+      if (rec?.dataUrl) {
         if (isMounted) {
-          setActualDataUrl(rec?.dataUrl ?? null);
+          setActualDataUrl(rec.dataUrl);
           setLoading(false);
         }
-      });
-    } else {
-      setActualDataUrl(file.dataUrl);
-      setLoading(false);
-    }
+        return;
+      }
+
+      if (file.dataUrl) {
+        const resolved = await resolveSupabaseDocumentUrl(file.dataUrl);
+        if (isMounted) {
+          setActualDataUrl(resolved);
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (isMounted) {
+        setActualDataUrl(null);
+        setLoading(false);
+      }
+    })();
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";

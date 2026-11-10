@@ -15,6 +15,7 @@ import {
 } from "@/lib/applications-store";
 import { useCourses } from "@/lib/courses-store";
 import { getDocumentFromStorage } from "@/lib/document-storage";
+import { resolveSupabaseDocumentUrl } from "@/lib/supabase/sync";
 
 function ReceiptPrintView() {
   const searchParams = useSearchParams();
@@ -29,7 +30,12 @@ function ReceiptPrintView() {
     : undefined) || getLatestApplication(applications);
 
   const course = courses.find((c) => c.id === record?.courseId);
-  const photoDoc = record?.documents?.find((d) => d.kind === "photo");
+  const photoDoc =
+    record?.documents?.find(
+      (d) => d.kind === "photo" && d.dataUrl?.startsWith("data:")
+    ) ??
+    record?.documents?.find((d) => d.kind === "photo" && Boolean(d.dataUrl)) ??
+    record?.documents?.find((d) => d.kind === "photo");
   const [loadedPhotoUrl, setLoadedPhotoUrl] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
 
@@ -53,11 +59,12 @@ function ReceiptPrintView() {
   }, [record?.idCard, record?.ref]);
 
   useEffect(() => {
+    let active = true;
     if (!photoDoc) {
       setLoadedPhotoUrl(null);
       return;
     }
-    if (photoDoc.dataUrl) {
+    if (photoDoc.dataUrl?.startsWith("data:")) {
       setLoadedPhotoUrl(photoDoc.dataUrl);
       return;
     }
@@ -68,26 +75,44 @@ function ReceiptPrintView() {
         return;
       }
     }
-    if (photoDoc.id) {
-      getDocumentFromStorage(photoDoc.id).then((doc) => {
-        if (doc?.dataUrl) {
-          setLoadedPhotoUrl(doc.dataUrl);
+    (async () => {
+      if (photoDoc.id) {
+        const localDoc = await getDocumentFromStorage(photoDoc.id, photoDoc.name);
+        if (active && localDoc?.dataUrl) {
+          setLoadedPhotoUrl(localDoc.dataUrl);
+          return;
         }
-      });
-    }
-  }, [photoDoc?.id, photoDoc?.dataUrl]);
+      }
+      if (photoDoc.dataUrl) {
+        const resolved = await resolveSupabaseDocumentUrl(photoDoc.dataUrl);
+        if (active && resolved) {
+          setLoadedPhotoUrl(resolved);
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [photoDoc?.id, photoDoc?.name, photoDoc?.dataUrl]);
 
-  const photoSrc = loadedPhotoUrl || photoDoc?.dataUrl || "/assets/avatar-placeholder.svg";
+  const photoSrc =
+    loadedPhotoUrl ||
+    (photoDoc?.dataUrl?.startsWith("data:") ? photoDoc.dataUrl : null) ||
+    "/assets/avatar-placeholder.svg";
 
   useEffect(() => {
-    if (record && !autoPrintTriggeredRef.current) {
-      autoPrintTriggeredRef.current = true;
-      const timer = setTimeout(() => {
+    if (!record || autoPrintTriggeredRef.current) return;
+    const photoReady = !photoDoc || Boolean(loadedPhotoUrl) || Boolean(photoDoc.dataUrl?.startsWith("data:"));
+    const qrReady = Boolean(qrDataUrl);
+    const delayMs = photoReady && qrReady ? 450 : 1200;
+    const timer = setTimeout(() => {
+      if (!autoPrintTriggeredRef.current) {
+        autoPrintTriggeredRef.current = true;
         window.print();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [record]);
+      }
+    }, delayMs);
+    return () => clearTimeout(timer);
+  }, [record, photoDoc, loadedPhotoUrl, qrDataUrl]);
 
   if (!record) {
     return (

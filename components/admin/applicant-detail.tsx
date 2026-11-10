@@ -23,6 +23,7 @@ import {
 } from "@/lib/applications-store";
 import { adminUser } from "@/lib/admin-data";
 import { getDocumentFromStorage } from "@/lib/document-storage";
+import { resolveSupabaseDocumentUrl } from "@/lib/supabase/sync";
 import { useAlumniStore, addTrainee } from "@/lib/alumni-store";
 
 const emptySubscribe = () => () => {};
@@ -203,15 +204,21 @@ export function ApplicantDetail({
   const [notice, setNotice] = useState("");
   const [copied, setCopied] = useState(false);
 
-  const photoDoc = applicant?.documents?.find((d) => d.kind === "photo");
+  const photoDoc =
+    applicant?.documents?.find(
+      (d) => d.kind === "photo" && d.dataUrl?.startsWith("data:")
+    ) ??
+    applicant?.documents?.find((d) => d.kind === "photo" && Boolean(d.dataUrl)) ??
+    applicant?.documents?.find((d) => d.kind === "photo");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
     if (!photoDoc) {
       setPhotoUrl(null);
       return;
     }
-    if (photoDoc.dataUrl) {
+    if (photoDoc.dataUrl?.startsWith("data:")) {
       setPhotoUrl(photoDoc.dataUrl);
       return;
     }
@@ -222,14 +229,25 @@ export function ApplicantDetail({
         return;
       }
     }
-    if (photoDoc.id) {
-      getDocumentFromStorage(photoDoc.id).then((doc) => {
-        if (doc?.dataUrl) {
-          setPhotoUrl(doc.dataUrl);
+    (async () => {
+      if (photoDoc.id) {
+        const localDoc = await getDocumentFromStorage(photoDoc.id, photoDoc.name);
+        if (active && localDoc?.dataUrl) {
+          setPhotoUrl(localDoc.dataUrl);
+          return;
         }
-      });
-    }
-  }, [photoDoc?.id, photoDoc?.dataUrl]);
+      }
+      if (photoDoc.dataUrl) {
+        const resolved = await resolveSupabaseDocumentUrl(photoDoc.dataUrl);
+        if (active && resolved) {
+          setPhotoUrl(resolved);
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [photoDoc?.id, photoDoc?.name, photoDoc?.dataUrl]);
 
   useEffect(() => {
     if (!notice) return;
@@ -451,7 +469,7 @@ export function ApplicantDetail({
           <img
             src={
               photoUrl ||
-              photoDoc?.dataUrl ||
+              (photoDoc?.dataUrl?.startsWith("data:") ? photoDoc.dataUrl : null) ||
               "/assets/avatar-placeholder.svg"
             }
             alt={`รูปถ่าย ${applicant.name}`}

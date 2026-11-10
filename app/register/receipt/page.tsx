@@ -19,6 +19,7 @@ import {
   useApplications,
 } from "@/lib/applications-store";
 import { getDocumentFromStorage } from "@/lib/document-storage";
+import { resolveSupabaseDocumentUrl } from "@/lib/supabase/sync";
 
 const emptySubscribe = () => () => {};
 
@@ -106,7 +107,12 @@ function ReceiptContent() {
     getCourseById(courseParam, courses) ??
     getDefaultCourse(courses);
 
-  const photoDoc = record?.documents?.find((d) => d.kind === "photo");
+  const photoDoc =
+    record?.documents?.find(
+      (d) => d.kind === "photo" && d.dataUrl?.startsWith("data:")
+    ) ??
+    record?.documents?.find((d) => d.kind === "photo" && Boolean(d.dataUrl)) ??
+    record?.documents?.find((d) => d.kind === "photo");
   const [loadedPhotoUrl, setLoadedPhotoUrl] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
 
@@ -130,11 +136,12 @@ function ReceiptContent() {
   }, [record?.idCard, record?.ref]);
 
   useEffect(() => {
+    let active = true;
     if (!photoDoc) {
       setLoadedPhotoUrl(null);
       return;
     }
-    if (photoDoc.dataUrl) {
+    if (photoDoc.dataUrl?.startsWith("data:")) {
       setLoadedPhotoUrl(photoDoc.dataUrl);
       return;
     }
@@ -145,14 +152,25 @@ function ReceiptContent() {
         return;
       }
     }
-    if (photoDoc.id) {
-      getDocumentFromStorage(photoDoc.id).then((doc) => {
-        if (doc?.dataUrl) {
-          setLoadedPhotoUrl(doc.dataUrl);
+    (async () => {
+      if (photoDoc.id) {
+        const localDoc = await getDocumentFromStorage(photoDoc.id, photoDoc.name);
+        if (active && localDoc?.dataUrl) {
+          setLoadedPhotoUrl(localDoc.dataUrl);
+          return;
         }
-      });
-    }
-  }, [photoDoc?.id, photoDoc?.dataUrl]);
+      }
+      if (photoDoc.dataUrl) {
+        const resolved = await resolveSupabaseDocumentUrl(photoDoc.dataUrl);
+        if (active && resolved) {
+          setLoadedPhotoUrl(resolved);
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [photoDoc?.id, photoDoc?.name, photoDoc?.dataUrl]);
 
   if (!record && !mounted) {
     return <ReceiptFallback />;
@@ -204,7 +222,7 @@ function ReceiptContent() {
 
   const photoSrc =
     loadedPhotoUrl ||
-    photoDoc?.dataUrl ||
+    (photoDoc?.dataUrl?.startsWith("data:") ? photoDoc.dataUrl : null) ||
     "/assets/avatar-placeholder.svg";
 
   return (

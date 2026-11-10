@@ -52,14 +52,32 @@ export async function saveDocumentToStorage(record: StoredDocumentRecord): Promi
   }
 }
 
-export async function getDocumentFromStorage(id: string): Promise<StoredDocumentRecord | undefined> {
+export async function getDocumentFromStorage(
+  id: string,
+  fallbackName?: string
+): Promise<StoredDocumentRecord | undefined> {
   try {
     const db = await openDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readonly");
       const store = tx.objectStore(STORE_NAME);
       const req = store.get(id);
-      req.onsuccess = () => resolve(req.result as StoredDocumentRecord | undefined);
+      req.onsuccess = () => {
+        const directMatch = req.result as StoredDocumentRecord | undefined;
+        if (directMatch?.dataUrl || !fallbackName) {
+          resolve(directMatch);
+          return;
+        }
+        const allReq = store.getAll();
+        allReq.onsuccess = () => {
+          const allRecords = (allReq.result as StoredDocumentRecord[]) || [];
+          const nameMatches = allRecords
+            .filter((item) => item.name === fallbackName && Boolean(item.dataUrl))
+            .sort((a, b) => Date.parse(b.savedAt || "") - Date.parse(a.savedAt || ""));
+          resolve(nameMatches[0] ?? directMatch);
+        };
+        allReq.onerror = () => resolve(directMatch);
+      };
       req.onerror = () => reject(req.error);
     });
   } catch (error) {

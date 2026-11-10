@@ -139,6 +139,11 @@ function persist() {
           name: doc.name,
           size: doc.size,
           type: doc.type,
+          // เก็บ dataUrl ของรูปถ่ายหน้าตรง (ขนาดบีบอัด ~10-50KB) ไว้ใน localStorage ด้วยเพื่อแสดงผลทันที
+          dataUrl:
+            doc.kind === "photo" && doc.dataUrl && doc.dataUrl.length < 300_000
+              ? doc.dataUrl
+              : undefined,
         })),
       })),
     };
@@ -163,7 +168,33 @@ export async function refreshApplicationsFromCloud(): Promise<void> {
   try {
     const cloudApps = await fetchApplicationsFromSupabase();
     if (cloudApps && cloudApps.length > 0) {
-      const validCloudApps = cloudApps.filter((a) => !isDemoApplication(a));
+      const validCloudApps = cloudApps
+        .filter((a) => !isDemoApplication(a))
+        .map((cloudApp) => {
+          const matchingLocal = state.applications.find(
+            (l) =>
+              l.ref === cloudApp.ref ||
+              (l.idCard === cloudApp.idCard && l.courseId === cloudApp.courseId)
+          );
+          if (!matchingLocal) return cloudApp;
+
+          // หากเครื่องของผู้สมัครมีไฟล์รูปภาพหรือเอกสารแบบ Base64 (data:) อยู่แล้ว ให้คงไว้ไม่ให้ถูกทับด้วยค่าว่าง
+          const mergedDocs = cloudApp.documents.map((cDoc) => {
+            if (cDoc.dataUrl?.startsWith("data:")) return cDoc;
+            const localDoc = matchingLocal.documents.find(
+              (lDoc) =>
+                (lDoc.kind === cDoc.kind || lDoc.name === cDoc.name) &&
+                lDoc.dataUrl?.startsWith("data:")
+            );
+            return localDoc
+              ? { ...cDoc, dataUrl: localDoc.dataUrl }
+              : cDoc;
+          });
+          return {
+            ...cloudApp,
+            documents: mergedDocs,
+          };
+        });
       const cloudRefs = new Set(validCloudApps.map((a) => a.ref));
       const cloudKeySet = new Set(
         validCloudApps.map((a) => `${a.idCard}-${a.courseId}`)
