@@ -146,7 +146,17 @@ export async function syncApplicationToSupabase(
       }
     }
 
-    const { error: appError } = await supabase.from("applications").upsert(
+    const aiPayload = {
+      ...record.ai,
+      _realStatus: record.status,
+      _reserveOrder: record.reserveOrder ?? null,
+      _notes: record.notes ?? [],
+    };
+
+    const dbStatus =
+      record.status === "action_required" ? "pending" : record.status;
+
+    let { error: appError } = await supabase.from("applications").upsert(
       {
         ref: targetRef,
         receipt_no: targetReceiptNo,
@@ -159,26 +169,74 @@ export async function syncApplicationToSupabase(
         phone: record.phone,
         affiliation: record.affiliation,
         position: record.position,
-        status: record.status,
+        status: dbStatus,
         review_reason: record.reviewReason ?? null,
         reviewed_at: record.reviewedAt ?? null,
         reviewed_by: record.reviewedBy ?? null,
         file_size: record.fileSize ? Math.round(record.fileSize * 1024 * 1024) : null,
-        ai: record.ai as unknown as Json,
+        ai: aiPayload as unknown as Json,
         submitted_at: record.submittedAt,
         updated_at: record.updatedAt,
       },
       { onConflict: "ref" }
     );
 
+    if (appError && dbStatus !== "pending") {
+      // Fallback กรณีฐานข้อมูลมี CHECK constraint เดิมที่ยังไม่รองรับสถานะใหม่
+      const retry = await supabase.from("applications").upsert(
+        {
+          ref: targetRef,
+          receipt_no: targetReceiptNo,
+          course_id: record.courseId,
+          course: record.course,
+          course_title: record.courseTitle,
+          name: record.name,
+          id_card: record.idCard,
+          email: record.email,
+          phone: record.phone,
+          affiliation: record.affiliation,
+          position: record.position,
+          status: "pending",
+          review_reason: record.reviewReason ?? null,
+          reviewed_at: record.reviewedAt ?? null,
+          reviewed_by: record.reviewedBy ?? null,
+          file_size: record.fileSize ? Math.round(record.fileSize * 1024 * 1024) : null,
+          ai: aiPayload as unknown as Json,
+          submitted_at: record.submittedAt,
+          updated_at: record.updatedAt,
+        },
+        { onConflict: "ref" }
+      );
+      appError = retry.error;
+    }
+
     if (appError) {
       console.warn("Supabase applications insert error:", appError.message);
       return false;
     }
 
-    // Insert documents
+    // Insert documents (เฉพาะเอกสารใหม่ที่ยังไม่มีในระบบเพื่อป้องกันข้อมูลซ้ำซ้อน)
     if (record.documents && record.documents.length > 0) {
+      const { data: existingDocs } = await supabase
+        .from("application_documents")
+        .select("id, kind, name, file_type, storage_path, data_url")
+        .eq("application_ref", targetRef);
+
       for (const doc of record.documents) {
+        const alreadyExists = (existingDocs || []).some((ed) => {
+          const edIsIdCard =
+            ed.kind === "idcard" ||
+            (ed.file_type && ed.file_type.startsWith("idcard:")) ||
+            (ed.storage_path && ed.storage_path.includes("idcard-"));
+          const edRealKind = edIsIdCard ? "idcard" : ed.kind;
+          return (
+            edRealKind === doc.kind &&
+            ed.name === doc.name &&
+            Boolean(ed.data_url || ed.storage_path)
+          );
+        });
+        if (alreadyExists) continue;
+
         let storagePath = null;
         if (doc.dataUrl && doc.dataUrl.startsWith("data:")) {
           const extension = doc.name.split(".").pop() || "bin";
@@ -213,19 +271,6 @@ export async function syncApplicationToSupabase(
       }
     }
 
-    // Insert notes
-    if (record.notes && record.notes.length > 0) {
-      for (const note of record.notes) {
-        await supabase.from("review_notes").upsert({
-          application_ref: targetRef,
-          author: note.author,
-          kind: note.kind,
-          text: note.text,
-          created_at: note.at,
-        });
-      }
-    }
-
     return true;
   } catch (err) {
     console.warn("Failed to sync application to Supabase:", err);
@@ -241,36 +286,60 @@ export async function syncReviewToSupabase(
   status: "approved" | "reserve" | "rejected" | "action_required" | "pending",
   reason: string,
   reviewer: string,
-  updatedAt: string
+  updatedAt: string,
+  extra?: {
+    notes?: ApplicantRecord["notes"];
+    reserveOrder?: number;
+    ai?: ApplicantRecord["ai"];
+  }
 ): Promise<boolean> {
   const supabase = getSupabaseClient();
   if (!supabase) return false;
 
   try {
-    const { error } = await supabase
+    const dbStatus = status === "action_required" ? "pending" : status;
+    const updatePayload: Database["public"]["Tables"]["applications"]["Update"] = {
+      status: dbStatus,
+      review_reason:
+        status === "rejected" || status === "action_required" ? reason : null,
+      reviewed_at: status === "pending" ? null : updatedAt,
+      reviewed_by: reviewer,
+      updated_at: updatedAt,
+    };
+
+    if (extra) {
+      updatePayload.ai = {
+        ...(extra.ai || {
+          tone: "review",
+          line1: "รอการตรวจสอบ",
+          line2: "อยู่ระหว่างตรวจเอกสารโดยเจ้าหน้าที่",
+        }),
+        _realStatus: status,
+        _reserveOrder: extra.reserveOrder ?? null,
+        _notes: extra.notes ?? [],
+      } as unknown as Json;
+    }
+
+    let { error } = await supabase
       .from("applications")
-      .update({
-        status,
-        review_reason:
-          status === "rejected" || status === "action_required" ? reason : null,
-        reviewed_at: status === "pending" ? null : updatedAt,
-        reviewed_by: reviewer,
-        updated_at: updatedAt,
-      })
+      .update(updatePayload)
       .eq("ref", ref);
+
+    if (error && dbStatus !== "pending") {
+      const retry = await supabase
+        .from("applications")
+        .update({
+          ...updatePayload,
+          status: "pending",
+        })
+        .eq("ref", ref);
+      error = retry.error;
+    }
 
     if (error) {
       console.warn("Supabase update review error:", error.message);
       return false;
     }
-
-    await supabase.from("review_notes").insert({
-      application_ref: ref,
-      author: reviewer,
-      kind: status === "pending" ? "note" : status,
-      text: reason,
-      created_at: updatedAt,
-    });
 
     return true;
   } catch (err) {
@@ -297,14 +366,32 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
       return null;
     }
 
-    const { data: allDocs } = await supabase
-      .from("application_documents")
-      .select("*");
+    const activeRefs = apps
+      .filter(
+        (a) =>
+          a.id_card !== "1100912345678" &&
+          a.name !== "นาย สมชาย สิงห์" &&
+          a.name !== "[Demo] นาย สมชาย สิงห์"
+      )
+      .map((a) => a.ref);
 
-    const { data: allNotes } = await supabase
-      .from("review_notes")
-      .select("*")
-      .order("created_at", { ascending: true });
+    const { data: allDocs } =
+      activeRefs.length > 0
+        ? await supabase
+            .from("application_documents")
+            .select("*")
+            .in("application_ref", activeRefs)
+            .order("created_at", { ascending: true })
+        : { data: [] };
+
+    const { data: allNotes } =
+      activeRefs.length > 0
+        ? await supabase
+            .from("review_notes")
+            .select("*")
+            .in("application_ref", activeRefs)
+            .order("created_at", { ascending: true })
+        : { data: [] };
 
     return apps.map((app) => {
       const rawDocs = (allDocs || [])
@@ -331,7 +418,7 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
           };
         });
 
-      // กรองเอกสารซ้ำซ้อนในประเภทเดียวกัน โดยเลือกแถวที่มีข้อมูลไฟล์ (data: หรือ storage URL) ก่อนเสมอ
+      // กรองเอกสารซ้ำซ้อนในประเภทเดียวกัน โดยเลือกแถวล่าสุดที่มีข้อมูลไฟล์ (data: หรือ storage URL) ก่อนเสมอ
       const docScore = (d: ApplicantDocument) => {
         if (d.dataUrl?.startsWith("data:")) return 3;
         if (d.dataUrl) return 2;
@@ -339,7 +426,14 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
       };
       const dedupedMap = new Map<string, ApplicantDocument>();
       for (const d of rawDocs) {
-        const key = d.kind === "photo" || d.kind === "cover" || d.kind === "idcard" ? d.kind : `${d.kind}:${d.name}`;
+        const key =
+          d.kind === "photo" ||
+          d.kind === "cover" ||
+          d.kind === "idcard" ||
+          d.kind === "certificate" ||
+          d.kind === "saka"
+            ? d.kind
+            : `${d.kind}:${d.name}`;
         const existing = dedupedMap.get(key);
         if (!existing || docScore(d) >= docScore(existing)) {
           dedupedMap.set(key, d);
@@ -347,15 +441,54 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
       }
       const docs = Array.from(dedupedMap.values());
 
-      const notes = (allNotes || [])
+      const rawAi = (
+        app.ai && typeof app.ai === "object" && !Array.isArray(app.ai)
+          ? app.ai
+          : {}
+      ) as Record<string, unknown>;
+
+      const aiNotes = Array.isArray(rawAi._notes)
+        ? (rawAi._notes as ApplicantRecord["notes"]).filter(
+            (n) => n && typeof n === "object" && typeof n.text === "string"
+          )
+        : [];
+
+      const dbNotes = (allNotes || [])
         .filter((note) => note.application_ref === app.ref)
         .map((note) => ({
           id: note.id,
           at: note.created_at,
           author: note.author,
-          kind: note.kind as "created" | "note" | "approved" | "rejected",
+          kind: note.kind as ApplicantRecord["notes"][number]["kind"],
           text: note.text,
         }));
+
+      const mergedNotesMap = new Map<string, ApplicantRecord["notes"][number]>();
+      for (const n of [...aiNotes, ...dbNotes]) {
+        const key = n.id || `${n.at}-${n.text}`;
+        mergedNotesMap.set(key, n);
+      }
+      const notes =
+        mergedNotesMap.size > 0
+          ? Array.from(mergedNotesMap.values())
+          : [
+              {
+                id: `${app.ref}-created`,
+                at: app.submitted_at,
+                author: "ระบบรับสมัคร",
+                kind: "created" as const,
+                text: "ได้รับข้อมูลการสมัครและเอกสารเรียบร้อยแล้ว",
+              },
+            ];
+
+      const realStatus = (
+        typeof rawAi._realStatus === "string" ? rawAi._realStatus : app.status
+      ) as ApplicantRecord["status"];
+
+      const realReserveOrder =
+        typeof rawAi._reserveOrder === "number"
+          ? rawAi._reserveOrder
+          : (app.reserve_order ?? undefined);
 
       return {
         id: Number(app.id),
@@ -374,13 +507,18 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
         updatedAt: app.updated_at,
         fileSize: app.file_size ? app.file_size / (1024 * 1024) : null,
         documents: docs,
-        ai: (app.ai as unknown as ApplicantRecord["ai"]) || {
-          tone: "review",
-          line1: "รอการตรวจสอบ",
-          line2: "อยู่ระหว่างตรวจเอกสารโดยเจ้าหน้าที่",
+        ai: {
+          tone:
+            (rawAi.tone as ApplicantRecord["ai"]["tone"]) || "review",
+          line1:
+            typeof rawAi.line1 === "string" ? rawAi.line1 : "รอการตรวจสอบ",
+          line2:
+            typeof rawAi.line2 === "string"
+              ? rawAi.line2
+              : "อยู่ระหว่างตรวจเอกสารโดยเจ้าหน้าที่",
         },
-        status: app.status as ApplicantRecord["status"],
-        reserveOrder: app.reserve_order ?? undefined,
+        status: realStatus,
+        reserveOrder: realReserveOrder,
         reviewReason: app.review_reason ?? undefined,
         reviewedAt: app.reviewed_at ?? undefined,
         reviewedBy: app.reviewed_by ?? undefined,

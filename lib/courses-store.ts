@@ -109,14 +109,19 @@ function persist() {
   if (typeof window === "undefined") return true;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.courses));
-    // Auto-sync to data/courses.json in the background
-    fetch("/api/admin/save-defaults", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ courses: state.courses }),
-    }).catch(() => {
-      // Ignore background sync errors in static/read-only environments
-    });
+    // Auto-sync to data/courses.json in the background only when an admin is logged in
+    if (window.sessionStorage.getItem("sat-admin-authenticated") === "true") {
+      fetch("/api/admin/save-defaults", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-authorized": "true",
+        },
+        body: JSON.stringify({ courses: state.courses }),
+      }).catch(() => {
+        // Ignore background sync errors in static/read-only environments
+      });
+    }
     return true;
   } catch {
     // Storage may be unavailable in private mode or full; the in-memory store still works.

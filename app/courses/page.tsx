@@ -44,7 +44,11 @@ function CourseCatalogContent() {
   const [selectedId, setSelectedId] = useState<number | null>(
     initialCourse.status === "open" ? initialCourse.id : null
   );
-  const [detailCourse, setDetailCourse] = useState<Course | null>(null);
+  const [detailCourseId, setDetailCourseId] = useState<number | null>(null);
+  const detailCourse = useMemo(
+    () => sortedCourses.find((c) => c.id === detailCourseId) ?? null,
+    [sortedCourses, detailCourseId]
+  );
   const selectedCourse = sortedCourses.find(
     (course) => course.id === selectedId && course.status === "open"
   );
@@ -93,7 +97,7 @@ function CourseCatalogContent() {
               scheduleOrder={idx + 1}
               selected={course.id === activeId}
               onSelect={setSelectedId}
-              onViewDetails={() => setDetailCourse(course)}
+              onViewDetails={() => setDetailCourseId(course.id)}
             />
           ))}
         </div>
@@ -103,7 +107,7 @@ function CourseCatalogContent() {
 
       <CourseDetailDialog
         course={detailCourse}
-        onClose={() => setDetailCourse(null)}
+        onClose={() => setDetailCourseId(null)}
         onSelectRegister={(id) => setSelectedId(id)}
       />
 

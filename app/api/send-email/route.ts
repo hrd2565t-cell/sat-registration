@@ -13,14 +13,30 @@ export interface SendApplicationEmailRequest {
   affiliation?: string;
 }
 
+function escapeHtml(raw: string | undefined | null): string {
+  if (!raw) return "";
+  return String(raw)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function formatMaskedIdCard(idCard: string): string {
   const digits = idCard.replace(/\D/g, "");
-  if (digits.length !== 13) return idCard;
+  if (digits.length !== 13) return escapeHtml(idCard);
   return `${digits[0]}-xxxx-xxxxx-${digits.slice(10, 12)}-${digits[12]}`;
 }
 
 function buildEmailHtml(data: SendApplicationEmailRequest, siteUrl: string): string {
   const maskedId = formatMaskedIdCard(data.idCard);
+  const safeName = escapeHtml(data.applicantName);
+  const safeReceiptNo = escapeHtml(data.receiptNo);
+  const safeCourseTitle = escapeHtml(data.courseTitle);
+  const safeCourseDate = escapeHtml(data.courseDate);
+  const safeCourseLocation = escapeHtml(data.courseLocation);
+  const safeAffiliation = escapeHtml(data.affiliation);
   const statusUrl = `${siteUrl}/status?id=${encodeURIComponent(data.idCard.replace(/\D/g, ""))}`;
   const receiptUrl = `${siteUrl}/print/receipt?ref=${encodeURIComponent(data.ref)}`;
   const dateStr = new Intl.DateTimeFormat("th-TH", {
@@ -206,7 +222,7 @@ function buildEmailHtml(data: SendApplicationEmailRequest, siteUrl: string): str
       </div>
       
       <div class="content">
-        <div class="greeting">เรียนคุณ ${data.applicantName}</div>
+        <div class="greeting">เรียนคุณ ${safeName}</div>
         <div class="intro">
           ระบบรับสมัครเข้ารับการฝึกอบรม กองพัฒนาบุคลากรกีฬา การกีฬาแห่งประเทศไทย ได้รับข้อมูลการสมัครและเอกสารประกอบของท่านเรียบร้อยแล้ว
         </div>
@@ -214,13 +230,13 @@ function buildEmailHtml(data: SendApplicationEmailRequest, siteUrl: string): str
         <div class="card">
           <div class="receipt-badge">
             <div class="receipt-label">รหัสอ้างอิงการสมัคร (Official Ref No.)</div>
-            <div class="receipt-val">${data.receiptNo}</div>
+            <div class="receipt-val">${safeReceiptNo}</div>
           </div>
           
           <table style="width: 100%; border-collapse: collapse; font-size: 13.5px;">
             <tr>
               <td style="padding: 6px 0; color: #64748b; width: 130px;">ชื่อ - นามสกุล:</td>
-              <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">${data.applicantName}</td>
+              <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">${safeName}</td>
             </tr>
             <tr>
               <td style="padding: 6px 0; color: #64748b;">เลขบัตร ปชช.:</td>
@@ -228,22 +244,22 @@ function buildEmailHtml(data: SendApplicationEmailRequest, siteUrl: string): str
             </tr>
             <tr>
               <td style="padding: 6px 0; color: #64748b;">หลักสูตร:</td>
-              <td style="padding: 6px 0; color: #1e3a8a; font-weight: 700;">${data.courseTitle}</td>
+              <td style="padding: 6px 0; color: #1e3a8a; font-weight: 700;">${safeCourseTitle}</td>
             </tr>
-            ${data.courseDate ? `
+            ${safeCourseDate ? `
             <tr>
               <td style="padding: 6px 0; color: #64748b;">กำหนดการอบรม:</td>
-              <td style="padding: 6px 0; color: #0f172a; font-weight: 500;">วันที่ ${data.courseDate}</td>
+              <td style="padding: 6px 0; color: #0f172a; font-weight: 500;">วันที่ ${safeCourseDate}</td>
             </tr>` : ""}
-            ${data.courseLocation ? `
+            ${safeCourseLocation ? `
             <tr>
               <td style="padding: 6px 0; color: #64748b;">สถานที่จัดอบรม:</td>
-              <td style="padding: 6px 0; color: #0f172a; font-weight: 500;">ณ ${data.courseLocation}</td>
+              <td style="padding: 6px 0; color: #0f172a; font-weight: 500;">ณ ${safeCourseLocation}</td>
             </tr>` : ""}
-            ${data.affiliation ? `
+            ${safeAffiliation ? `
             <tr>
               <td style="padding: 6px 0; color: #64748b;">สังกัด / หน่วยงาน:</td>
-              <td style="padding: 6px 0; color: #0f172a; font-weight: 500;">${data.affiliation}</td>
+              <td style="padding: 6px 0; color: #0f172a; font-weight: 500;">${safeAffiliation}</td>
             </tr>` : ""}
             <tr>
               <td style="padding: 6px 0; color: #64748b;">วันที่ยื่นสมัคร:</td>
@@ -291,11 +307,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const siteUrl =
+    const siteUrl = (
       process.env.NEXT_PUBLIC_SITE_URL ||
-      process.env.VERCEL_PROJECT_PRODUCTION_URL
+      (process.env.VERCEL_PROJECT_PRODUCTION_URL
         ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-        : "https://sat-registration.vercel.app";
+        : "https://sat-registration.vercel.app")
+    ).replace(/\/$/, "");
 
     const emailHtml = buildEmailHtml(
       { to, applicantName, receiptNo, ref, courseTitle, courseDate, courseLocation, idCard, affiliation },

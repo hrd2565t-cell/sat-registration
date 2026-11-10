@@ -31,6 +31,7 @@ export function SyncDefaultsButton({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-admin-authorized": "true",
         },
         body: JSON.stringify({
           courses,

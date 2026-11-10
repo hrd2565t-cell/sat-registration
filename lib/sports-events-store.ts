@@ -211,14 +211,19 @@ function persist() {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.events));
-    // Auto-sync to data/sports-events.json in the background
-    fetch("/api/admin/save-defaults", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sportsEvents: state.events }),
-    }).catch(() => {
-      // Ignore background sync errors
-    });
+    // Auto-sync to data/sports-events.json in the background when admin is logged in
+    if (window.sessionStorage.getItem("sat-admin-authenticated") === "true") {
+      fetch("/api/admin/save-defaults", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-authorized": "true",
+        },
+        body: JSON.stringify({ sportsEvents: state.events }),
+      }).catch(() => {
+        // Ignore background sync errors
+      });
+    }
   } catch {
     // LocalStorage fallback
   }

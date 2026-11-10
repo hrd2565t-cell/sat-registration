@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS public.applications (
     phone VARCHAR(20) NOT NULL,
     affiliation TEXT DEFAULT '',
     position TEXT DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'reserve')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'reserve', 'action_required')),
     reserve_order INTEGER,
     review_reason TEXT,
     reviewed_at TIMESTAMPTZ,
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS public.applications (
 CREATE TABLE IF NOT EXISTS public.application_documents (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     application_ref TEXT REFERENCES public.applications(ref) ON DELETE CASCADE,
-    kind TEXT NOT NULL CHECK (kind IN ('photo', 'cover', 'certificate', 'saka')),
+    kind TEXT NOT NULL CHECK (kind IN ('photo', 'cover', 'certificate', 'idcard', 'saka')),
     name TEXT NOT NULL,
     size TEXT NOT NULL,
     file_type TEXT,
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS public.review_notes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     application_ref TEXT REFERENCES public.applications(ref) ON DELETE CASCADE,
     author TEXT NOT NULL,
-    kind TEXT NOT NULL DEFAULT 'note' CHECK (kind IN ('created', 'note', 'approved', 'rejected', 'reserve')),
+    kind TEXT NOT NULL DEFAULT 'note' CHECK (kind IN ('created', 'note', 'approved', 'rejected', 'reserve', 'action_required')),
     text TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );

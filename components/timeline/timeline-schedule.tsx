@@ -645,11 +645,16 @@ export function TimelineSchedule() {
     } catch {
       // ignore
     }
-    void fetch("/api/admin/save-defaults", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ timelineSettings: next }),
-    }).catch(() => {});
+    if (window.sessionStorage.getItem("sat-admin-authenticated") === "true") {
+      void fetch("/api/admin/save-defaults", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-authorized": "true",
+        },
+        body: JSON.stringify({ timelineSettings: next }),
+      }).catch(() => {});
+    }
   };
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);

@@ -257,13 +257,18 @@ function persist() {
   if (typeof window === "undefined") return;
   try {
     saveToLocalStorage(state.trainees);
-    fetch("/api/admin/save-defaults", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ alumni: state.trainees }),
-    }).catch(() => {
-      // background sync
-    });
+    if (window.sessionStorage.getItem("sat-admin-authenticated") === "true") {
+      fetch("/api/admin/save-defaults", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-authorized": "true",
+        },
+        body: JSON.stringify({ alumni: state.trainees }),
+      }).catch(() => {
+        // background sync
+      });
+    }
   } catch {
     // Local storage full or unavailable
   }

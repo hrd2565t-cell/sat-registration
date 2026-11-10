@@ -4,6 +4,16 @@ import path from "node:path";
 
 export async function POST(request: Request) {
   try {
+    const adminAuthorized = request.headers.get("x-admin-authorized");
+    const adminPinHeader = request.headers.get("x-admin-pin");
+    const expectedPin = process.env.NEXT_PUBLIC_ADMIN_PIN || "336699";
+    if (adminAuthorized !== "true" && adminPinHeader !== expectedPin) {
+      return NextResponse.json(
+        { ok: false, error: "ไม่ได้รับอนุญาต (ต้องเป็นผู้ดูแลระบบ)" },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { courses, sportsEvents, timelineSettings, alumni } = body as {
       courses?: unknown[];
@@ -12,21 +22,34 @@ export async function POST(request: Request) {
       alumni?: unknown[];
     };
 
+    const isServerlessReadOnly = Boolean(process.env.VERCEL);
     const dataDir = path.join(process.cwd(), "data");
-    await fs.mkdir(dataDir, { recursive: true });
+    if (!isServerlessReadOnly) {
+      try {
+        await fs.mkdir(dataDir, { recursive: true });
+      } catch {
+        // Ignore read-only filesystem errors
+      }
+    }
 
     let coursesCount = 0;
     let sportsEventsCount = 0;
     let alumniCount = 0;
 
     if (Array.isArray(courses)) {
-      const coursesPath = path.join(dataDir, "courses.json");
-      await fs.writeFile(
-        coursesPath,
-        JSON.stringify(courses, null, 2) + "\n",
-        "utf-8"
-      );
       coursesCount = courses.length;
+      if (!isServerlessReadOnly) {
+        try {
+          const coursesPath = path.join(dataDir, "courses.json");
+          await fs.writeFile(
+            coursesPath,
+            JSON.stringify(courses, null, 2) + "\n",
+            "utf-8"
+          );
+        } catch {
+          // Ignore on read-only filesystem
+        }
+      }
 
       // Sync updated courses directly to Supabase with service role key if available
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -127,23 +150,35 @@ export async function POST(request: Request) {
     }
 
     if (Array.isArray(sportsEvents)) {
-      const sportsEventsPath = path.join(dataDir, "sports-events.json");
-      await fs.writeFile(
-        sportsEventsPath,
-        JSON.stringify(sportsEvents, null, 2) + "\n",
-        "utf-8"
-      );
       sportsEventsCount = sportsEvents.length;
+      if (!isServerlessReadOnly) {
+        try {
+          const sportsEventsPath = path.join(dataDir, "sports-events.json");
+          await fs.writeFile(
+            sportsEventsPath,
+            JSON.stringify(sportsEvents, null, 2) + "\n",
+            "utf-8"
+          );
+        } catch {
+          // Ignore on read-only filesystem
+        }
+      }
     }
 
     if (Array.isArray(alumni)) {
-      const alumniPath = path.join(dataDir, "alumni.json");
-      await fs.writeFile(
-        alumniPath,
-        JSON.stringify(alumni, null, 2) + "\n",
-        "utf-8"
-      );
       alumniCount = alumni.length;
+      if (!isServerlessReadOnly) {
+        try {
+          const alumniPath = path.join(dataDir, "alumni.json");
+          await fs.writeFile(
+            alumniPath,
+            JSON.stringify(alumni, null, 2) + "\n",
+            "utf-8"
+          );
+        } catch {
+          // Ignore on read-only filesystem
+        }
+      }
 
       // Sync updated alumni to Supabase if configured
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -196,13 +231,17 @@ export async function POST(request: Request) {
       }
     }
 
-    if (timelineSettings && typeof timelineSettings === "object") {
-      const settingsPath = path.join(dataDir, "timeline-settings.json");
-      await fs.writeFile(
-        settingsPath,
-        JSON.stringify(timelineSettings, null, 2) + "\n",
-        "utf-8"
-      );
+    if (timelineSettings && typeof timelineSettings === "object" && !isServerlessReadOnly) {
+      try {
+        const settingsPath = path.join(dataDir, "timeline-settings.json");
+        await fs.writeFile(
+          settingsPath,
+          JSON.stringify(timelineSettings, null, 2) + "\n",
+          "utf-8"
+        );
+      } catch {
+        // Ignore on read-only filesystem
+      }
     }
 
     return NextResponse.json({

@@ -7,6 +7,7 @@ import {
   type ApplicantDocument,
   type ApplicantRecord,
 } from "@/lib/applications-store";
+import { saveDocumentToStorage } from "@/lib/document-storage";
 
 interface ResubmitDocumentsBoxProps {
   application: ApplicantRecord;
@@ -51,8 +52,36 @@ export function ResubmitDocumentsBox({ application, onSuccess }: ResubmitDocumen
         name: `${file.name} (แนบใหม่)`,
         size: file.size,
         dataUrl: file.dataUrl,
+        type: file.type,
         kind: selectedKind,
       };
+
+      if (file.dataUrl) {
+        try {
+          await saveDocumentToStorage({
+            id: newDoc.id,
+            name: newDoc.name,
+            type: file.type || "application/octet-stream",
+            size: newDoc.size,
+            dataUrl: file.dataUrl,
+            savedAt: new Date().toISOString(),
+          });
+          if (typeof window !== "undefined") {
+            sessionStorage.setItem(`sat-doc-${newDoc.id}`, file.dataUrl);
+            if (selectedKind === "photo") {
+              sessionStorage.setItem("sat-latest-photo", file.dataUrl);
+              if (application.idCard) {
+                sessionStorage.setItem(
+                  `sat-photo-idcard-${application.idCard.replace(/\D/g, "")}`,
+                  file.dataUrl
+                );
+              }
+            }
+          }
+        } catch {
+          // Ignore local storage errors
+        }
+      }
 
       // Replace or append doc in existing documents
       const existingDocs = application.documents.filter(

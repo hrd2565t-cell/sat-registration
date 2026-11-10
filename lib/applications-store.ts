@@ -565,6 +565,7 @@ export function reviewApplication(
   syncCourseSeats();
 
   if (isSupabaseConfigured()) {
+    const updatedApp = state.applications.find((a) => a.ref === ref);
     const noteText =
       status === "approved"
         ? reason.trim() || "อนุมัติคุณสมบัติและเอกสารครบถ้วน"
@@ -573,7 +574,11 @@ export function reviewApplication(
           : status === "action_required"
             ? reason.trim() || "ขอเอกสารเพิ่มเติมประกอบการพิจารณา"
             : reason.trim() || "ไม่ผ่านการตรวจสอบคุณสมบัติ";
-    syncReviewToSupabase(ref, status, noteText, reviewer, now);
+    void syncReviewToSupabase(ref, status, noteText, reviewer, now, {
+      notes: updatedApp?.notes,
+      reserveOrder: updatedApp?.reserveOrder,
+      ai: updatedApp?.ai,
+    });
   }
 }
 
@@ -587,10 +592,12 @@ export function resubmitApplicantDocuments(
   applicantMessage?: string
 ) {
   const now = new Date().toISOString();
+  const noteMsg =
+    applicantMessage?.trim() ||
+    "ผู้สมัครได้แนบเอกสารเพิ่มเติมและส่งเข้าสู่ระบบเรียบร้อยแล้ว";
   state = {
     applications: state.applications.map((item) => {
       if (item.ref !== ref) return item;
-      const noteMsg = applicantMessage?.trim() || "ผู้สมัครได้แนบเอกสารเพิ่มเติมและส่งเข้าสู่ระบบเรียบร้อยแล้ว";
       return {
         ...item,
         status: "pending" as const,
@@ -615,16 +622,14 @@ export function resubmitApplicantDocuments(
   emit();
 
   if (isSupabaseConfigured()) {
-    syncReviewToSupabase(
-      ref,
-      "pending",
-      "ผู้สมัครได้แนบเอกสารเพิ่มเติมและส่งเข้าสู่ระบบเรียบร้อยแล้ว",
-      "ผู้สมัคร",
-      now
-    );
     const app = state.applications.find((a) => a.ref === ref);
+    void syncReviewToSupabase(ref, "pending", noteMsg, "ผู้สมัคร", now, {
+      notes: app?.notes,
+      reserveOrder: app?.reserveOrder,
+      ai: app?.ai,
+    });
     if (app) {
-      syncApplicationToSupabase(app).then();
+      void syncApplicationToSupabase(app);
     }
   }
 }
@@ -638,6 +643,7 @@ export function promoteReserveToApproved(
   if (!target) return;
 
   const formerOrder = target.reserveOrder ?? 1;
+  const shiftedReserveRefs: string[] = [];
 
   state = {
     applications: state.applications.map((item) => {
@@ -667,6 +673,7 @@ export function promoteReserveToApproved(
         item.reserveOrder &&
         item.reserveOrder > formerOrder
       ) {
+        shiftedReserveRefs.push(item.ref);
         return {
           ...item,
           reserveOrder: item.reserveOrder - 1,
@@ -682,13 +689,36 @@ export function promoteReserveToApproved(
   syncCourseSeats();
 
   if (isSupabaseConfigured()) {
-    syncReviewToSupabase(
+    const promotedApp = state.applications.find((a) => a.ref === ref);
+    void syncReviewToSupabase(
       ref,
       "approved",
       `เลื่อนลำดับจากรายชื่อสำรอง (เดิมลำดับที่ ${formerOrder}) เป็นตัวจริง`,
       reviewer,
-      now
+      now,
+      {
+        notes: promotedApp?.notes,
+        reserveOrder: undefined,
+        ai: promotedApp?.ai,
+      }
     );
+    for (const shiftedRef of shiftedReserveRefs) {
+      const shiftedApp = state.applications.find((a) => a.ref === shiftedRef);
+      if (shiftedApp) {
+        void syncReviewToSupabase(
+          shiftedRef,
+          "reserve",
+          `ปรับลำดับรายชื่อสำรองเป็นลำดับที่ ${shiftedApp.reserveOrder}`,
+          reviewer,
+          now,
+          {
+            notes: shiftedApp.notes,
+            reserveOrder: shiftedApp.reserveOrder,
+            ai: shiftedApp.ai,
+          }
+        );
+      }
+    }
   }
 }
 
@@ -726,17 +756,21 @@ export function addApplicationNote(
   emit();
 
   if (isSupabaseConfigured()) {
-    const supabase = getSupabaseClient();
-    supabase
-      ?.from("review_notes")
-      .insert({
-        application_ref: ref,
-        author,
-        kind: "note",
-        text: trimmed,
-        created_at: now,
-      })
-      .then();
+    const updatedApp = state.applications.find((a) => a.ref === ref);
+    if (updatedApp) {
+      void syncReviewToSupabase(
+        ref,
+        updatedApp.status,
+        updatedApp.reviewReason || trimmed,
+        updatedApp.reviewedBy || author,
+        now,
+        {
+          notes: updatedApp.notes,
+          reserveOrder: updatedApp.reserveOrder,
+          ai: updatedApp.ai,
+        }
+      );
+    }
   }
 }
 
