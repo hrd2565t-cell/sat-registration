@@ -5,6 +5,9 @@ import * as React from "react";
 export interface IdCardInputProps {
   value?: string;
   onChange?: (value: string) => void;
+  onEnter?: (value: string) => void;
+  onComplete?: (value: string) => void;
+  onClear?: () => void;
   disabled?: boolean;
   className?: string;
   tone?: "default" | "highlight";
@@ -16,6 +19,9 @@ export interface IdCardInputProps {
 export function IdCardInput({
   value = "",
   onChange,
+  onEnter,
+  onComplete,
+  onClear,
   disabled = false,
   className,
   tone = "default",
@@ -71,6 +77,11 @@ export function IdCardInput({
     });
     update(next);
 
+    const joined = next.join("");
+    if (joined.length === 13) {
+      onComplete?.(joined);
+    }
+
     const target = Math.min(startIndex + chars.length - 1, 12);
     refs.current[target]?.focus();
     return true;
@@ -107,6 +118,11 @@ export function IdCardInput({
     next[index] = incoming;
     update(next);
 
+    const joined = next.join("");
+    if (joined.length === 13) {
+      onComplete?.(joined);
+    }
+
     if (index < 12) {
       refs.current[index + 1]?.focus();
     }
@@ -116,6 +132,11 @@ export function IdCardInput({
     index: number,
     event: React.KeyboardEvent<HTMLInputElement>
   ) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      onEnter?.(digits.join(""));
+      return;
+    }
     if (event.key === "Backspace" && !digits[index] && index > 0) {
       const next = [...digits];
       next[index - 1] = "";
@@ -156,6 +177,7 @@ export function IdCardInput({
   const handleClear = () => {
     const empty = Array(13).fill("");
     update(empty);
+    onClear?.();
     refs.current[0]?.focus();
   };
 
