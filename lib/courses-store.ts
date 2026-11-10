@@ -169,8 +169,7 @@ function mergeStoredCourses(stored: Course[]): Course[] {
 
     const cap = Number(saved.seats?.match(/\d+/)?.[0]) || saved.capacity || seed?.capacity || 40;
     const seedQuotas = seed?.targetQuotas ?? balanceQuotasToCapacity(cap);
-    const isSaved50 = isLegacy50Quota(saved.targetQuotas);
-    const finalStoredQuotas = isSaved50 ? seedQuotas : (saved.targetQuotas ?? seedQuotas);
+    const finalStoredQuotas = saved.targetQuotas ?? seedQuotas;
 
     return {
       ...(seed ?? {}),
@@ -274,9 +273,16 @@ function mapCloudCourse(
   const seed = getSeedCourse(c.id);
   const existing = existingCourses.find((item) => item.id === c.id);
 
-  // ยึดฐานข้อมูลกลาง (Supabase Cloud) เป็นแหล่งข้อมูลหลักชุดเดียวกันทุกเครื่อง (Single Source of Truth)
-  // เพื่อป้องกันปัญหา localStorage เก่าของแต่ละเครื่องแสดงผลไม่ตรงกัน
+  // หากข้อมูลในเครื่องของผู้ดูแลระบบเพิ่งถูกแก้ไขใหม่กว่าข้อมูลบน Cloud (เช่น เพิ่งกดบันทึก)
+  // ให้รักษาข้อมูลชุดที่ใหม่กว่าไว้เพื่อป้องกันการถูกทับด้วยค่าเก่า
   const cloudUpdatedAt = (c as { updated_at?: string }).updated_at;
+  if (
+    existing?.updatedAt &&
+    cloudUpdatedAt &&
+    Date.parse(existing.updatedAt) > Date.parse(cloudUpdatedAt) + 1000
+  ) {
+    return existing;
+  }
 
   const isOldCloudMock = c.id === 3 && c.date === "1-3 ธ.ค. 2569";
   const finalDate = isOldCloudMock ? (seed?.date || "20-22 ม.ค. 2570") : c.date;
@@ -298,65 +304,64 @@ function mapCloudCourse(
     colUseCustom !== undefined ? colUseCustom : cloudSchedule?.useCustomSchedule;
 
   const finalRegDate =
-    cloudSchedReg || seed?.registrationDate || DEFAULT_GLOBAL_REGISTRATION_DATE;
+    cloudSchedReg || existing?.registrationDate || seed?.registrationDate || DEFAULT_GLOBAL_REGISTRATION_DATE;
 
   const finalResDate =
-    cloudSchedRes || seed?.resultDate || DEFAULT_GLOBAL_RESULT_DATE;
+    cloudSchedRes || existing?.resultDate || seed?.resultDate || DEFAULT_GLOBAL_RESULT_DATE;
 
   const finalUseCustom =
     cloudSchedCustom !== undefined
       ? cloudSchedCustom
-      : Boolean(seed?.useCustomSchedule);
+      : Boolean(existing?.useCustomSchedule ?? seed?.useCustomSchedule);
 
   const cleanCloudQ = sanitizeQuotas(rawCloudQuotas, cap);
-  const isCloud50 = isLegacy50Quota(cleanCloudQ);
-  const finalQuotas = isCloud50
-    ? (seed?.targetQuotas ?? balanceQuotasToCapacity(cap))
-    : (cleanCloudQ || seed?.targetQuotas || balanceQuotasToCapacity(cap));
+  const finalQuotas =
+    cleanCloudQ || existing?.targetQuotas || seed?.targetQuotas || balanceQuotasToCapacity(cap);
 
   const finalCourseObjective =
     cloudMeta?.courseObjective !== undefined
       ? cloudMeta.courseObjective
       : (c as { course_objective?: string }).course_objective !== undefined
       ? (c as { course_objective?: string }).course_objective
-      : seed?.courseObjective;
+      : (existing?.courseObjective ?? seed?.courseObjective);
 
   const finalQualifications =
     cloudMeta?.qualifications !== undefined
       ? cloudMeta.qualifications
-      : (seed?.qualifications ?? []);
+      : (existing?.qualifications ?? seed?.qualifications ?? []);
 
   const finalRequiredDocuments =
     cloudMeta?.requiredDocuments !== undefined
       ? cloudMeta.requiredDocuments
-      : (seed?.requiredDocuments ?? []);
+      : (existing?.requiredDocuments ?? seed?.requiredDocuments ?? []);
 
   const finalEvaluationCriteria =
     cloudMeta?.evaluationCriteria !== undefined
       ? cloudMeta.evaluationCriteria
-      : (seed?.evaluationCriteria ?? []);
+      : (existing?.evaluationCriteria ?? seed?.evaluationCriteria ?? []);
 
   const finalSatSupport =
     cloudMeta?.satSupport !== undefined
       ? cloudMeta.satSupport
-      : (seed?.satSupport ?? [...DEFAULT_SAT_SUPPORT]);
+      : (existing?.satSupport ?? seed?.satSupport ?? [...DEFAULT_SAT_SUPPORT]);
 
   const finalExpensesPolicy =
     cloudMeta?.expensesPolicy !== undefined
       ? cloudMeta.expensesPolicy
-      : (seed?.expensesPolicy ?? DEFAULT_EXPENSES_POLICY);
+      : (existing?.expensesPolicy ?? seed?.expensesPolicy ?? DEFAULT_EXPENSES_POLICY);
 
   const rawSeatsLeft =
     typeof c.seats_left === "number"
       ? c.seats_left
       : typeof cloudMeta?.seatsLeft === "number"
       ? cloudMeta.seatsLeft
-      : (seed?.seatsLeft ?? cap);
+      : (existing?.seatsLeft ?? seed?.seatsLeft ?? cap);
   const finalSeatsLeft = c.status === "full" ? undefined : Math.min(cap, rawSeatsLeft);
 
   const cloudDocConfig =
     (c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config ||
-    cloudMeta?.documentConfig;
+    cloudMeta?.documentConfig ||
+    existing?.documentConfig;
 
   return {
     ...(seed ?? {}),
@@ -528,14 +533,25 @@ function hydrate() {
   hydrateStarted = true;
 
   try {
-    // ล้างแคช localStorage รุ่นเก่าเพื่อไม่ให้ข้อมูลเก่าค้างในแต่ละเครื่อง
+    let raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      for (const legacyKey of LEGACY_COURSE_KEYS) {
+        try {
+          const legacyRaw = window.localStorage.getItem(legacyKey);
+          if (legacyRaw) {
+            raw = legacyRaw;
+            window.localStorage.setItem(STORAGE_KEY, legacyRaw);
+            break;
+          }
+        } catch {}
+      }
+    }
     for (const legacyKey of LEGACY_COURSE_KEYS) {
       try {
         window.localStorage.removeItem(legacyKey);
       } catch {}
     }
 
-    const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as unknown;
       if (
@@ -947,7 +963,17 @@ export function addCourse(
         useCustomSchedule: newCourse.useCustomSchedule,
         updatedAt: newCourse.updatedAt,
       },
-      newCourse.capacity || 40
+      newCourse.capacity || 40,
+      {
+        courseObjective: newCourse.courseObjective,
+        qualifications: newCourse.qualifications,
+        requiredDocuments: newCourse.requiredDocuments,
+        evaluationCriteria: newCourse.evaluationCriteria,
+        satSupport: newCourse.satSupport,
+        expensesPolicy: newCourse.expensesPolicy,
+        documentConfig: newCourse.documentConfig,
+        seatsLeft: newCourse.seatsLeft,
+      }
     );
 
     supabase
@@ -1005,7 +1031,7 @@ export function updateGlobalCourseSchedule(
   const persisted = persist();
   emit();
 
-  // Sync each affected course immediately to Supabase
+  // Sync each affected course immediately to Supabase (พร้อมรักษาข้อมูล _metadata ทั้ง 8 หัวข้อไว้ครบถ้วน)
   if (isSupabaseConfigured()) {
     const supabase = getSupabaseClient();
     nextCourses.forEach((c) => {
@@ -1017,7 +1043,17 @@ export function updateGlobalCourseSchedule(
           useCustomSchedule: false,
           updatedAt: now,
         },
-        c.capacity || 40
+        c.capacity || 40,
+        {
+          courseObjective: c.courseObjective,
+          qualifications: c.qualifications,
+          requiredDocuments: c.requiredDocuments,
+          evaluationCriteria: c.evaluationCriteria,
+          satSupport: c.satSupport,
+          expensesPolicy: c.expensesPolicy,
+          documentConfig: c.documentConfig,
+          seatsLeft: c.seatsLeft,
+        }
       );
 
       supabase

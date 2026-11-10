@@ -67,8 +67,16 @@ export async function POST(request: Request) {
             .filter((id): id is number => typeof id === "number");
 
           // 1. Delete courses in Supabase that have been deleted by the admin
-          const { data: existingRows } = await supabase.from("courses").select("id");
+          const { data: existingRows } = await supabase
+            .from("courses")
+            .select("id, target_quotas");
+          const existingMap = new Map<number, Record<string, unknown>>();
           if (existingRows && existingRows.length > 0) {
+            for (const row of existingRows) {
+              if (typeof row.id === "number" && row.target_quotas && typeof row.target_quotas === "object") {
+                existingMap.set(row.id, row.target_quotas as Record<string, unknown>);
+              }
+            }
             const idsToDelete = existingRows
               .map((r) => r.id)
               .filter((id) => !activeCourseIds.includes(id));
@@ -80,15 +88,27 @@ export async function POST(request: Request) {
           // 2. Upsert active courses so new courses are inserted and existing courses are updated
           for (const c of courseList) {
             if (typeof c.id === "number") {
+              const prevQuotas = existingMap.get(c.id) || {};
+              const prevMeta =
+                prevQuotas._metadata && typeof prevQuotas._metadata === "object"
+                  ? (prevQuotas._metadata as Record<string, unknown>)
+                  : {};
               const warningText =
                 typeof c.warningMessage === "string" ? c.warningMessage.trim() : "";
               const targetQ =
                 (c.targetQuotas as Record<string, unknown>) ?? {
-                  sat: 5,
-                  nationalAssoc: 15,
-                  provincialAssoc: 15,
-                  nsdf: 0,
-                  external: 5,
+                  sat: typeof prevQuotas.sat === "number" ? prevQuotas.sat : 5,
+                  nationalAssoc:
+                    typeof prevQuotas.nationalAssoc === "number"
+                      ? prevQuotas.nationalAssoc
+                      : 15,
+                  provincialAssoc:
+                    typeof prevQuotas.provincialAssoc === "number"
+                      ? prevQuotas.provincialAssoc
+                      : 15,
+                  nsdf: typeof prevQuotas.nsdf === "number" ? prevQuotas.nsdf : 0,
+                  external:
+                    typeof prevQuotas.external === "number" ? prevQuotas.external : 5,
                 };
               const quotasPayload = {
                 ...targetQ,
@@ -108,14 +128,29 @@ export async function POST(request: Request) {
                       : new Date().toISOString(),
                 },
                 _metadata: {
-                  courseObjective: c.courseObjective,
-                  qualifications: c.qualifications,
-                  requiredDocuments: c.requiredDocuments,
-                  evaluationCriteria: c.evaluationCriteria,
-                  satSupport: c.satSupport,
-                  expensesPolicy: c.expensesPolicy,
-                  documentConfig: c.documentConfig,
-                  seatsLeft: typeof c.seatsLeft === "number" ? c.seatsLeft : undefined,
+                  ...prevMeta,
+                  ...(c.courseObjective !== undefined
+                    ? { courseObjective: c.courseObjective }
+                    : {}),
+                  ...(c.qualifications !== undefined
+                    ? { qualifications: c.qualifications }
+                    : {}),
+                  ...(c.requiredDocuments !== undefined
+                    ? { requiredDocuments: c.requiredDocuments }
+                    : {}),
+                  ...(c.evaluationCriteria !== undefined
+                    ? { evaluationCriteria: c.evaluationCriteria }
+                    : {}),
+                  ...(c.satSupport !== undefined ? { satSupport: c.satSupport } : {}),
+                  ...(c.expensesPolicy !== undefined
+                    ? { expensesPolicy: c.expensesPolicy }
+                    : {}),
+                  ...(c.documentConfig !== undefined
+                    ? { documentConfig: c.documentConfig }
+                    : {}),
+                  ...(typeof c.seatsLeft === "number"
+                    ? { seatsLeft: c.seatsLeft }
+                    : {}),
                 },
               };
 
