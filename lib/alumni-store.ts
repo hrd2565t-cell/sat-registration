@@ -356,13 +356,13 @@ function hydrate() {
 
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length >= SEED_TRAINEES.length) {
+      if (Array.isArray(parsed) && parsed.length >= 100) {
         // Strip any residual sample demo duties from previous prototype testing
         const sanitizedList = parsed.map((t) => ({
           ...t,
           duties: (t.duties || []).filter((d: { id?: string }) => !d.id?.startsWith("duty-real-")),
         }));
-        const result = standardizeAllTrainees(sanitizedList, { reclassifyGroups: true });
+        const result = standardizeAllTrainees(sanitizedList, { reclassifyGroups: false });
         state = {
           trainees: result.cleaned,
           revision: state.revision + 1,
@@ -372,8 +372,8 @@ function hydrate() {
           persist();
         }
         emit();
-      } else if (Array.isArray(parsed) && parsed.length < SEED_TRAINEES.length) {
-        // Auto-upgrade stale cache with fewer records to full 2,811 official dataset
+      } else if (Array.isArray(parsed) && parsed.length < 100) {
+        // Auto-upgrade tiny 5-row prototype demo cache to full official dataset
         state = {
           trainees: SEED_TRAINEES,
           revision: state.revision + 1,

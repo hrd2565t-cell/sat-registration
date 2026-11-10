@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import defaultSportsEventsData from "@/data/sports-events.json";
+import { isSupabaseConfigured, getSupabaseClient } from "@/lib/supabase/client";
 
 export type EventCategory =
   | "national"
@@ -201,18 +202,95 @@ let state: SportsEventsState = {
 };
 
 let hydrateStarted = false;
+let sportsRealtimeSubscribed = false;
 const listeners = new Set<() => void>();
 
 function emit() {
   listeners.forEach((listener) => listener());
 }
 
+async function syncSportsEventsToSupabase(eventsToSync: SportsEvent[]) {
+  if (!isSupabaseConfigured()) return;
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+  try {
+    const { data: row } = await supabase
+      .from("courses")
+      .select("id, target_quotas")
+      .order("id")
+      .limit(1)
+      .maybeSingle();
+    if (!row) return;
+    const prevQuotas =
+      row.target_quotas && typeof row.target_quotas === "object"
+        ? (row.target_quotas as Record<string, unknown>)
+        : {};
+    const prevGlobal =
+      prevQuotas._globalTimeline && typeof prevQuotas._globalTimeline === "object"
+        ? (prevQuotas._globalTimeline as Record<string, unknown>)
+        : {};
+    const nextQuotas = {
+      ...prevQuotas,
+      _globalTimeline: {
+        ...prevGlobal,
+        sportsEvents: eventsToSync,
+        updatedAt: new Date().toISOString(),
+      },
+    };
+    await supabase
+      .from("courses")
+      .update({
+        target_quotas: nextQuotas as unknown as import("@/lib/supabase/types").Json,
+      })
+      .eq("id", row.id);
+  } catch (err) {
+    console.warn("Failed to sync sports events to Supabase:", err);
+  }
+}
+
+export async function refreshSportsEventsFromCloud(): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+  try {
+    const { data: row } = await supabase
+      .from("courses")
+      .select("id, target_quotas")
+      .order("id")
+      .limit(1)
+      .maybeSingle();
+    const rawQuotas =
+      row?.target_quotas && typeof row.target_quotas === "object"
+        ? (row.target_quotas as Record<string, unknown>)
+        : null;
+    const globalTimeline =
+      rawQuotas?._globalTimeline && typeof rawQuotas._globalTimeline === "object"
+        ? (rawQuotas._globalTimeline as Record<string, unknown>)
+        : null;
+    if (Array.isArray(globalTimeline?.sportsEvents) && globalTimeline.sportsEvents.length > 0) {
+      state = {
+        events: normalizeEvents(globalTimeline.sportsEvents as SportsEvent[]),
+        revision: state.revision + 1,
+      };
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.events));
+        } catch {}
+      }
+      emit();
+    }
+  } catch (err) {
+    console.warn("Failed to refresh sports events from cloud:", err);
+  }
+}
+
 function persist() {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.events));
-    // Auto-sync to data/sports-events.json in the background when admin is logged in
+    // Auto-sync to Supabase and data/sports-events.json when admin is logged in
     if (window.sessionStorage.getItem("sat-admin-authenticated") === "true") {
+      void syncSportsEventsToSupabase(state.events);
       fetch("/api/admin/save-defaults", {
         method: "POST",
         headers: {
@@ -235,17 +313,36 @@ function hydrate() {
 
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      state = {
-        events: normalizeEvents(parsed),
-        revision: state.revision + 1,
-      };
-      emit();
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        state = {
+          events: normalizeEvents(parsed),
+          revision: state.revision + 1,
+        };
+        emit();
+      }
     }
   } catch {
     // fallback to defaults
+  }
+
+  void refreshSportsEventsFromCloud();
+  if (!sportsRealtimeSubscribed && isSupabaseConfigured()) {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      sportsRealtimeSubscribed = true;
+      supabase
+        .channel("sat-sports-events-realtime-channel")
+        .on(
+          "postgres_changes",
+          { event: "UPDATE", schema: "public", table: "courses" },
+          () => {
+            void refreshSportsEventsFromCloud();
+          }
+        )
+        .subscribe();
+    }
   }
 }
 

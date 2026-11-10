@@ -112,6 +112,9 @@ export async function POST(request: Request) {
                 };
               const quotasPayload = {
                 ...targetQ,
+                ...(prevQuotas._globalTimeline
+                  ? { _globalTimeline: prevQuotas._globalTimeline }
+                  : {}),
                 _schedule: {
                   registrationDate:
                     typeof c.registrationDate === "string" && c.registrationDate.trim()
@@ -197,6 +200,57 @@ export async function POST(request: Request) {
         } catch {
           // Ignore on read-only filesystem
         }
+      }
+    }
+
+    if (
+      (Array.isArray(sportsEvents) ||
+        (timelineSettings && typeof timelineSettings === "object")) &&
+      process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      (process.env.SUPABASE_SERVICE_ROLE_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+    ) {
+      try {
+        const { createClient } = await import("@supabase/supabase-js");
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL,
+          (process.env.SUPABASE_SERVICE_ROLE_KEY ||
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)!
+        );
+        const { data: firstCourse } = await supabase
+          .from("courses")
+          .select("id, target_quotas")
+          .order("id")
+          .limit(1)
+          .maybeSingle();
+        if (firstCourse) {
+          const prevQ =
+            firstCourse.target_quotas &&
+            typeof firstCourse.target_quotas === "object"
+              ? (firstCourse.target_quotas as Record<string, unknown>)
+              : {};
+          const prevGlobal =
+            prevQ._globalTimeline && typeof prevQ._globalTimeline === "object"
+              ? (prevQ._globalTimeline as Record<string, unknown>)
+              : {};
+          const nextQ = {
+            ...prevQ,
+            _globalTimeline: {
+              ...prevGlobal,
+              ...(Array.isArray(sportsEvents) ? { sportsEvents } : {}),
+              ...(timelineSettings && typeof timelineSettings === "object"
+                ? { timelineSettings }
+                : {}),
+              updatedAt: new Date().toISOString(),
+            },
+          };
+          await supabase
+            .from("courses")
+            .update({ target_quotas: nextQ })
+            .eq("id", firstCourse.id);
+        }
+      } catch (timelineSyncErr) {
+        console.warn("Server Supabase timeline sync warning:", timelineSyncErr);
       }
     }
 

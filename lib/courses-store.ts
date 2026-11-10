@@ -35,6 +35,8 @@ export function sanitizeQuotas(raw?: unknown, fallbackCap = 40): TargetGroupQuot
   return { sat, nationalAssoc, provincialAssoc, nsdf, external };
 }
 
+const cachedGlobalTimelineByCourseId = new Map<number, Record<string, unknown>>();
+
 export function buildQuotasPayload(
   quotas: TargetGroupQuotas | undefined,
   schedule: {
@@ -53,11 +55,17 @@ export function buildQuotasPayload(
     expensesPolicy?: string;
     documentConfig?: import("@/lib/courses").CourseDocumentConfig;
     seatsLeft?: number;
-  }
+  },
+  courseId?: number
 ): Record<string, unknown> {
   const cleanQ = sanitizeQuotas(quotas, capacity);
+  const existingGlobalTimeline =
+    typeof courseId === "number"
+      ? cachedGlobalTimelineByCourseId.get(courseId)
+      : undefined;
   const payload: Record<string, unknown> = {
     ...cleanQ,
+    ...(existingGlobalTimeline ? { _globalTimeline: existingGlobalTimeline } : {}),
     _schedule: {
       registrationDate: schedule.registrationDate?.trim() || DEFAULT_GLOBAL_REGISTRATION_DATE,
       resultDate: schedule.resultDate?.trim() || DEFAULT_GLOBAL_RESULT_DATE,
@@ -136,7 +144,10 @@ function persist() {
 export function isAllowedCourseImage(value: unknown): value is string {
   return (
     typeof value === "string" &&
-    (value.startsWith("data:image/") || value.startsWith("/assets/"))
+    (value.startsWith("data:image/") ||
+      value.startsWith("/assets/") ||
+      value.startsWith("https://") ||
+      value.startsWith("http://"))
   );
 }
 
@@ -249,7 +260,7 @@ function mergeStoredCourses(stored: Course[]): Course[] {
       warningMessage:
         saved.warningMessage !== undefined
           ? (saved.warningMessage.trim() || undefined)
-          : (saved.id === 1 ? undefined : seed?.warningMessage),
+          : undefined,
       status: saved.status === "full" ? "full" : "open",
       capacity: cap,
       seatsLeft:
@@ -291,6 +302,9 @@ function mapCloudCourse(
   const finalSeats = c.seats;
 
   const rawCloudQuotas = (c as { target_quotas?: any }).target_quotas;
+  if (rawCloudQuotas?._globalTimeline && typeof rawCloudQuotas._globalTimeline === "object") {
+    cachedGlobalTimelineByCourseId.set(c.id, rawCloudQuotas._globalTimeline);
+  }
   const cloudSchedule = rawCloudQuotas?._schedule as EmbeddedSchedule | undefined;
   const cloudMeta = rawCloudQuotas?._metadata as Record<string, any> | undefined;
 
@@ -797,7 +811,8 @@ export function updateCourse(
         expensesPolicy: updated.expensesPolicy,
         documentConfig: updated.documentConfig,
         seatsLeft: updated.seatsLeft,
-      }
+      },
+      id
     );
 
     supabase
@@ -851,7 +866,8 @@ export function updateCourse(
               expensesPolicy: other.expensesPolicy,
               documentConfig: other.documentConfig,
               seatsLeft: other.seatsLeft,
-            }
+            },
+            other.id
           );
           supabase
             ?.from("courses")
@@ -973,7 +989,8 @@ export function addCourse(
         expensesPolicy: newCourse.expensesPolicy,
         documentConfig: newCourse.documentConfig,
         seatsLeft: newCourse.seatsLeft,
-      }
+      },
+      newCourse.id
     );
 
     supabase
@@ -1053,7 +1070,8 @@ export function updateGlobalCourseSchedule(
           expensesPolicy: c.expensesPolicy,
           documentConfig: c.documentConfig,
           seatsLeft: c.seatsLeft,
-        }
+        },
+        c.id
       );
 
       supabase
@@ -1116,21 +1134,38 @@ export function syncCourseSeatsWithApprovedCounts(
   const nextCourses = state.courses.map((course) => {
     const approvedCount = countsByCourseId[course.id] ?? 0;
     const parsedCap = Number(course.seats?.match(/\d+/)?.[0]);
-    const capacity = Number.isFinite(parsedCap) && parsedCap > 0 ? parsedCap : (course.capacity || 40);
+    const capacity =
+      Number.isFinite(parsedCap) && parsedCap > 0
+        ? parsedCap
+        : (course.capacity || 40);
+
+    // หากผู้ดูแลระบบตั้งสถานะหลักสูตรเป็น "full" (ปิดรับสมัครชั่วคราว) ด้วยตนเอง
+    // ห้ามเปลี่ยนกลับเป็น "open" โดยอัตโนมัติ
+    if (course.status === "full" && approvedCount < capacity) {
+      if (course.capacity !== capacity) {
+        changed = true;
+        return { ...course, capacity };
+      }
+      return course;
+    }
+
     const computedSeatsLeft = Math.max(0, capacity - approvedCount);
     const computedStatus: "open" | "full" =
       computedSeatsLeft === 0 ? "full" : "open";
 
     if (
       course.capacity !== capacity ||
-      course.seatsLeft !== computedSeatsLeft ||
+      (approvedCount > 0 && course.seatsLeft !== computedSeatsLeft) ||
       course.status !== computedStatus
     ) {
       changed = true;
       return {
         ...course,
         capacity,
-        seatsLeft: computedSeatsLeft,
+        seatsLeft:
+          approvedCount > 0
+            ? computedSeatsLeft
+            : (course.seatsLeft ?? computedSeatsLeft),
         status: computedStatus,
       };
     }

@@ -31,6 +31,7 @@ import { CourseEditDialog } from "@/components/admin/course-edit-dialog";
 import { GlobalScheduleCard } from "@/components/admin/global-schedule-card";
 import { AddSportsEventDialog } from "@/components/timeline/add-sports-event-dialog";
 import { EditSportsEventDialog } from "@/components/timeline/edit-sports-event-dialog";
+import { getSupabaseClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 type BarTone = "open" | "review" | "training" | "result";
 type ViewMode = "gantt" | "monthly";
@@ -594,29 +595,81 @@ export function TimelineSchedule() {
   const effectiveHighlightFreeSlots = canEdit && highlightFreeSlots;
 
   useEffect(() => {
+    let active = true;
     const timer = setTimeout(() => {
       try {
         const raw = window.localStorage.getItem(TIMELINE_SETTINGS_KEY);
-        if (!raw) return;
-        const parsed = JSON.parse(raw) as {
-          showSportsEvents?: boolean;
-          showSubPhases?: boolean;
-          onlyActiveMonths?: boolean;
-        };
-        if (typeof parsed.showSportsEvents === "boolean") {
-          setShowSportsEvents(parsed.showSportsEvents);
-        }
-        if (typeof parsed.showSubPhases === "boolean") {
-          setShowSubPhases(parsed.showSubPhases);
-        }
-        if (typeof parsed.onlyActiveMonths === "boolean") {
-          setOnlyActiveMonths(parsed.onlyActiveMonths);
+        if (raw) {
+          const parsed = JSON.parse(raw) as {
+            showSportsEvents?: boolean;
+            showSubPhases?: boolean;
+            onlyActiveMonths?: boolean;
+          };
+          if (typeof parsed.showSportsEvents === "boolean") {
+            setShowSportsEvents(parsed.showSportsEvents);
+          }
+          if (typeof parsed.showSubPhases === "boolean") {
+            setShowSubPhases(parsed.showSubPhases);
+          }
+          if (typeof parsed.onlyActiveMonths === "boolean") {
+            setOnlyActiveMonths(parsed.onlyActiveMonths);
+          }
         }
       } catch {
         // ignore storage errors
       }
+
+      if (isSupabaseConfigured()) {
+        const supabase = getSupabaseClient();
+        supabase
+          ?.from("courses")
+          .select("id, target_quotas")
+          .order("id")
+          .limit(1)
+          .maybeSingle()
+          .then(({ data: row }) => {
+            if (!active || !row) return;
+            const q =
+              row.target_quotas && typeof row.target_quotas === "object"
+                ? (row.target_quotas as Record<string, unknown>)
+                : null;
+            const globalT =
+              q?._globalTimeline && typeof q._globalTimeline === "object"
+                ? (q._globalTimeline as Record<string, unknown>)
+                : null;
+            const ts =
+              globalT?.timelineSettings &&
+              typeof globalT.timelineSettings === "object"
+                ? (globalT.timelineSettings as {
+                    showSportsEvents?: boolean;
+                    showSubPhases?: boolean;
+                    onlyActiveMonths?: boolean;
+                  })
+                : null;
+            if (ts) {
+              if (typeof ts.showSportsEvents === "boolean") {
+                setShowSportsEvents(ts.showSportsEvents);
+              }
+              if (typeof ts.showSubPhases === "boolean") {
+                setShowSubPhases(ts.showSubPhases);
+              }
+              if (typeof ts.onlyActiveMonths === "boolean") {
+                setOnlyActiveMonths(ts.onlyActiveMonths);
+              }
+              try {
+                window.localStorage.setItem(
+                  TIMELINE_SETTINGS_KEY,
+                  JSON.stringify(ts)
+                );
+              } catch {}
+            }
+          });
+      }
     }, 0);
-    return () => clearTimeout(timer);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, []);
 
   const updateDisplaySetting = (
@@ -654,6 +707,43 @@ export function TimelineSchedule() {
         },
         body: JSON.stringify({ timelineSettings: next }),
       }).catch(() => {});
+
+      if (isSupabaseConfigured()) {
+        const supabase = getSupabaseClient();
+        supabase
+          ?.from("courses")
+          .select("id, target_quotas")
+          .order("id")
+          .limit(1)
+          .maybeSingle()
+          .then(({ data: row }) => {
+            if (!row) return;
+            const prevQ =
+              row.target_quotas && typeof row.target_quotas === "object"
+                ? (row.target_quotas as Record<string, unknown>)
+                : {};
+            const prevGlobal =
+              prevQ._globalTimeline &&
+              typeof prevQ._globalTimeline === "object"
+                ? (prevQ._globalTimeline as Record<string, unknown>)
+                : {};
+            const nextQ = {
+              ...prevQ,
+              _globalTimeline: {
+                ...prevGlobal,
+                timelineSettings: next,
+                updatedAt: new Date().toISOString(),
+              },
+            };
+            void supabase
+              .from("courses")
+              .update({
+                target_quotas:
+                  nextQ as unknown as import("@/lib/supabase/types").Json,
+              })
+              .eq("id", row.id);
+          });
+      }
     }
   };
 
