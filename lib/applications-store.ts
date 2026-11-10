@@ -89,7 +89,8 @@ interface ApplicationsState {
   revision: number;
 }
 
-const STORAGE_KEY = "sat-applications-v2";
+const STORAGE_KEY = "sat-applications-v3";
+const LEGACY_APP_KEYS = ["sat-applications-v2", "sat-applications-v1"];
 const SEED_REVIEWER = adminUser.name;
 
 export function isDemoApplication(app: Partial<ApplicantRecord> | null | undefined): boolean {
@@ -163,11 +164,18 @@ export function syncCourseSeats() {
   syncCourseSeatsWithApprovedCounts(counts);
 }
 
+let appsRealtimeSubscribed = false;
+let lastAppsFetchAt = 0;
+
 export async function refreshApplicationsFromCloud(): Promise<void> {
   if (!isSupabaseConfigured()) return;
+  const now = Date.now();
+  if (now - lastAppsFetchAt < 1500) return;
+  lastAppsFetchAt = now;
+
   try {
     const cloudApps = await fetchApplicationsFromSupabase();
-    if (cloudApps && cloudApps.length > 0) {
+    if (cloudApps) {
       const validCloudApps = cloudApps
         .filter((a) => !isDemoApplication(a))
         .map((cloudApp) => {
@@ -199,16 +207,18 @@ export async function refreshApplicationsFromCloud(): Promise<void> {
       const cloudKeySet = new Set(
         validCloudApps.map((a) => `${a.idCard}-${a.courseId}`)
       );
-      // คงข้อมูลใบสมัครในเครื่องที่ยังไม่ได้ถูกซิงก์ขึ้นคลาวด์ไว้ ไม่ให้หายไป
-      // หากมีรายการเดียวกันบนคลาวด์แล้ว (ตรงตาม idCard + courseId) ให้ยึดข้อมูลบนคลาวด์เป็นหลัก
-      const localOnly = state.applications.filter(
-        (a) =>
-          !cloudRefs.has(a.ref) &&
-          !cloudKeySet.has(`${a.idCard}-${a.courseId}`) &&
-          !isDemoApplication(a)
-      );
+      // คงเฉพาะใบสมัครที่เพิ่งยื่นภายใน 2 นาทีและกำลังอัปโหลดขึ้น Cloud เท่านั้น
+      // นอกนั้นยึดฐานข้อมูลกลาง Supabase เป็น Single Source of Truth เพื่อให้ทุกเครื่องแสดงผลตรงกัน
+      const pendingUploadLocalOnly = state.applications.filter((a) => {
+        if (isDemoApplication(a)) return false;
+        if (cloudRefs.has(a.ref) || cloudKeySet.has(`${a.idCard}-${a.courseId}`)) {
+          return false;
+        }
+        const ageMs = Date.now() - Date.parse(a.submittedAt || "");
+        return Number.isFinite(ageMs) && ageMs >= 0 && ageMs < 120_000;
+      });
       state = {
-        applications: [...localOnly, ...validCloudApps],
+        applications: [...pendingUploadLocalOnly, ...validCloudApps],
         revision: state.revision + 1,
       };
       persist();
@@ -220,11 +230,56 @@ export async function refreshApplicationsFromCloud(): Promise<void> {
   }
 }
 
+function subscribeToApplicationsRealtime() {
+  if (appsRealtimeSubscribed || typeof window === "undefined" || !isSupabaseConfigured()) return;
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+
+  try {
+    appsRealtimeSubscribed = true;
+    supabase
+      .channel("sat-applications-realtime-channel")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "applications" },
+        () => {
+          lastAppsFetchAt = 0;
+          void refreshApplicationsFromCloud();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "application_documents" },
+        () => {
+          lastAppsFetchAt = 0;
+          void refreshApplicationsFromCloud();
+        }
+      )
+      .subscribe();
+
+    const handleFocusOrVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refreshApplicationsFromCloud();
+      }
+    };
+    window.addEventListener("focus", handleFocusOrVisible);
+    document.addEventListener("visibilitychange", handleFocusOrVisible);
+  } catch (err) {
+    console.warn("Failed to subscribe to applications realtime:", err);
+  }
+}
+
 function hydrate() {
   if (hydrateStarted || typeof window === "undefined") return;
   hydrateStarted = true;
 
   try {
+    for (const legacyKey of LEGACY_APP_KEYS) {
+      try {
+        window.localStorage.removeItem(legacyKey);
+      } catch {}
+    }
+
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<ApplicationsState>;
@@ -253,8 +308,9 @@ function hydrate() {
   emit();
   syncCourseSeats();
 
-  // ดึงข้อมูลจาก Supabase Cloud เสมอ แม้ว่า localStorage จะว่างเปล่าก็ตาม
+  // ดึงข้อมูลจาก Supabase Cloud เสมอ และเปิดรับการอัปเดตแบบ Realtime ข้ามเครื่อง
   void refreshApplicationsFromCloud();
+  subscribeToApplicationsRealtime();
 }
 
 function subscribe(listener: () => void) {
