@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
+import QRCode from "qrcode";
 import { Header } from "@/components/layout/header";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Card } from "@/components/ui/card";
@@ -107,6 +108,26 @@ function ReceiptContent() {
 
   const photoDoc = record?.documents?.find((d) => d.kind === "photo");
   const [loadedPhotoUrl, setLoadedPhotoUrl] = useState<string | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string>("");
+
+  useEffect(() => {
+    if (!record) return;
+    const origin =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : "https://sat-registration.vercel.app";
+    const targetUrl = `${origin}/status?id=${encodeURIComponent(record.idCard)}&ref=${encodeURIComponent(record.ref)}`;
+    QRCode.toDataURL(targetUrl, {
+      width: 160,
+      margin: 1,
+      color: {
+        dark: "#16265E",
+        light: "#FFFFFF",
+      },
+    })
+      .then((url) => setQrDataUrl(url))
+      .catch(() => setQrDataUrl(""));
+  }, [record?.idCard, record?.ref]);
 
   useEffect(() => {
     if (!photoDoc) {
@@ -293,16 +314,31 @@ function ReceiptContent() {
                   className="h-full w-full object-cover"
                 />
               </div>
-              <Image
-                src="/assets/qr-receipt.png"
-                alt="QR Code สำหรับใช้ติดต่อกลับ"
-                width={58}
-                height={59}
-                className="mt-3 h-[58px] w-[58px] object-contain"
-              />
-              <p className="mt-1 text-center text-[10px] leading-snug text-[#4b5563]">
-                QR Code สำหรับใช้ติดต่อกลับ
-              </p>
+              <Link
+                href={`/status?id=${encodeURIComponent(record.idCard)}&ref=${encodeURIComponent(record.ref)}`}
+                title="สแกนหรือคลิกเพื่อตรวจสอบสถานะการสมัคร"
+                className="group mt-3 flex flex-col items-center rounded-md p-1 transition hover:bg-[#eff6ff]"
+              >
+                {qrDataUrl ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={qrDataUrl}
+                    alt="QR Code สำหรับตรวจสอบสถานะการสมัคร"
+                    className="h-[64px] w-[64px] rounded-[4px] border border-[#cbd5e1] bg-white p-0.5 object-contain shadow-2xs transition group-hover:border-[#1e3a8a] group-hover:scale-105"
+                  />
+                ) : (
+                  <Image
+                    src="/assets/qr-receipt.png"
+                    alt="QR Code สำหรับตรวจสอบสถานะ"
+                    width={58}
+                    height={59}
+                    className="h-[58px] w-[58px] object-contain"
+                  />
+                )}
+                <span className="mt-1 text-center text-[9.5px] font-medium leading-snug text-[#1e3a8a] underline-offset-2 group-hover:underline">
+                  สแกน/คลิก เช็คสถานะ
+                </span>
+              </Link>
             </div>
           </div>
         </Card>

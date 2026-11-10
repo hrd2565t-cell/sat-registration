@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
+import QRCode from "qrcode";
 import { CopyButton } from "@/components/ui/copy-button";
 import {
   useApplications,
@@ -30,6 +31,26 @@ function ReceiptPrintView() {
   const course = courses.find((c) => c.id === record?.courseId);
   const photoDoc = record?.documents?.find((d) => d.kind === "photo");
   const [loadedPhotoUrl, setLoadedPhotoUrl] = useState<string | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string>("");
+
+  useEffect(() => {
+    if (!record) return;
+    const origin =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : "https://sat-registration.vercel.app";
+    const targetUrl = `${origin}/status?id=${encodeURIComponent(record.idCard)}&ref=${encodeURIComponent(record.ref)}`;
+    QRCode.toDataURL(targetUrl, {
+      width: 200,
+      margin: 1,
+      color: {
+        dark: "#16265E",
+        light: "#FFFFFF",
+      },
+    })
+      .then((url) => setQrDataUrl(url))
+      .catch(() => setQrDataUrl(""));
+  }, [record?.idCard, record?.ref]);
 
   useEffect(() => {
     if (!photoDoc) {
@@ -274,17 +295,30 @@ function ReceiptPrintView() {
         {/* Section 4: การติดตามสถานะ & ตราประทับ */}
         <div className="mt-6 flex items-end justify-between border-t border-[#e5e7eb] pt-6">
           <div className="flex items-center gap-4">
-            <div className="relative h-24 w-24 shrink-0 rounded-lg border border-[#e5e7eb] p-1 shadow-sm">
-              <Image
-                src="/assets/qr-receipt.png"
-                alt="QR Code"
-                fill
-                className="object-contain p-1"
-              />
-            </div>
+            <Link
+              href={`/status?id=${encodeURIComponent(record.idCard)}&ref=${encodeURIComponent(record.ref)}`}
+              title="สแกนหรือคลิกเพื่อตรวจสอบสถานะการสมัคร"
+              className="relative flex h-24 w-24 shrink-0 items-center justify-center rounded-lg border border-[#e5e7eb] bg-white p-1 shadow-sm transition hover:border-[#1e3a8a]"
+            >
+              {qrDataUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={qrDataUrl}
+                  alt="QR Code สำหรับตรวจสอบสถานะ"
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <Image
+                  src="/assets/qr-receipt.png"
+                  alt="QR Code"
+                  fill
+                  className="object-contain p-1"
+                />
+              )}
+            </Link>
             <div className="max-w-[260px] text-[10px] leading-relaxed text-[#6b7280]">
               <p className="font-semibold text-[#111827]">
-                สแกน QR เพื่อติดตามสถานะแบบเรียลไทม์
+                สแกนหรือคลิก QR เพื่อติดตามสถานะแบบเรียลไทม์
               </p>
               <p className="mt-0.5">
                 สามารถตรวจสอบสถานะการพิจารณาได้ตลอด 24 ชั่วโมง โดยใช้หมายเลขบัตรประชาชน 13 หลัก

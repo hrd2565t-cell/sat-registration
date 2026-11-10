@@ -91,12 +91,17 @@ interface ApplicationsState {
 
 const STORAGE_KEY = "sat-applications-v2";
 const SEED_REVIEWER = adminUser.name;
-const DEMO_APPLICATION_REFS = new Set(["SAT-00001", "SAT-00002", "SAT-00003"]);
 
 export function isDemoApplication(app: Partial<ApplicantRecord> | null | undefined): boolean {
   if (!app) return false;
-  if (app.ref && DEMO_APPLICATION_REFS.has(app.ref)) return true;
-  if (app.name === "นาย สมชาย สิงห์" || app.name === "[Demo] นาย สมชาย สิงห์") return true;
+  // กรองเฉพาะข้อมูลตัวอย่าง (Demo) "นาย สมชาย สิงห์" (1100912345678) เท่านั้น ไม่บล็อกตามรหัส ref
+  if (
+    app.name === "นาย สมชาย สิงห์" ||
+    app.name === "[Demo] นาย สมชาย สิงห์" ||
+    app.idCard === "1100912345678"
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -153,33 +158,62 @@ export function syncCourseSeats() {
   syncCourseSeatsWithApprovedCounts(counts);
 }
 
+export async function refreshApplicationsFromCloud(): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  try {
+    const cloudApps = await fetchApplicationsFromSupabase();
+    if (cloudApps && cloudApps.length > 0) {
+      const validCloudApps = cloudApps.filter((a) => !isDemoApplication(a));
+      const cloudRefs = new Set(validCloudApps.map((a) => a.ref));
+      const cloudKeySet = new Set(
+        validCloudApps.map((a) => `${a.idCard}-${a.courseId}`)
+      );
+      // คงข้อมูลใบสมัครในเครื่องที่ยังไม่ได้ถูกซิงก์ขึ้นคลาวด์ไว้ ไม่ให้หายไป
+      // หากมีรายการเดียวกันบนคลาวด์แล้ว (ตรงตาม idCard + courseId) ให้ยึดข้อมูลบนคลาวด์เป็นหลัก
+      const localOnly = state.applications.filter(
+        (a) =>
+          !cloudRefs.has(a.ref) &&
+          !cloudKeySet.has(`${a.idCard}-${a.courseId}`) &&
+          !isDemoApplication(a)
+      );
+      state = {
+        applications: [...localOnly, ...validCloudApps],
+        revision: state.revision + 1,
+      };
+      persist();
+      emit();
+      syncCourseSeats();
+    }
+  } catch (err) {
+    console.warn("Failed to refresh applications from cloud:", err);
+  }
+}
+
 function hydrate() {
   if (hydrateStarted || typeof window === "undefined") return;
   hydrateStarted = true;
 
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      syncCourseSeats();
-      return;
-    }
-    const parsed = JSON.parse(raw) as Partial<ApplicationsState>;
-    if (
-      Array.isArray(parsed.applications) &&
-      parsed.applications.every(
-        (item) =>
-          typeof item === "object" &&
-          item !== null &&
-          typeof (item as ApplicantRecord).ref === "string"
-      )
-    ) {
-      const filtered = (parsed.applications as ApplicantRecord[]).filter(
-        (item) => !isDemoApplication(item)
-      );
-      state = {
-        applications: filtered,
-        revision: state.revision + 1,
-      };
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<ApplicationsState>;
+      if (
+        Array.isArray(parsed.applications) &&
+        parsed.applications.every(
+          (item) =>
+            typeof item === "object" &&
+            item !== null &&
+            typeof (item as ApplicantRecord).ref === "string"
+        )
+      ) {
+        const filtered = (parsed.applications as ApplicantRecord[]).filter(
+          (item) => !isDemoApplication(item)
+        );
+        state = {
+          applications: filtered,
+          revision: state.revision + 1,
+        };
+      }
     }
   } catch {
     state = { applications: buildSeedApplications(), revision: state.revision + 1 };
@@ -188,25 +222,8 @@ function hydrate() {
   emit();
   syncCourseSeats();
 
-  if (isSupabaseConfigured()) {
-    fetchApplicationsFromSupabase().then((cloudApps) => {
-      if (cloudApps && cloudApps.length > 0) {
-        const validCloudApps = cloudApps.filter((a) => !isDemoApplication(a));
-        const cloudMap = new Map(validCloudApps.map((a) => [a.ref, a]));
-        // คงข้อมูลใบสมัครในเครื่องที่ยังไม่ได้ถูกซิงก์ขึ้นคลาวด์ไว้ ไม่ให้หายไป
-        const localOnly = state.applications.filter(
-          (a) => !cloudMap.has(a.ref) && !isDemoApplication(a)
-        );
-        state = {
-          applications: [...localOnly, ...validCloudApps],
-          revision: state.revision + 1,
-        };
-        persist();
-        emit();
-        syncCourseSeats();
-      }
-    });
-  }
+  // ดึงข้อมูลจาก Supabase Cloud เสมอ แม้ว่า localStorage จะว่างเปล่าก็ตาม
+  void refreshApplicationsFromCloud();
 }
 
 function subscribe(listener: () => void) {
@@ -254,9 +271,15 @@ export function getApplicationByRef(ref: string | null | undefined): ApplicantRe
   if (!ref) return undefined;
   const cleanRef = ref.trim();
   const inMemory = state.applications.find(
-    (item) => item.ref === cleanRef || item.receiptNo === cleanRef
+    (item) => (item.ref === cleanRef || item.receiptNo === cleanRef) && !isDemoApplication(item)
   );
   if (inMemory) return inMemory;
+
+  // รองรับกรณีรหัสเดิม SAT-00001 ที่ถูกย้ายไปเป็น SAT-00004 (คุณศาสตรา เอื้อเฟื้อ)
+  if (cleanRef === "SAT-00001" || cleanRef === "SAT-00001-70") {
+    const migrated = state.applications.find((item) => item.ref === "SAT-00004");
+    if (migrated) return migrated;
+  }
 
   if (typeof window !== "undefined") {
     try {
@@ -264,9 +287,10 @@ export function getApplicationByRef(ref: string | null | undefined): ApplicantRe
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<ApplicationsState>;
         if (Array.isArray(parsed.applications)) {
-          return (parsed.applications as ApplicantRecord[]).find(
-            (item) => item.ref === cleanRef || item.receiptNo === cleanRef
+          const foundLocal = (parsed.applications as ApplicantRecord[]).find(
+            (item) => (item.ref === cleanRef || item.receiptNo === cleanRef) && !isDemoApplication(item)
           );
+          if (foundLocal) return foundLocal;
         }
       }
     } catch {
@@ -332,9 +356,10 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
   const numericRefs = state.applications
     .map((item) => Number(item.ref.replace(/\D/g, "")))
     .filter((value) => Number.isFinite(value));
-  const nextRef = Math.max(0, ...numericRefs) + 1;
+  // เริ่มต้นรหัสอย่างน้อยที่ 5 (SAT-00005) เพื่อไม่ให้ชนกับรหัส 00001-00004 ในฐานข้อมูล Supabase
+  const nextRef = Math.max(4, ...numericRefs) + 1;
   const ref = padRef(nextRef);
-  const id = Math.max(0, ...state.applications.map((item) => item.id)) + 1;
+  const id = Math.max(10, ...state.applications.map((item) => item.id)) + 1;
   const fileSize = input.documents.reduce((total, document) => {
     const value = Number.parseFloat(document.size);
     return total + (Number.isFinite(value) ? value : 0);
@@ -667,12 +692,41 @@ export function getApplicationsByIdCard(
 ): ApplicantRecord[] {
   const digits = idCard.replace(/\D/g, "");
   if (!digits) return [];
-  return [...applications]
-    .filter((item) => item.idCard === digits)
-    .sort(
+  const inMemory = applications.filter(
+    (item) => item.idCard.replace(/\D/g, "") === digits && !isDemoApplication(item)
+  );
+  if (inMemory.length > 0) {
+    return [...inMemory].sort(
       (left, right) =>
         Date.parse(right.submittedAt) - Date.parse(left.submittedAt)
     );
+  }
+
+  // Fallback ตรวจสอบใน localStorage โดยตรงกรณีที่ข้อมูลกำลังโหลด
+  if (typeof window !== "undefined") {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<ApplicationsState>;
+        if (Array.isArray(parsed.applications)) {
+          return (parsed.applications as ApplicantRecord[])
+            .filter(
+              (item) =>
+                item.idCard?.replace(/\D/g, "") === digits &&
+                !isDemoApplication(item)
+            )
+            .sort(
+              (left, right) =>
+                Date.parse(right.submittedAt) - Date.parse(left.submittedAt)
+            );
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return [];
 }
 
 export interface RegistrationEligibility {

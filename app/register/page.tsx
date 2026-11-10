@@ -29,7 +29,11 @@ import {
 import { ConflictDialog } from "@/components/register/conflict-dialog";
 import { PdpaModal } from "@/components/register/pdpa-modal";
 import { isValidThaiIdCard } from "@/lib/validation";
-import { useAlumniStore } from "@/lib/alumni-store";
+import {
+  normalizeNameForMatching,
+  updatePersonProfile,
+  useAlumniStore,
+} from "@/lib/alumni-store";
 import { saveDocumentToStorage } from "@/lib/document-storage";
 
 const labelClass = "text-[12.5px] font-medium text-[#1f2937]";
@@ -131,9 +135,23 @@ function RegistrationContent() {
 
   const priorTraineeRecords = useMemo(() => {
     const digits = idCard.replace(/\D/g, "");
-    if (digits.length !== 13) return [];
-    return trainees.filter((t) => t.idCard.replace(/\D/g, "") === digits);
-  }, [idCard, trainees]);
+    if (digits.length === 13) {
+      const byId = trainees.filter((t) => t.idCard.replace(/\D/g, "") === digits);
+      if (byId.length > 0) return byId;
+    }
+    const cleanInputName = name.trim();
+    if (cleanInputName.length >= 3) {
+      const normInput = normalizeNameForMatching(`${prefix} ${cleanInputName}`);
+      const normRaw = normalizeNameForMatching(cleanInputName);
+      if (normInput || normRaw) {
+        return trainees.filter((t) => {
+          const normT = normalizeNameForMatching(t.name);
+          return normT && (normT === normInput || normT === normRaw);
+        });
+      }
+    }
+    return [];
+  }, [idCard, name, prefix, trainees]);
 
   const [affiliation, setAffiliation] = useState<string>(
     TARGET_GROUPS[0].label
@@ -179,51 +197,69 @@ function RegistrationContent() {
   // ดึงข้อมูลส่วนตัวจากการสมัครก่อนหน้าหรือทำเนียบรุ่นมาเติมให้อัตโนมัติ เพื่ออำนวยความสะดวก
   useEffect(() => {
     const digits = idCard.replace(/\D/g, "");
-    if (digits.length === 13 && !hasAutofilledRef.current) {
-      const prior = applications.find(
-        (a) => a.idCard === digits && a.status !== "rejected"
-      );
-      if (prior) {
-        hasAutofilledRef.current = true;
-        const timer = setTimeout(() => {
-          if (prior.name) {
-            const parsed = splitPrefixAndName(prior.name);
-            setPrefix(parsed.prefix);
-            setName(parsed.name);
-          }
-          if (prior.phone) setPhone(prior.phone);
-          if (prior.email) setEmail(prior.email);
-          if (prior.affiliation) {
-            const match = prior.affiliation.match(/^(.*?)\s*\((.*?)\)$/);
-            if (match) {
-              setAffiliation(match[1]);
-              setSubAffiliation(match[2]);
-            } else {
-              setAffiliation(prior.affiliation);
+    if (!hasAutofilledRef.current) {
+      if (digits.length === 13) {
+        const prior = applications.find(
+          (a) => a.idCard === digits && a.status !== "rejected"
+        );
+        if (prior) {
+          hasAutofilledRef.current = true;
+          const timer = setTimeout(() => {
+            if (prior.name) {
+              const parsed = splitPrefixAndName(prior.name);
+              setPrefix(parsed.prefix);
+              setName(parsed.name);
             }
-          }
-          if (prior.position) setPosition(prior.position);
-        }, 0);
-        return () => clearTimeout(timer);
-      } else if (priorTraineeRecords.length > 0) {
+            if (prior.phone) setPhone(prior.phone);
+            if (prior.email) setEmail(prior.email);
+            if (prior.affiliation) {
+              const match = prior.affiliation.match(/^(.*?)\s*\((.*?)\)$/);
+              if (match) {
+                setAffiliation(match[1]);
+                setSubAffiliation(match[2]);
+              } else {
+                setAffiliation(prior.affiliation);
+              }
+            }
+            if (prior.position) setPosition(prior.position);
+          }, 0);
+          return () => clearTimeout(timer);
+        }
+      }
+
+      if (priorTraineeRecords.length > 0) {
         const alumni = priorTraineeRecords[0];
         hasAutofilledRef.current = true;
         const timer = setTimeout(() => {
-          if (alumni.name) {
+          if (alumni.name && !name.trim()) {
             const parsed = splitPrefixAndName(alumni.name);
             setPrefix(parsed.prefix);
             setName(parsed.name);
           }
-          if (alumni.affiliation) {
-            setAffiliation(alumni.affiliation);
+          if (alumni.affiliationGroup) {
+            setAffiliation(alumni.affiliationGroup);
           }
-          if (alumni.phone) setPhone(alumni.phone);
-          if (alumni.email) setEmail(alumni.email);
+          if (
+            alumni.affiliation &&
+            alumni.affiliation !== alumni.affiliationGroup &&
+            !subAffiliation.trim()
+          ) {
+            setSubAffiliation(alumni.affiliation);
+          }
+          if (alumni.phone && !phone.trim()) setPhone(alumni.phone);
+          if (alumni.email && !email.trim()) setEmail(alumni.email);
+          if (
+            alumni.idCard &&
+            alumni.idCard.replace(/\D/g, "").length === 13 &&
+            digits.length !== 13
+          ) {
+            setIdCard(alumni.idCard.replace(/\D/g, ""));
+          }
         }, 0);
         return () => clearTimeout(timer);
       }
     }
-  }, [idCard, applications, priorTraineeRecords]);
+  }, [idCard, name, phone, email, subAffiliation, applications, priorTraineeRecords]);
 
   // การตั้งค่าช่อง 3.1 ตามกลุ่มสังกัดที่เลือก
   const subAffiliationConfig = useMemo(() => {
@@ -514,6 +550,27 @@ function RegistrationContent() {
       : affiliation;
 
     setSubmitting(true);
+
+    // 1. อัปเดตข้อมูลล่าสุดกลับไปยังฐานข้อมูลทำเนียบบุคลากรกีฬา (หากมีชื่อในระบบทำเนียบอยู่แล้ว)
+    if (priorTraineeRecords.length > 0) {
+      const targetAlumni = priorTraineeRecords[0];
+      const nameParts = cleanName.split(/\s+/);
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
+      updatePersonProfile(targetAlumni.personnelId || targetAlumni.id, {
+        name: fullApplicantName,
+        prefix: prefix === "อื่นๆ" ? "" : prefix,
+        firstName,
+        lastName,
+        idCard: cleanId,
+        phone: cleanPhone,
+        email: email.trim(),
+        affiliationGroup: affiliation,
+        affiliation: subAffiliation.trim() || affiliation,
+        isVerified: true,
+      });
+    }
+
     const record = createApplication({
       name: fullApplicantName,
       idCard,
@@ -727,24 +784,36 @@ function RegistrationContent() {
                   )}
 
                   {priorTraineeRecords.length > 0 && (
-                    <div className="mt-1.5 rounded-xl border border-emerald-300 bg-emerald-50/80 p-2.5 text-xs text-emerald-900 shadow-2xs animate-in fade-in">
-                      <p className="flex items-center gap-1.5 font-bold text-emerald-800">
-                        <span>🎉</span>
-                        <span>พบประวัติบุคลากรในทำเนียบ กกท. (สำเร็จการอบรมแล้ว {priorTraineeRecords.length} หลักสูตร)</span>
+                    <div className="mt-2 rounded-xl border border-emerald-300 bg-gradient-to-r from-emerald-50/90 via-teal-50/60 to-white p-3 text-xs text-emerald-950 shadow-2xs animate-in fade-in">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="flex items-center gap-1.5 font-bold text-emerald-800 text-[12.5px]">
+                          <span>🎉</span>
+                          <span>
+                            ยินดีต้อนรับกลับสู่ระบบ กกท.! พบข้อมูลในทำเนียบบุคลากรกีฬา
+                          </span>
+                        </p>
+                        {priorTraineeRecords[0].personnelId && (
+                          <span className="shrink-0 rounded-full border border-emerald-300 bg-white px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-800">
+                            {priorTraineeRecords[0].personnelId}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-[11px] leading-relaxed text-emerald-800">
+                        ระบบได้ดึงข้อมูลพื้นฐานของท่านมาเติมให้อัตโนมัติแล้ว ท่านสามารถตรวจสอบและแก้ไขข้อมูลให้เป็นปัจจุบันได้ทันที (เมื่อกดยื่นสมัคร ระบบจะอัปเดตข้อมูลล่าสุดของท่านกลับไปยังฐานข้อมูลทำเนียบโดยอัตโนมัติ)
                       </p>
-                      <div className="mt-1 flex flex-wrap gap-1">
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10.5px] font-semibold text-emerald-700">
+                          ประวัติการอบรม ({priorTraineeRecords.length} หลักสูตร):
+                        </span>
                         {priorTraineeRecords.map((rec) => (
                           <span
                             key={rec.id}
-                            className="rounded-md border border-emerald-200 bg-white px-2 py-0.5 text-[10.5px] font-semibold text-emerald-800"
+                            className="rounded-md border border-emerald-200 bg-white px-2 py-0.5 text-[10.5px] font-semibold text-emerald-800 shadow-2xs"
                           >
                             ✓ {rec.courseTitle} ({rec.yearBE})
                           </span>
                         ))}
                       </div>
-                      <p className="mt-1 text-[11px] text-emerald-700">
-                        * ระบบดึงข้อมูลส่วนตัวมาเติมให้อัตโนมัติเพื่ออำนวยความสะดวก
-                      </p>
                     </div>
                   )}
 

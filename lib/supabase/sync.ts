@@ -62,10 +62,35 @@ export async function syncApplicationToSupabase(
   if (!supabase) return false;
 
   try {
+    let targetRef = record.ref;
+    let targetReceiptNo = record.receiptNo;
+
+    // ตรวจสอบรหัส ref ในฐานข้อมูลก่อนบันทึก เพื่อป้องกันการชนกันของรหัสอ้างอิง
+    const { data: existingRefs } = await supabase
+      .from("applications")
+      .select("ref, id_card, course_id");
+
+    if (existingRefs && existingRefs.length > 0) {
+      const sameApplicantCourse = existingRefs.find(
+        (r) => r.id_card === record.idCard && r.course_id === record.courseId
+      );
+      if (sameApplicantCourse) {
+        targetRef = sameApplicantCourse.ref;
+        targetReceiptNo = `${targetRef}-70`;
+      } else if (existingRefs.some((r) => r.ref === targetRef)) {
+        const maxNum = existingRefs.reduce((max, r) => {
+          const num = Number(r.ref.replace(/\D/g, ""));
+          return Number.isFinite(num) && num > max ? num : max;
+        }, 4);
+        targetRef = `SAT-${String(maxNum + 1).padStart(5, "0")}`;
+        targetReceiptNo = `${targetRef}-70`;
+      }
+    }
+
     const { error: appError } = await supabase.from("applications").upsert(
       {
-        ref: record.ref,
-        receipt_no: record.receiptNo,
+        ref: targetRef,
+        receipt_no: targetReceiptNo,
         course_id: record.courseId,
         course: record.course,
         course_title: record.courseTitle,
@@ -98,7 +123,7 @@ export async function syncApplicationToSupabase(
         let storagePath = null;
         if (doc.dataUrl) {
           const extension = doc.name.split(".").pop() || "bin";
-          const path = `${record.ref}/${doc.kind}-${doc.id}.${extension}`;
+          const path = `${targetRef}/${doc.kind}-${doc.id}.${extension}`;
           storagePath = await uploadDocumentToSupabaseStorage(
             "sat-documents",
             path,
@@ -111,7 +136,7 @@ export async function syncApplicationToSupabase(
         const dbFileType = doc.kind === "idcard" ? `idcard:${doc.type || ""}` : (doc.type ?? null);
 
         await supabase.from("application_documents").upsert({
-          application_ref: record.ref,
+          application_ref: targetRef,
           kind: dbKind,
           name: doc.name,
           size: doc.size,
@@ -126,7 +151,7 @@ export async function syncApplicationToSupabase(
     if (record.notes && record.notes.length > 0) {
       for (const note of record.notes) {
         await supabase.from("review_notes").upsert({
-          application_ref: record.ref,
+          application_ref: targetRef,
           author: note.author,
           kind: note.kind,
           text: note.text,

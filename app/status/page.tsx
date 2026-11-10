@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useRef, useState, useSyncExternalStore } from "react";
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -18,6 +18,7 @@ import { useCourses } from "@/lib/courses-store";
 import {
   formatThaiDateTime,
   getApplicationsByIdCard,
+  refreshApplicationsFromCloud,
   useApplications,
 } from "@/lib/applications-store";
 import { isValidThaiIdCard } from "@/lib/validation";
@@ -104,6 +105,10 @@ function StatusContent() {
   const [error, setError] = useState("");
   const resultsRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    void refreshApplicationsFromCloud();
+  }, []);
+
   const results = searchedId
     ? getApplicationsByIdCard(applications, searchedId)
     : [];
@@ -124,6 +129,7 @@ function StatusContent() {
     }
     setError("");
     setSearchedId(digits);
+    void refreshApplicationsFromCloud();
     resultsRef.current?.scrollIntoView({
       behavior: "smooth",
       block: "start",
