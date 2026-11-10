@@ -8,7 +8,10 @@ import type {
 } from "@/lib/applications-store";
 import { getDocumentLabel } from "@/lib/applications-store";
 import { getDocumentFromStorage } from "@/lib/document-storage";
-import { resolveSupabaseDocumentUrl } from "@/lib/supabase/sync";
+import {
+  backfillDocumentToSupabase,
+  resolveSupabaseDocumentUrl,
+} from "@/lib/supabase/sync";
 
 function dataUrlToBlob(dataUrl: string, overrideMime?: string): Blob | null {
   try {
@@ -44,9 +47,10 @@ export function DocumentPreviewDialog({
   );
   const [loading, setLoading] = useState<boolean>(!file?.dataUrl?.startsWith("data:"));
 
-  const [prevFileId, setPrevFileId] = useState(file?.id);
-  if (file?.id !== prevFileId) {
-    setPrevFileId(file?.id);
+  const fileSyncKey = `${file?.id ?? ""}|${file?.dataUrl ?? ""}`;
+  const [prevFileKey, setPrevFileKey] = useState(fileSyncKey);
+  if (fileSyncKey !== prevFileKey) {
+    setPrevFileKey(fileSyncKey);
     setActualDataUrl(file?.dataUrl?.startsWith("data:") ? file.dataUrl : null);
     setLoading(!file?.dataUrl?.startsWith("data:"));
   }
@@ -75,6 +79,9 @@ export function DocumentPreviewDialog({
 
       const rec = await getDocumentFromStorage(file.id, file.name);
       if (rec?.dataUrl) {
+        if (!file.dataUrl) {
+          void backfillDocumentToSupabase(applicant.ref, file, rec.dataUrl);
+        }
         if (isMounted) {
           setActualDataUrl(rec.dataUrl);
           setLoading(false);
@@ -97,6 +104,13 @@ export function DocumentPreviewDialog({
       }
     })();
 
+    return () => {
+      isMounted = false;
+    };
+  }, [file, applicant.ref]);
+
+  useEffect(() => {
+    if (!file) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -105,7 +119,6 @@ export function DocumentPreviewDialog({
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      isMounted = false;
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
@@ -346,7 +359,7 @@ export function DocumentPreviewDialog({
               <div className="flex items-start justify-between gap-4 border-b border-[#d1d5db] pb-4">
                 <div>
                   <p className="text-[10px] font-semibold tracking-wide text-[#1e3a8a]">
-                    สถาบันพัฒนากีฬาแห่งประเทศไทย
+                    กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ การกีฬาแห่งประเทศไทย
                   </p>
                   <p className="mt-1 text-[8px] text-[#6b7280]">
                     เอกสารประกอบการสมัครเข้ารับการฝึกอบรม (ตัวอย่างจำลอง)

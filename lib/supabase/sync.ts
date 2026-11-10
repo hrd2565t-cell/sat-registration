@@ -1,9 +1,11 @@
 import { getSupabaseClient } from "./client";
 import type { ApplicantRecord, ApplicantDocument } from "@/lib/applications-store";
 import type { HistoricalTrainee, DutyRecord } from "@/lib/alumni-store";
+import { getDocumentFromStorage } from "@/lib/document-storage";
 import type { Json, Database } from "./types";
 
 const storageUrlCache = new Map<string, string>();
+const backfilledDocKeys = new Set<string>();
 
 /**
  * Resolves a document URL or DataURL. If it points to the private `sat-documents`
@@ -44,6 +46,11 @@ export async function resolveSupabaseDocumentUrl(
       return null;
     }
 
+    const normalizedBlob =
+      objectPath.toLowerCase().endsWith(".pdf") && data.type !== "application/pdf"
+        ? new Blob([data], { type: "application/pdf" })
+        : data;
+
     const dataUrl = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -51,7 +58,7 @@ export async function resolveSupabaseDocumentUrl(
         else reject(new Error("Failed to convert blob to data URL"));
       };
       reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(data);
+      reader.readAsDataURL(normalizedBlob);
     });
 
     storageUrlCache.set(urlOrDataUrl, dataUrl);
@@ -223,7 +230,7 @@ export async function syncApplicationToSupabase(
         .eq("application_ref", targetRef);
 
       for (const doc of record.documents) {
-        const alreadyExists = (existingDocs || []).some((ed) => {
+        const alreadyHasContent = (existingDocs || []).some((ed) => {
           const edIsIdCard =
             ed.kind === "idcard" ||
             (ed.file_type && ed.file_type.startsWith("idcard:")) ||
@@ -235,16 +242,37 @@ export async function syncApplicationToSupabase(
             Boolean(ed.data_url || ed.storage_path)
           );
         });
-        if (alreadyExists) continue;
+        if (alreadyHasContent) continue;
 
-        let storagePath = null;
-        if (doc.dataUrl && doc.dataUrl.startsWith("data:")) {
-          const extension = doc.name.split(".").pop() || "bin";
-          const path = `${targetRef}/${doc.kind}-${doc.id}-${Date.now()}.${extension}`;
+        let effectiveDataUrl = doc.dataUrl;
+        if (!effectiveDataUrl && typeof window !== "undefined") {
+          const stored = await getDocumentFromStorage(doc.id, doc.name);
+          if (stored?.dataUrl) {
+            effectiveDataUrl = stored.dataUrl;
+          }
+        }
+
+        const alreadyHasPlaceholder = (existingDocs || []).some((ed) => {
+          const edIsIdCard =
+            ed.kind === "idcard" ||
+            (ed.file_type && ed.file_type.startsWith("idcard:")) ||
+            (ed.storage_path && ed.storage_path.includes("idcard-"));
+          const edRealKind = edIsIdCard ? "idcard" : ed.kind;
+          return edRealKind === doc.kind && ed.name === doc.name;
+        });
+
+        // หากมีแถวว่างอยู่แล้วและเครื่องนี้ก็ไม่มีไฟล์จริงใน IndexedDB ไม่ต้อง insert แถวว่างซ้ำ
+        if (alreadyHasPlaceholder && !effectiveDataUrl) continue;
+
+        let storagePath: string | null = null;
+        if (effectiveDataUrl && effectiveDataUrl.startsWith("data:")) {
+          const extension = (doc.name.split(".").pop() || "bin").replace(/[^a-zA-Z0-9]/g, "") || "pdf";
+          const safeId = String(doc.id || doc.kind).replace(/[^a-zA-Z0-9_-]/g, "");
+          const path = `${targetRef}/${doc.kind}-${safeId}-${Date.now()}.${extension}`;
           storagePath = await uploadDocumentToSupabaseStorage(
             "sat-documents",
             path,
-            doc.dataUrl
+            effectiveDataUrl
           );
         }
 
@@ -257,7 +285,7 @@ export async function syncApplicationToSupabase(
         const shouldKeepInlineDataUrl =
           doc.kind === "photo" ||
           !storagePath ||
-          Boolean(doc.dataUrl && doc.dataUrl.length < 500_000);
+          Boolean(effectiveDataUrl && effectiveDataUrl.length < 500_000);
 
         await supabase.from("application_documents").insert({
           application_ref: targetRef,
@@ -266,7 +294,7 @@ export async function syncApplicationToSupabase(
           size: doc.size,
           file_type: dbFileType,
           storage_path: storagePath,
-          data_url: shouldKeepInlineDataUrl ? (doc.dataUrl ?? null) : null,
+          data_url: shouldKeepInlineDataUrl ? (effectiveDataUrl ?? null) : null,
         });
       }
     }
@@ -275,6 +303,57 @@ export async function syncApplicationToSupabase(
   } catch (err) {
     console.warn("Failed to sync application to Supabase:", err);
     return false;
+  }
+}
+
+/**
+ * หากเอกสารในฐานข้อมูลกลางยังไม่มีไฟล์จริง (storage_path / data_url เป็น null)
+ * แต่เครื่องปัจจุบันมีไฟล์จริงอยู่ใน IndexedDB ให้อัปโหลดขึ้น Supabase Storage อัตโนมัติทันที
+ */
+export async function backfillDocumentToSupabase(
+  applicationRef: string,
+  doc: ApplicantDocument,
+  dataUrl: string
+): Promise<string | null> {
+  if (!applicationRef || !dataUrl || !dataUrl.startsWith("data:")) return null;
+  const dedupeKey = `${applicationRef}:${doc.kind}:${doc.name}`;
+  if (backfilledDocKeys.has(dedupeKey)) return null;
+  backfilledDocKeys.add(dedupeKey);
+
+  const supabase = getSupabaseClient();
+  if (!supabase) return null;
+
+  try {
+    const extension = (doc.name.split(".").pop() || "bin").replace(/[^a-zA-Z0-9]/g, "") || "pdf";
+    const safeId = String(doc.id || doc.kind).replace(/[^a-zA-Z0-9_-]/g, "");
+    const path = `${applicationRef}/${doc.kind}-${safeId}-${Date.now()}.${extension}`;
+    const storagePath = await uploadDocumentToSupabaseStorage(
+      "sat-documents",
+      path,
+      dataUrl
+    );
+
+    const dbKind = doc.kind === "idcard" ? "certificate" : doc.kind;
+    const dbFileType =
+      doc.kind === "idcard" ? `idcard:${doc.type || "application/pdf"}` : (doc.type ?? null);
+    const shouldKeepInlineDataUrl =
+      doc.kind === "photo" || !storagePath || dataUrl.length < 500_000;
+
+    await supabase.from("application_documents").insert({
+      application_ref: applicationRef,
+      kind: dbKind,
+      name: doc.name,
+      size: doc.size,
+      file_type: dbFileType,
+      storage_path: storagePath,
+      data_url: shouldKeepInlineDataUrl ? dataUrl : null,
+    });
+
+    return storagePath || (shouldKeepInlineDataUrl ? dataUrl : null);
+  } catch (err) {
+    console.warn("Failed to backfill document to Supabase:", err);
+    backfilledDocKeys.delete(dedupeKey);
+    return null;
   }
 }
 

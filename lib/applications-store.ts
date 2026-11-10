@@ -18,10 +18,12 @@ import {
   getSupabaseClient,
 } from "@/lib/supabase/client";
 import {
+  backfillDocumentToSupabase,
   fetchApplicationsFromSupabase,
   syncApplicationToSupabase,
   syncReviewToSupabase,
 } from "@/lib/supabase/sync";
+import { getDocumentFromStorage } from "@/lib/document-storage";
 
 export type ApplicantDocumentKind =
   | "photo"
@@ -224,6 +226,22 @@ export async function refreshApplicationsFromCloud(): Promise<void> {
       persist();
       emit();
       syncCourseSeats();
+
+      // หากบน Cloud มีเอกสารที่ยังไม่มีไฟล์จริงแนบ (dataUrl เป็น undefined) แต่เครื่องปัจจุบันมีไฟล์อยู่ใน IndexedDB
+      // ให้อัปโหลดไฟล์จาก IndexedDB ขึ้น Supabase Storage อัตโนมัติทันทีเพื่อให้ทุกเครื่องเห็นไฟล์จริงตรงกัน
+      if (typeof window !== "undefined") {
+        for (const app of validCloudApps) {
+          for (const doc of app.documents) {
+            if (!doc.dataUrl) {
+              void getDocumentFromStorage(doc.id, doc.name).then((stored) => {
+                if (stored?.dataUrl) {
+                  void backfillDocumentToSupabase(app.ref, doc, stored.dataUrl);
+                }
+              });
+            }
+          }
+        }
+      }
     }
   } catch (err) {
     console.warn("Failed to refresh applications from cloud:", err);
