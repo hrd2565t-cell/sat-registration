@@ -19,6 +19,8 @@ export function CourseDetailDialog({
   onSelectRegister,
 }: CourseDetailDialogProps) {
   const { courses } = useCourses();
+  const { applications } = useApplications();
+
   useEffect(() => {
     if (!course) return;
 
@@ -38,7 +40,6 @@ export function CourseDetailDialog({
 
   if (!course) return null;
 
-  const { applications } = useApplications();
   const applicantCount = applications.filter(
     (a) => a.courseId === course.id && a.status !== "rejected"
   ).length;
