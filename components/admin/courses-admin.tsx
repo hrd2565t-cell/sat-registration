@@ -20,6 +20,7 @@ import { useApplications } from "@/lib/applications-store";
 import {
   addCourse,
   deleteCourse,
+  syncAllCoursesToCloud,
   updateCourse,
   useCourses,
   type CourseUpdate,
@@ -138,6 +139,7 @@ export function CoursesAdmin() {
   const { courses } = useCourses();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [notice, setNotice] = useState("");
 
   const editingCourse =
@@ -254,6 +256,25 @@ export function CoursesAdmin() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={isSyncingCloud}
+              onClick={async () => {
+                setIsSyncingCloud(true);
+                const ok = await syncAllCoursesToCloud();
+                setIsSyncingCloud(false);
+                if (ok) {
+                  showNotice(
+                    "ซิงก์ข้อมูลหลักสูตรทั้งหมดจากเครื่องนี้ขึ้นฐานข้อมูลกลาง (Cloud) เรียบร้อยแล้ว ทุกเครื่องจะแสดงผลตรงกันทันที"
+                  );
+                } else {
+                  showNotice("ซิงก์ข้อมูลบางส่วนไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+                }
+              }}
+              className="inline-flex h-8 items-center gap-1 rounded-[5px] border border-[#16a34a] bg-[#f0fdf4] px-3 text-[11px] font-semibold text-[#15803d] shadow-sm transition hover:bg-[#dcfce7] disabled:opacity-60"
+            >
+              <span>{isSyncingCloud ? "กำลังซิงก์..." : "🔄 ซิงก์ข้อมูลทุกเครื่องให้ตรงกัน"}</span>
+            </button>
             <button
               type="button"
               onClick={() => setIsCreating(true)}

@@ -93,8 +93,9 @@ interface CoursesState {
   revision: number;
 }
 
-const STORAGE_KEY = "sat-courses-v7";
-const LEGACY_COURSE_KEYS = ["sat-courses-v6", "sat-courses-v5", "sat-courses-v4"];
+const STORAGE_KEY = "sat-courses-v8";
+const LEGACY_COURSE_KEYS = ["sat-courses-v7", "sat-courses-v6", "sat-courses-v5", "sat-courses-v4"];
+let lastLocalCourseEditAt = 0;
 
 function cloneSeedCourses() {
   return seedCourses.map((course) => ({ ...course }));
@@ -284,14 +285,9 @@ function mapCloudCourse(
   const seed = getSeedCourse(c.id);
   const existing = existingCourses.find((item) => item.id === c.id);
 
-  // หากข้อมูลในเครื่องของผู้ดูแลระบบเพิ่งถูกแก้ไขใหม่กว่าข้อมูลบน Cloud (เช่น เพิ่งกดบันทึก)
-  // ให้รักษาข้อมูลชุดที่ใหม่กว่าไว้เพื่อป้องกันการถูกทับด้วยค่าเก่า
+  // ป้องกันการเขียนทับเฉพาะกรณีที่แอดมินเพิ่งกดบันทึกในแท็บนี้ไม่เกิน 8 วินาที (ระหว่างรอคำสั่งอัปเดต Cloud เสร็จสิ้น)
   const cloudUpdatedAt = (c as { updated_at?: string }).updated_at;
-  if (
-    existing?.updatedAt &&
-    cloudUpdatedAt &&
-    Date.parse(existing.updatedAt) > Date.parse(cloudUpdatedAt) + 1000
-  ) {
+  if (existing && Date.now() - lastLocalCourseEditAt < 8000) {
     return existing;
   }
 
@@ -307,6 +303,20 @@ function mapCloudCourse(
   }
   const cloudSchedule = rawCloudQuotas?._schedule as EmbeddedSchedule | undefined;
   const cloudMeta = rawCloudQuotas?._metadata as Record<string, any> | undefined;
+
+  // หากเครื่องแอดมินมีข้อมูลรายละเอียดหลักสูตรที่แก้ไขไว้เอง (ไม่ตรงกับค่าเริ่มต้น seed)
+  // แต่บน Cloud ยังเป็นค่าเริ่มต้น seed อยู่ ให้ใช้ข้อมูลจริงจากเครื่องแอดมิน
+  const isAdminSession =
+    typeof window !== "undefined" &&
+    window.sessionStorage.getItem("sat-admin-authenticated") === "true";
+  const hasCustomLocalMeta =
+    isAdminSession &&
+    Boolean(
+      existing?.courseObjective &&
+        existing.courseObjective.trim() !== (seed?.courseObjective ?? "").trim() &&
+        (!cloudMeta?.courseObjective ||
+          cloudMeta.courseObjective.trim() === (seed?.courseObjective ?? "").trim())
+    );
 
   const colRegDate = (c as { registration_date?: string }).registration_date;
   const colResDate = (c as { result_date?: string }).result_date;
@@ -332,35 +342,46 @@ function mapCloudCourse(
   const finalQuotas =
     cleanCloudQ || existing?.targetQuotas || seed?.targetQuotas || balanceQuotasToCapacity(cap);
 
-  const finalCourseObjective =
-    cloudMeta?.courseObjective !== undefined
-      ? cloudMeta.courseObjective
-      : (c as { course_objective?: string }).course_objective !== undefined
-      ? (c as { course_objective?: string }).course_objective
-      : (existing?.courseObjective ?? seed?.courseObjective);
+  const finalCourseObjective = hasCustomLocalMeta
+    ? existing!.courseObjective
+    : cloudMeta?.courseObjective !== undefined
+    ? cloudMeta.courseObjective
+    : (c as { course_objective?: string }).course_objective !== undefined
+    ? (c as { course_objective?: string }).course_objective
+    : (existing?.courseObjective ?? seed?.courseObjective);
 
   const finalQualifications =
-    cloudMeta?.qualifications !== undefined
+    hasCustomLocalMeta && existing?.qualifications?.length
+      ? existing.qualifications
+      : cloudMeta?.qualifications !== undefined
       ? cloudMeta.qualifications
       : (existing?.qualifications ?? seed?.qualifications ?? []);
 
   const finalRequiredDocuments =
-    cloudMeta?.requiredDocuments !== undefined
+    hasCustomLocalMeta && existing?.requiredDocuments?.length
+      ? existing.requiredDocuments
+      : cloudMeta?.requiredDocuments !== undefined
       ? cloudMeta.requiredDocuments
       : (existing?.requiredDocuments ?? seed?.requiredDocuments ?? []);
 
   const finalEvaluationCriteria =
-    cloudMeta?.evaluationCriteria !== undefined
+    hasCustomLocalMeta && existing?.evaluationCriteria?.length
+      ? existing.evaluationCriteria
+      : cloudMeta?.evaluationCriteria !== undefined
       ? cloudMeta.evaluationCriteria
       : (existing?.evaluationCriteria ?? seed?.evaluationCriteria ?? []);
 
   const finalSatSupport =
-    cloudMeta?.satSupport !== undefined
+    hasCustomLocalMeta && existing?.satSupport?.length
+      ? existing.satSupport
+      : cloudMeta?.satSupport !== undefined
       ? cloudMeta.satSupport
       : (existing?.satSupport ?? seed?.satSupport ?? [...DEFAULT_SAT_SUPPORT]);
 
   const finalExpensesPolicy =
-    cloudMeta?.expensesPolicy !== undefined
+    hasCustomLocalMeta && existing?.expensesPolicy
+      ? existing.expensesPolicy
+      : cloudMeta?.expensesPolicy !== undefined
       ? cloudMeta.expensesPolicy
       : (existing?.expensesPolicy ?? seed?.expensesPolicy ?? DEFAULT_EXPENSES_POLICY);
 
@@ -373,6 +394,7 @@ function mapCloudCourse(
   const finalSeatsLeft = c.status === "full" ? undefined : Math.min(cap, rawSeatsLeft);
 
   const cloudDocConfig =
+    (hasCustomLocalMeta ? existing?.documentConfig : undefined) ||
     (c as { document_config?: import("@/lib/courses").CourseDocumentConfig }).document_config ||
     cloudMeta?.documentConfig ||
     existing?.documentConfig;
@@ -443,6 +465,74 @@ function mapCloudCourse(
 let realtimeSubscribed = false;
 let lastCoursesFetchAt = 0;
 
+async function pushCourseToSupabase(course: Course): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  const supabase = getSupabaseClient();
+  if (!supabase) return false;
+  const nowIso = new Date().toISOString();
+  const quotasPayload = buildQuotasPayload(
+    course.targetQuotas,
+    {
+      registrationDate: course.registrationDate,
+      resultDate: course.resultDate,
+      useCustomSchedule: course.useCustomSchedule,
+      updatedAt: nowIso,
+    },
+    course.capacity || 40,
+    {
+      courseObjective: course.courseObjective,
+      qualifications: course.qualifications,
+      requiredDocuments: course.requiredDocuments,
+      evaluationCriteria: course.evaluationCriteria,
+      satSupport: course.satSupport,
+      expensesPolicy: course.expensesPolicy,
+      documentConfig: course.documentConfig,
+      seatsLeft: course.seatsLeft,
+    },
+    course.id
+  );
+  const { error } = await supabase
+    .from("courses")
+    .update({
+      title: course.title,
+      short_title: course.shortTitle ?? null,
+      date: course.date,
+      location: course.location,
+      seats: course.seats,
+      seats_left: course.seatsLeft ?? 0,
+      status: course.status,
+      image: course.image,
+      warning_message:
+        course.warningMessage && course.warningMessage.trim()
+          ? course.warningMessage.trim()
+          : null,
+      target_quotas: quotasPayload as unknown as import("@/lib/supabase/types").Json,
+      updated_at: nowIso,
+    })
+    .eq("id", course.id);
+  return !error;
+}
+
+export async function syncAllCoursesToCloud(): Promise<boolean> {
+  lastLocalCourseEditAt = Date.now();
+  let allOk = true;
+  for (const course of state.courses) {
+    const ok = await pushCourseToSupabase(course);
+    if (!ok) allOk = false;
+  }
+  if (typeof window !== "undefined") {
+    fetch("/api/admin/save-defaults", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-authorized": "true",
+      },
+      body: JSON.stringify({ courses: state.courses }),
+    }).catch(() => {});
+  }
+  return allOk;
+}
+
 export async function refreshCoursesFromCloud(): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const now = Date.now();
@@ -456,7 +546,27 @@ export async function refreshCoursesFromCloud(): Promise<void> {
       .select("*")
       .order("id") ?? Promise.resolve({ data: null }));
     if (data && data.length > 0) {
-      const cloudCourses = data.map((c) => mapCloudCourse(c, state.courses));
+      const isAdminSession =
+        typeof window !== "undefined" &&
+        window.sessionStorage.getItem("sat-admin-authenticated") === "true";
+
+      const cloudCourses = data.map((c) => {
+        const mapped = mapCloudCourse(c, state.courses);
+        if (isAdminSession) {
+          const seed = getSeedCourse(c.id);
+          const rawCloudQuotas = (c as { target_quotas?: any }).target_quotas;
+          const cloudMeta = rawCloudQuotas?._metadata as Record<string, any> | undefined;
+          const hasRescuedLocalMeta =
+            mapped.courseObjective &&
+            mapped.courseObjective.trim() !== (seed?.courseObjective ?? "").trim() &&
+            (!cloudMeta?.courseObjective ||
+              cloudMeta.courseObjective.trim() === (seed?.courseObjective ?? "").trim());
+          if (hasRescuedLocalMeta) {
+            void pushCourseToSupabase(mapped);
+          }
+        }
+        return mapped;
+      });
       state = {
         courses: cloudCourses,
         revision: state.revision + 1,
@@ -547,19 +657,37 @@ function hydrate() {
   hydrateStarted = true;
 
   try {
+    const isAdminSession =
+      window.sessionStorage.getItem("sat-admin-authenticated") === "true";
     let raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
+
+    if (!raw && isAdminSession) {
+      // สำหรับเครื่องแอดมิน: ตรวจสอบคีย์รุ่นเก่าทั้งหมดและกู้คืนข้อมูลรายละเอียดหลักสูตรที่เคยแก้ไขไว้ (ไม่ใช่ค่าเริ่มต้น seed)
+      const rescuedByCourseId = new Map<number, Course>();
       for (const legacyKey of LEGACY_COURSE_KEYS) {
         try {
           const legacyRaw = window.localStorage.getItem(legacyKey);
-          if (legacyRaw) {
-            raw = legacyRaw;
-            window.localStorage.setItem(STORAGE_KEY, legacyRaw);
-            break;
+          if (!legacyRaw) continue;
+          const legacyParsed = JSON.parse(legacyRaw) as unknown;
+          if (!Array.isArray(legacyParsed)) continue;
+          for (const item of legacyParsed as Course[]) {
+            if (!item || typeof item.id !== "number") continue;
+            const seed = getSeedCourse(item.id);
+            const hasCustomMeta =
+              item.courseObjective &&
+              item.courseObjective.trim() !== (seed?.courseObjective ?? "").trim();
+            if (!rescuedByCourseId.has(item.id) || hasCustomMeta) {
+              rescuedByCourseId.set(item.id, item);
+            }
           }
         } catch {}
       }
+      if (rescuedByCourseId.size > 0) {
+        raw = JSON.stringify(Array.from(rescuedByCourseId.values()));
+        window.localStorage.setItem(STORAGE_KEY, raw);
+      }
     }
+
     for (const legacyKey of LEGACY_COURSE_KEYS) {
       try {
         window.localStorage.removeItem(legacyKey);
@@ -776,7 +904,9 @@ export function updateCourse(
 
   if (!updated) return undefined;
 
+  lastLocalCourseEditAt = Date.now();
   const previousState = state;
+  lastLocalCourseEditAt = Date.now();
   state = {
     courses: nextCourses,
     revision: state.revision + 1,
@@ -962,6 +1092,7 @@ export function addCourse(
     documentConfig: data.documentConfig,
   };
 
+  lastLocalCourseEditAt = Date.now();
   state = {
     courses: [...state.courses, newCourse],
     revision: state.revision + 1,
@@ -1041,6 +1172,7 @@ export function updateGlobalCourseSchedule(
     };
   });
 
+  lastLocalCourseEditAt = Date.now();
   state = {
     courses: nextCourses,
     revision: state.revision + 1,
