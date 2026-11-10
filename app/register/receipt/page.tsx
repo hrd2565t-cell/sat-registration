@@ -13,6 +13,7 @@ import { StatusTracker } from "@/components/status/status-tracker";
 import { getCourseById, getDefaultCourse } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
 import {
+  getApplicationByRef,
   getLatestApplication,
   useApplications,
 } from "@/lib/applications-store";
@@ -95,10 +96,10 @@ function ReceiptContent() {
   const ref = searchParams.get("ref");
   const courseParam = searchParams.get("course");
   const record = (ref
-    ? applications.find((item) => item.ref === ref || item.receiptNo === ref)
+    ? applications.find((item) => item.ref === ref || item.receiptNo === ref) ??
+      getApplicationByRef(ref)
     : undefined) ??
-    getLatestApplication(applications) ??
-    applications[0];
+    getLatestApplication(applications);
   const course =
     (record ? getCourseById(record.courseId, courses) : undefined) ??
     getCourseById(courseParam, courses) ??

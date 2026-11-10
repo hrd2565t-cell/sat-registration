@@ -525,6 +525,29 @@ function RegistrationContent() {
       documents,
     });
 
+    // ส่งอีเมลยืนยันการรับสมัครไปยังอีเมลของผู้สมัครอัตโนมัติ
+    try {
+      fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: record.email,
+          applicantName: record.name,
+          receiptNo: record.receiptNo,
+          ref: record.ref,
+          courseTitle: record.courseTitle,
+          courseDate: course.date,
+          courseLocation: course.location,
+          idCard: record.idCard,
+          affiliation: record.affiliation,
+        }),
+      }).catch((err) => {
+        console.warn("Email confirmation trigger error:", err);
+      });
+    } catch (e) {
+      console.warn("Failed to initiate email send:", e);
+    }
+
     router.push(
       `/register/receipt?ref=${encodeURIComponent(record.ref)}&course=${record.courseId}`
     );

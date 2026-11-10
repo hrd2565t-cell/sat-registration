@@ -106,12 +106,16 @@ export async function syncApplicationToSupabase(
           );
         }
 
+        // ป้องกัน constraint violation ของ Supabase ที่ยังไม่มี 'idcard' ใน CHECK constraint
+        const dbKind = doc.kind === "idcard" ? "certificate" : doc.kind;
+        const dbFileType = doc.kind === "idcard" ? `idcard:${doc.type || ""}` : (doc.type ?? null);
+
         await supabase.from("application_documents").upsert({
           application_ref: record.ref,
-          kind: doc.kind,
+          kind: dbKind,
           name: doc.name,
           size: doc.size,
-          file_type: doc.type ?? null,
+          file_type: dbFileType,
           storage_path: storagePath,
           data_url: storagePath ? null : doc.dataUrl ?? null,
         });
@@ -214,14 +218,26 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
     return apps.map((app) => {
       const docs = (allDocs || [])
         .filter((doc) => doc.application_ref === app.ref)
-        .map((doc): ApplicantDocument => ({
-          id: doc.id,
-          kind: doc.kind as ApplicantDocument["kind"],
-          name: doc.name,
-          size: doc.size,
-          type: doc.file_type ?? undefined,
-          dataUrl: (doc.storage_path || doc.data_url) ?? undefined,
-        }));
+        .map((doc): ApplicantDocument => {
+          const isIdCard =
+            doc.kind === "idcard" ||
+            (doc.file_type && doc.file_type.startsWith("idcard:")) ||
+            (doc.storage_path && doc.storage_path.includes("idcard-"));
+          const realKind = isIdCard ? "idcard" : (doc.kind as ApplicantDocument["kind"]);
+          const realType =
+            doc.file_type && doc.file_type.startsWith("idcard:")
+              ? doc.file_type.replace("idcard:", "")
+              : (doc.file_type ?? undefined);
+
+          return {
+            id: doc.id,
+            kind: realKind,
+            name: doc.name,
+            size: doc.size,
+            type: realType,
+            dataUrl: (doc.storage_path || doc.data_url) ?? undefined,
+          };
+        });
 
       const notes = (allNotes || [])
         .filter((note) => note.application_ref === app.ref)

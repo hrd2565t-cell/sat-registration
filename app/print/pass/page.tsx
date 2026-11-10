@@ -5,7 +5,12 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { CopyButton } from "@/components/ui/copy-button";
-import { useApplications, formatThaiDate, getLatestApplication } from "@/lib/applications-store";
+import {
+  useApplications,
+  formatThaiDate,
+  getLatestApplication,
+  getApplicationByRef,
+} from "@/lib/applications-store";
 import { useCourses } from "@/lib/courses-store";
 import { getDocumentFromStorage } from "@/lib/document-storage";
 
@@ -17,8 +22,9 @@ function PassPrintView() {
   const autoPrintTriggeredRef = useRef(false);
 
   const record = (ref
-    ? applications.find((app) => app.ref === ref || app.receiptNo === ref)
-    : undefined) || getLatestApplication(applications) || applications[0];
+    ? applications.find((app) => app.ref === ref || app.receiptNo === ref) ||
+      getApplicationByRef(ref)
+    : undefined) || getLatestApplication(applications);
 
   const course = courses.find((c) => c.id === record?.courseId);
   const photoDoc = record?.documents?.find((d) => d.kind === "photo");

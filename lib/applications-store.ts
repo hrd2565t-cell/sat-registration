@@ -91,6 +91,14 @@ interface ApplicationsState {
 
 const STORAGE_KEY = "sat-applications-v2";
 const SEED_REVIEWER = adminUser.name;
+const DEMO_APPLICATION_REFS = new Set(["SAT-00001", "SAT-00002", "SAT-00003"]);
+
+export function isDemoApplication(app: Partial<ApplicantRecord> | null | undefined): boolean {
+  if (!app) return false;
+  if (app.ref && DEMO_APPLICATION_REFS.has(app.ref)) return true;
+  if (app.name === "นาย สมชาย สิงห์" || app.name === "[Demo] นาย สมชาย สิงห์") return true;
+  return false;
+}
 
 function padRef(value: number) {
   return `SAT-${String(value).padStart(5, "0")}`;
@@ -165,8 +173,11 @@ function hydrate() {
           typeof (item as ApplicantRecord).ref === "string"
       )
     ) {
+      const filtered = (parsed.applications as ApplicantRecord[]).filter(
+        (item) => !isDemoApplication(item)
+      );
       state = {
-        applications: parsed.applications as ApplicantRecord[],
+        applications: filtered,
         revision: state.revision + 1,
       };
     }
@@ -180,8 +191,14 @@ function hydrate() {
   if (isSupabaseConfigured()) {
     fetchApplicationsFromSupabase().then((cloudApps) => {
       if (cloudApps && cloudApps.length > 0) {
+        const validCloudApps = cloudApps.filter((a) => !isDemoApplication(a));
+        const cloudMap = new Map(validCloudApps.map((a) => [a.ref, a]));
+        // คงข้อมูลใบสมัครในเครื่องที่ยังไม่ได้ถูกซิงก์ขึ้นคลาวด์ไว้ ไม่ให้หายไป
+        const localOnly = state.applications.filter(
+          (a) => !cloudMap.has(a.ref) && !isDemoApplication(a)
+        );
         state = {
-          applications: cloudApps,
+          applications: [...localOnly, ...validCloudApps],
           revision: state.revision + 1,
         };
         persist();
@@ -233,29 +250,91 @@ export function usePendingCount() {
   return applications.filter((item) => item.status === "pending").length;
 }
 
+export function getApplicationByRef(ref: string | null | undefined): ApplicantRecord | undefined {
+  if (!ref) return undefined;
+  const cleanRef = ref.trim();
+  const inMemory = state.applications.find(
+    (item) => item.ref === cleanRef || item.receiptNo === cleanRef
+  );
+  if (inMemory) return inMemory;
+
+  if (typeof window !== "undefined") {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<ApplicationsState>;
+        if (Array.isArray(parsed.applications)) {
+          return (parsed.applications as ApplicantRecord[]).find(
+            (item) => item.ref === cleanRef || item.receiptNo === cleanRef
+          );
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return undefined;
+}
+
 export function createApplication(input: NewApplicationInput): ApplicantRecord {
   const cleanIdCard = input.idCard.replace(/\D/g, "");
-  // ป้องกันการบันทึกซ้ำในระดับ Store (Idempotency)
-  const existing = state.applications.find(
-    (item) => item.idCard === cleanIdCard && item.courseId === input.courseId
-  );
-  if (existing && existing.status !== "rejected") {
-    return existing;
-  }
-
   const courseOption =
     adminCourseOptions.find((item) => item.id === input.courseId) ??
     adminCourseOptions[0];
   const course = getCoursesSnapshot().find(
     (item) => item.id === input.courseId
   );
+  const now = new Date().toISOString();
+
+  // ตรวจสอบว่าเคยมีใบสมัครของหลักสูตรนี้อยู่แล้วหรือไม่
+  // หากมีอยู่แล้ว ให้อัปเดตข้อมูลด้วยข้อมูลใหม่ล่าสุดที่ผู้สมัครกรอก (ไม่แสดงข้อมูลเก่าหรือข้อมูลเดโม)
+  const existingIndex = state.applications.findIndex(
+    (item) => item.idCard === cleanIdCard && item.courseId === input.courseId
+  );
+
+  if (existingIndex >= 0) {
+    const existing = state.applications[existingIndex];
+    if (existing.status !== "rejected") {
+      const fileSize = input.documents.reduce((total, document) => {
+        const value = Number.parseFloat(document.size);
+        return total + (Number.isFinite(value) ? value : 0);
+      }, 0);
+
+      const updatedRecord: ApplicantRecord = {
+        ...existing,
+        name: input.name.trim() || existing.name,
+        email: input.email.trim() || existing.email,
+        phone: input.phone.trim() || existing.phone,
+        affiliation: input.affiliation,
+        position: input.position.trim(),
+        documents: input.documents.length > 0 ? input.documents : existing.documents,
+        fileSize: fileSize > 0 ? Math.round(fileSize * 10) / 10 : existing.fileSize,
+        updatedAt: now,
+      };
+
+      const updatedApps = [...state.applications];
+      updatedApps[existingIndex] = updatedRecord;
+      state = {
+        applications: updatedApps,
+        revision: state.revision + 1,
+      };
+      persist();
+      emit();
+      syncCourseSeats();
+
+      if (isSupabaseConfigured()) {
+        syncApplicationToSupabase(updatedRecord);
+      }
+      return updatedRecord;
+    }
+  }
+
   const numericRefs = state.applications
     .map((item) => Number(item.ref.replace(/\D/g, "")))
     .filter((value) => Number.isFinite(value));
   const nextRef = Math.max(0, ...numericRefs) + 1;
   const ref = padRef(nextRef);
   const id = Math.max(0, ...state.applications.map((item) => item.id)) + 1;
-  const now = new Date().toISOString();
   const fileSize = input.documents.reduce((total, document) => {
     const value = Number.parseFloat(document.size);
     return total + (Number.isFinite(value) ? value : 0);
@@ -296,7 +375,7 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
   };
 
   state = {
-    applications: [record, ...state.applications],
+    applications: [record, ...state.applications.filter((a) => a.ref !== record.ref)],
     revision: state.revision + 1,
   };
   persist();
