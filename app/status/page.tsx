@@ -12,6 +12,7 @@ import { IdCardInput } from "@/components/ui/id-card-input";
 import { CopyButton } from "@/components/ui/copy-button";
 import { StatusPanel } from "@/components/status/status-panel";
 import { ResubmitDocumentsBox } from "@/components/status/resubmit-documents-box";
+import { DocumentPreviewDialog } from "@/components/admin/document-preview-dialog";
 import { getCourseById, getDefaultCourse, type Course } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
 import {
@@ -184,11 +185,7 @@ function ApplicantStatusCard({
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [showResubmitManual, setShowResubmitManual] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
-  const [previewDoc, setPreviewDoc] = useState<{
-    name: string;
-    url: string;
-    isPdf: boolean;
-  } | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<ApplicantDocument | null>(null);
 
   const photoDoc = result.documents.find(
     (d) =>
@@ -238,29 +235,6 @@ function ApplicantStatusCard({
       active = false;
     };
   }, [photoDoc, result.ref, result.idCard]);
-
-  const handleOpenDocument = async (doc: ApplicantDocument) => {
-    let targetUrl: string | null = null;
-    if (doc.dataUrl?.startsWith("data:")) {
-      targetUrl = doc.dataUrl;
-    } else if (doc.dataUrl) {
-      targetUrl = await resolveSupabaseDocumentUrl(doc.dataUrl);
-    }
-    if (!targetUrl) {
-      const stored = await getDocumentFromStorage(doc.id, doc.name);
-      if (stored?.dataUrl) targetUrl = stored.dataUrl;
-    }
-    if (!targetUrl && typeof window !== "undefined") {
-      targetUrl = sessionStorage.getItem(`sat-doc-${doc.id}`);
-    }
-    if (targetUrl) {
-      const isPdf =
-        doc.type === "application/pdf" ||
-        doc.name.toLowerCase().endsWith(".pdf") ||
-        targetUrl.startsWith("data:application/pdf");
-      setPreviewDoc({ name: doc.name, url: targetUrl, isPdf });
-    }
-  };
 
   const displayCourseTitle = result.courseTitle.startsWith("หลักสูตร")
     ? result.courseTitle
@@ -533,7 +507,7 @@ function ApplicantStatusCard({
                   </div>
                   <button
                     type="button"
-                    onClick={() => void handleOpenDocument(doc)}
+                    onClick={() => setPreviewDoc(doc)}
                     className="shrink-0 rounded border border-[#cbd5e1] bg-[#f8fafc] px-2 py-0.5 text-[10px] font-semibold text-[#1e3a8a] hover:bg-[#eff6ff]"
                   >
                     ดูไฟล์
@@ -569,47 +543,12 @@ function ApplicantStatusCard({
         )}
       </div>
 
-      {/* Document Preview Modal */}
-      {previewDoc && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          onClick={() => setPreviewDoc(null)}
-        >
-          <div
-            className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-              <h4 className="truncate text-[13px] font-bold text-gray-900">
-                {previewDoc.name}
-              </h4>
-              <button
-                type="button"
-                onClick={() => setPreviewDoc(null)}
-                className="rounded-lg border border-gray-300 px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100"
-              >
-                ✕ ปิดหน้าต่าง
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto bg-gray-100 p-4">
-              {previewDoc.isPdf ? (
-                <iframe
-                  src={previewDoc.url}
-                  title={previewDoc.name}
-                  className="h-[70vh] w-full rounded border bg-white"
-                />
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={previewDoc.url}
-                  alt={previewDoc.name}
-                  className="mx-auto max-h-[70vh] rounded object-contain"
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Document Preview Modal (ใช้ตัวแปลง Blob URL เดียวกับระบบผู้ดูแลระบบ เพื่อให้แสดง PDF ได้ทุกขนาด) */}
+      <DocumentPreviewDialog
+        file={previewDoc}
+        applicant={result}
+        onClose={() => setPreviewDoc(null)}
+      />
     </Card>
   );
 }

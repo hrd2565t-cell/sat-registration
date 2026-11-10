@@ -10,11 +10,14 @@ import { getDocumentLabel } from "@/lib/applications-store";
 import { getDocumentFromStorage } from "@/lib/document-storage";
 import { resolveSupabaseDocumentUrl } from "@/lib/supabase/sync";
 
-function dataUrlToBlob(dataUrl: string): Blob | null {
+function dataUrlToBlob(dataUrl: string, overrideMime?: string): Blob | null {
   try {
     const parts = dataUrl.split(",");
     const mimeMatch = parts[0].match(/:(.*?);/);
-    const mime = mimeMatch ? mimeMatch[1] : "application/pdf";
+    const detectedMime = mimeMatch ? mimeMatch[1] : "application/pdf";
+    const mime =
+      overrideMime ||
+      (detectedMime === "application/octet-stream" ? "application/pdf" : detectedMime);
     const bstr = atob(parts[1]);
     let n = bstr.length;
     const u8arr = new Uint8Array(n);
@@ -115,13 +118,16 @@ export function DocumentPreviewDialog({
       return actualDataUrl;
     }
     if (actualDataUrl.startsWith("data:")) {
-      const blob = dataUrlToBlob(actualDataUrl);
+      const forcePdfMime = file?.name?.toLowerCase().endsWith(".pdf")
+        ? "application/pdf"
+        : undefined;
+      const blob = dataUrlToBlob(actualDataUrl, forcePdfMime);
       if (blob) {
         return URL.createObjectURL(blob);
       }
     }
     return null;
-  }, [actualDataUrl]);
+  }, [actualDataUrl, file?.name]);
 
   useEffect(() => {
     return () => {
