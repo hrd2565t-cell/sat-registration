@@ -317,6 +317,9 @@ function ReceiptContent() {
                 />
                 <ReceiptRow label="สังกัด" value={record.affiliation} />
                 <ReceiptRow label="ตำแหน่ง" value={record.position} />
+                {record.email && (
+                  <ReceiptRow label="อีเมลแจ้งผล" value={record.email} />
+                )}
               </dl>
             </div>
 
@@ -360,6 +363,13 @@ function ReceiptContent() {
             </div>
           </div>
         </Card>
+
+        {record.email && (
+          <div className="mt-3 flex items-center justify-center gap-2 rounded-md border border-[#bfdbfe] bg-[#eff6ff] px-3 py-2 text-[11px] text-[#1e40af]">
+            <span>✉️</span>
+            <span>ระบบได้ส่งอีเมลยืนยันการรับสมัครไปยัง <strong>{record.email}</strong> แล้ว</span>
+          </div>
+        )}
 
         <p className="mt-3 text-center text-[11px] font-medium leading-relaxed text-[#dc2626]">
           * กรุณาเก็บรหัสอ้างอิงหรือดาวน์โหลดเอกสารไว้

@@ -349,7 +349,12 @@ export async function POST(request: Request) {
         });
       } else {
         const errText = await resendRes.text();
-        console.warn("Resend API returned error:", errText);
+        console.warn("[Resend Warning] Resend API returned error:", errText);
+        if (resendRes.status === 403) {
+          console.warn(
+            "[Resend Domain Required] onboarding@resend.dev can only send to the account owner. To send to any applicant, verify your domain at resend.com/domains or configure SMTP."
+          );
+        }
       }
     }
 

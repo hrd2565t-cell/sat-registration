@@ -104,6 +104,8 @@ git push -u origin main
 | `SUPABASE_SERVICE_ROLE_KEY` | `eyJhbGci...` | Service Role Key จาก Supabase |
 | `NEXT_PUBLIC_ADMIN_PIN` | `336699` | รหัส PIN 6 หลักสำหรับเข้าห้องผู้ดูแลระบบ |
 | `NEXT_PUBLIC_SITE_URL` | `https://your-sat-project.vercel.app` | โดเมนของระบบ (อัปเดตหลัง deploy ได้) |
+| `RESEND_API_KEY` | `re_xxxxxxxxx` | API Key สำหรับส่งอีเมลยืนยันการรับสมัครผ่าน Resend |
+| `EMAIL_FROM` | `กองพัฒนาบุคลากรกีฬา กกท. <onboarding@resend.dev>` | ชื่อและอีเมลผู้ส่ง |
 
 ### 3.3 กด Deploy
 1. กดปุ่ม **"Deploy"**
