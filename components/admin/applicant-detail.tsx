@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo, useSyncExternalStore } from "react";
 import { AiVerdictBadge } from "@/components/admin/ai-verdict-badge";
 import { DocumentPreviewDialog } from "@/components/admin/document-preview-dialog";
+import { DeleteApplicantDialog } from "@/components/admin/delete-applicant-dialog";
 import {
   ReviewDecisionDialog,
   type ReviewDecision,
@@ -150,6 +152,25 @@ function XIcon() {
   );
 }
 
+function TrashIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+      />
+    </svg>
+  );
+}
+
 function ClockIcon() {
   return (
     <svg
@@ -187,8 +208,10 @@ export function ApplicantDetail({
   const applicant = useApplication(refId);
   const { applications } = useApplications();
   const { courses } = useCourses();
+  const router = useRouter();
   const mounted = useMounted();
   const [decision, setDecision] = useState<ReviewDecision | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedDocument, setSelectedDocument] =
     useState<ApplicantDocument | null>(null);
   const [note, setNote] = useState("");
@@ -516,6 +539,15 @@ export function ApplicantDetail({
           >
             พิมพ์ใบสมัคร (A4)
           </a>
+          <button
+            type="button"
+            onClick={() => setShowDeleteModal(true)}
+            className="inline-flex h-8 items-center gap-1 rounded-[5px] border border-[#fca5a5] bg-[#fff5f5] px-2.5 text-[11px] font-semibold text-[#dc2626] transition-colors hover:bg-[#fee2e2]"
+            title="ลบใบสมัครนี้ออกจากระบบ"
+          >
+            <TrashIcon className="h-3.5 w-3.5" />
+            <span>ลบใบสมัคร</span>
+          </button>
           {applicant.status === "approved" && (
             <>
               <a
@@ -989,6 +1021,18 @@ export function ApplicantDetail({
                 ไม่อนุมัติ
               </button>
             </div>
+
+            <div className="mt-3 border-t border-[#f1f5f9] pt-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(true)}
+                className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-[6px] border border-[#fca5a5] bg-[#fff5f5] text-[11px] font-semibold text-[#b91c1c] transition-colors hover:bg-[#fee2e2]"
+                title="ลบใบสมัครนี้ออกจากระบบ"
+              >
+                <TrashIcon className="h-3.5 w-3.5" />
+                <span>ลบใบสมัครนี้ออกจากระบบ</span>
+              </button>
+            </div>
           </section>
 
           {/* Section 3: ข้อมูลโควตาและสถานะที่นั่งหลักสูตร */}
@@ -1126,6 +1170,20 @@ export function ApplicantDetail({
         applicant={applicant}
         onClose={() => setSelectedDocument(null)}
       />
+
+      {/* Delete Applicant Dialog Modal */}
+      {showDeleteModal && (
+        <DeleteApplicantDialog
+          open
+          applicantRef={applicant.ref}
+          applicantName={applicant.name}
+          onClose={() => setShowDeleteModal(false)}
+          onSuccess={() => {
+            setShowDeleteModal(false);
+            router.push(backHref);
+          }}
+        />
+      )}
     </div>
   );
 }

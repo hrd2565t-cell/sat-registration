@@ -13,6 +13,7 @@ import {
 import { exportApplicantsToExcel } from "@/lib/export-excel";
 import { AiVerdictBadge } from "@/components/admin/ai-verdict-badge";
 import { ReviewDecisionDialog } from "@/components/admin/review-decision-dialog";
+import { DeleteApplicantDialog } from "@/components/admin/delete-applicant-dialog";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { Pagination } from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
@@ -105,6 +106,25 @@ function ChevronIcon() {
   );
 }
 
+function TrashIcon({ className = "h-2.5 w-2.5 shrink-0" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+      />
+    </svg>
+  );
+}
+
 interface ApplicantsTableProps {
   title?: string;
   description?: string;
@@ -134,6 +154,10 @@ export function ApplicantsTable({
   const [page, setPage] = useState(1);
   const [notice, setNotice] = useState("");
   const [rejectTarget, setRejectTarget] = useState<{
+    ref: string;
+    name: string;
+  } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
     ref: string;
     name: string;
   } | null>(null);
@@ -491,6 +515,15 @@ export function ApplicantsTable({
                     >
                       <ChevronIcon />
                     </Link>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget({ ref: row.ref, name: row.name })}
+                      title={`ลบใบสมัครของ ${row.name}`}
+                      aria-label={`ลบใบสมัครของ ${row.name}`}
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-[4px] border border-[#fca5a5] bg-white text-[#dc2626] transition-colors hover:bg-[#fef2f2]"
+                    >
+                      <TrashIcon className="h-2.5 w-2.5" />
+                    </button>
                   </div>
                   <div className="hidden print:block">
                     <StatusBadge status={row.status} reserveOrder={row.reserveOrder} />
@@ -551,6 +584,15 @@ export function ApplicantsTable({
                 ดูรายละเอียด
                 <ChevronIcon />
               </Link>
+              <button
+                type="button"
+                onClick={() => setDeleteTarget({ ref: row.ref, name: row.name })}
+                className="inline-flex h-9 items-center justify-center gap-1 rounded-[5px] border border-[#fca5a5] bg-[#fff5f5] px-2.5 text-[11px] font-semibold text-[#dc2626] transition-colors hover:bg-[#fee2e2]"
+                title={`ลบใบสมัครของ ${row.name}`}
+              >
+                <TrashIcon className="h-3.5 w-3.5" />
+                <span>ลบ</span>
+              </button>
               {row.status === "pending" && (
                 <>
                   <button
@@ -612,6 +654,19 @@ export function ApplicantsTable({
             reviewApplication(rejectTarget.ref, "rejected", reason);
             setNotice(`ไม่อนุมัติ ${rejectTarget.name} เรียบร้อยแล้ว`);
             setRejectTarget(null);
+          }}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteApplicantDialog
+          open
+          applicantRef={deleteTarget.ref}
+          applicantName={deleteTarget.name}
+          onClose={() => setDeleteTarget(null)}
+          onSuccess={() => {
+            setNotice(`ลบใบสมัครของ ${deleteTarget.name} (รหัส ${deleteTarget.ref}) สำเร็จเรียบร้อยแล้ว`);
+            setDeleteTarget(null);
           }}
         />
       )}

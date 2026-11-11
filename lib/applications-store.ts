@@ -12,13 +12,14 @@ import {
   isCourseDateOverlapping,
   type Course,
 } from "@/lib/courses";
-import { getCoursesSnapshot, syncCourseSeatsWithApprovedCounts } from "@/lib/courses-store";
+import { getCoursesSnapshot, syncCourseSeatsWithApprovedCounts, cachedReviewsByCourseId } from "@/lib/courses-store";
 import {
   isSupabaseConfigured,
   getSupabaseClient,
 } from "@/lib/supabase/client";
 import {
   backfillDocumentToSupabase,
+  deleteApplicationFromSupabase,
   fetchApplicationsFromSupabase,
   syncApplicationToSupabase,
   syncReviewToSupabase,
@@ -849,6 +850,55 @@ export function addApplicationNote(
       );
     }
   }
+}
+
+/**
+ * ลบใบสมัครออกจากระบบอย่างสมบูรณ์ ทั้ง State ภายในเครื่องและฐานข้อมูล Supabase
+ */
+export async function deleteApplication(ref: string): Promise<boolean> {
+  const target = state.applications.find((item) => item.ref === ref);
+  const targetCourseId = target?.courseId;
+
+  // 1. นำออกจาก in-memory state ทันที
+  state = {
+    applications: state.applications.filter((item) => item.ref !== ref),
+    revision: state.revision + 1,
+  };
+
+  // 2. เคลียร์ออกจาก localStorage & แจ้งเตือนทุก component
+  persist();
+  emit();
+  syncCourseSeats();
+
+  // 3. เคลียร์แคชรีวิวของหลักสูตร
+  if (targetCourseId) {
+    const existingCached = cachedReviewsByCourseId.get(targetCourseId);
+    if (existingCached && ref in existingCached) {
+      const nextCached = { ...existingCached };
+      delete nextCached[ref];
+      cachedReviewsByCourseId.set(targetCourseId, nextCached);
+    }
+  }
+
+  // 4. เคลียร์แคชเอกสารใน sessionStorage
+  if (typeof window !== "undefined" && target) {
+    try {
+      for (const doc of target.documents) {
+        sessionStorage.removeItem(`sat-doc-${doc.id}`);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 5. ส่งคำสั่งลบไปยัง Supabase ผ่าน Server API (Service Role)
+  try {
+    await deleteApplicationFromSupabase(ref, targetCourseId);
+  } catch (err) {
+    console.warn("Failed to delete application from Supabase:", err);
+  }
+
+  return true;
 }
 
 export function resetDemoData() {

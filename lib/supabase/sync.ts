@@ -1,4 +1,4 @@
-import { getSupabaseClient } from "./client";
+import { getSupabaseClient, isSupabaseConfigured } from "./client";
 import type { ApplicantRecord, ApplicantDocument } from "@/lib/applications-store";
 import type { HistoricalTrainee, DutyRecord } from "@/lib/alumni-store";
 import { setCachedCourseReviews } from "@/lib/courses-store";
@@ -961,6 +961,54 @@ export async function deleteTraineeFromSupabase(id: string): Promise<boolean> {
     return true;
   } catch (err) {
     console.warn("Failed to delete trainee from Supabase:", err);
+    return false;
+  }
+}
+
+/**
+ * Deletes an application and all its related documents from Supabase
+ */
+export async function deleteApplicationFromSupabase(
+  ref: string,
+  courseId?: number
+): Promise<boolean> {
+  if (!isSupabaseConfigured() || !ref) return true;
+
+  try {
+    // 1. เรียกใช้งานผ่าน Server Route ด้วยสิทธิ์ Super Admin เพื่อลบทั้งตารางและไฟล์ใน Storage
+    if (typeof window !== "undefined") {
+      const res = await fetch("/api/admin/delete-application", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-authorized": "true",
+          "x-admin-pin": "336699",
+        },
+        body: JSON.stringify({ ref, courseId }),
+      });
+      if (res.ok) {
+        return true;
+      }
+    }
+  } catch (apiErr) {
+    console.warn("Server delete application API error, falling back to client delete:", apiErr);
+  }
+
+  // Fallback สำหรับ client โดยตรง
+  const supabase = getSupabaseClient();
+  if (!supabase) return false;
+
+  try {
+    await supabase.from("application_documents").delete().eq("application_ref", ref);
+    await supabase.from("review_notes").delete().eq("application_ref", ref);
+    const { error } = await supabase.from("applications").delete().eq("ref", ref);
+    if (error) {
+      console.warn("Supabase delete application error:", error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn("Failed to delete application from Supabase:", err);
     return false;
   }
 }
