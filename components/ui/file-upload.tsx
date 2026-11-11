@@ -15,9 +15,13 @@ interface FileUploadProps {
   onAdd?: (file: FileItem) => void;
   onRemove?: (index: number) => void;
   maxFiles?: number;
+  /** ขนาดไฟล์สูงสุดในหน่วย MB (ค่าเริ่มต้น: 10 MB) */
+  maxSizeMB?: number;
   disabled?: boolean;
   emptyText?: string;
   accept?: string;
+  hint?: string;
+  onError?: (error: string) => void;
 }
 
 function formatSize(bytes: number) {
@@ -33,16 +37,35 @@ export function FileUpload({
   onAdd,
   onRemove,
   maxFiles = 1,
+  maxSizeMB = 10,
   disabled = false,
   emptyText = "ยังไม่ได้แนบไฟล์",
   accept = ".jpg,.jpeg,.png,.pdf",
+  hint,
+  onError,
 }: FileUploadProps) {
   const canUpload = files.length < maxFiles;
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
   const handlePick = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !onAdd) return;
+    if (!file) return;
+
+    setErrorMessage(null);
+
+    // ตรวจสอบขนาดไฟล์ไม่ให้เกิน maxSizeMB
+    const maxBytes = maxSizeMB * 1024 * 1024;
+    if (file.size > maxBytes) {
+      const actualSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      const err = `ขนาดไฟล์ "${file.name}" ใหญ่เกินกำหนด (${actualSizeMB} MB) ระบบจำกัดไว้ไม่เกิน ${maxSizeMB} MB ต่อไฟล์`;
+      setErrorMessage(err);
+      onError?.(err);
+      event.target.value = "";
+      return;
+    }
+
+    if (!onAdd) return;
 
     const fileType = file.type || (file.name.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
     const reader = new FileReader();
@@ -53,6 +76,7 @@ export function FileUpload({
         dataUrl: reader.result as string,
         type: fileType,
       });
+      setErrorMessage(null);
     };
     reader.readAsDataURL(file);
     event.target.value = "";
@@ -63,6 +87,7 @@ export function FileUpload({
       {label && (
         <label className="text-[12.5px] font-medium text-[#1f2937]">{label}</label>
       )}
+
       {files.length === 0 ? (
         <button
           type="button"
@@ -123,6 +148,52 @@ export function FileUpload({
           ))}
         </div>
       )}
+
+      {/* ข้อความแจ้งเตือนเมื่อไฟล์มีขนาดเกินกำหนด */}
+      {errorMessage && (
+        <div className="flex items-start gap-2 rounded-[5px] border border-[#fecaca] bg-[#fef2f2] p-2.5 text-[11.5px] text-[#b91c1c] animate-in fade-in">
+          <svg
+            className="h-4 w-4 shrink-0 text-[#dc2626] mt-0.5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+            />
+          </svg>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">{errorMessage}</p>
+            <p className="mt-1 text-[10.5px] text-[#991b1b]">
+              💡 <strong>วิธีแก้ไข:</strong> หากเป็นไฟล์ PDF สามารถย่อขนาดได้ที่ ilovepdf.com หรือหากเป็นรูปภาพ ให้ถ่ายใหม่หรือบันทึกด้วยความละเอียดที่เหมาะสม
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setErrorMessage(null)}
+            className="shrink-0 text-[#991b1b] hover:text-[#7f1d1d] text-[13px] font-bold px-1"
+            title="ปิดข้อความแจ้งเตือน"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* คำแนะนำขนาดไฟล์ */}
+      {files.length === 0 && !errorMessage && (
+        hint ? (
+          <p className="text-[10.5px] text-[#6b7280]">{hint}</p>
+        ) : (
+          <p className="text-[10.5px] text-[#64748b] flex items-center gap-1">
+            <span>ℹ️</span>
+            <span>ขนาดไฟล์ไม่เกิน {maxSizeMB} MB ต่อไฟล์ (รองรับ {accept.replace(/\./g, " ").toUpperCase().trim()})</span>
+          </p>
+        )
+      )}
+
       <input
         ref={inputRef}
         type="file"

@@ -516,6 +516,26 @@ function RegistrationContent() {
       return;
     }
 
+    // ตรวจสอบขนาดไฟล์แนบ (ไม่เกิน 10 MB ต่อไฟล์)
+    const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+    const allFiles = [
+      ...photoFiles,
+      ...coverFiles,
+      ...certFiles,
+      ...idCardFiles,
+      ...sakaFiles,
+    ];
+    for (const f of allFiles) {
+      if (f.dataUrl) {
+        const base64Content = f.dataUrl.split(",")[1] || "";
+        const byteLength = (base64Content.length * 3) / 4;
+        if (byteLength > MAX_FILE_SIZE_BYTES) {
+          setFormError(`ไฟล์ "${f.name}" มีขนาดใหญ่เกินกำหนด (${(byteLength / (1024 * 1024)).toFixed(1)} MB) กรุณาลดขนาดไฟล์ให้ไม่เกิน 10 MB ต่อไฟล์`);
+          return;
+        }
+      }
+    }
+
     const documents: ApplicantDocument[] = [
       ...(docConfig.photo.enabled
         ? photoFiles.map((file, index) => toDocument("photo", file, index))
@@ -949,14 +969,19 @@ function RegistrationContent() {
 
             {/* เอกสารและรูปถ่ายผู้สมัคร */}
             <section className="min-w-0 rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs sm:p-5">
-              <div className="mb-4 flex items-center justify-between border-b border-[#f1f5f9] pb-3">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f5f9] pb-3">
                 <h2 className="flex items-center gap-2 text-[15px] font-bold text-[#16265E]">
                   <span>📎</span>
                   <span>เอกสารและรูปถ่ายผู้สมัคร</span>
                 </h2>
-                <span className="text-[11px] font-medium text-[#64748b]">
-                  ไฟล์ภาพ (JPG/PNG) หรือ PDF
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#f1f5f9] px-2.5 py-0.5 text-[11px] font-semibold text-[#475569]">
+                    📁 จำกัดไม่เกิน 10 MB / ไฟล์
+                  </span>
+                  <span className="text-[11px] font-medium text-[#64748b] hidden sm:inline">
+                    (JPG/PNG/PDF)
+                  </span>
+                </div>
               </div>
 
               <div className="space-y-4">
