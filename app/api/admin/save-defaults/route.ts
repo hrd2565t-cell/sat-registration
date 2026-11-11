@@ -115,6 +115,9 @@ export async function POST(request: Request) {
                 ...(prevQuotas._globalTimeline
                   ? { _globalTimeline: prevQuotas._globalTimeline }
                   : {}),
+                ...(prevQuotas._reviews
+                  ? { _reviews: prevQuotas._reviews }
+                  : {}),
                 _schedule: {
                   registrationDate:
                     typeof c.registrationDate === "string" && c.registrationDate.trim()

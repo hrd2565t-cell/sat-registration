@@ -1,6 +1,7 @@
 import { getSupabaseClient } from "./client";
 import type { ApplicantRecord, ApplicantDocument } from "@/lib/applications-store";
 import type { HistoricalTrainee, DutyRecord } from "@/lib/alumni-store";
+import { setCachedCourseReviews } from "@/lib/courses-store";
 import { getDocumentFromStorage } from "@/lib/document-storage";
 import type { Json, Database } from "./types";
 
@@ -462,6 +463,8 @@ export async function syncReviewToSupabase(
               notes: extra?.notes ?? null,
             },
           };
+
+          setCachedCourseReviews(targetCourseId, nextReviews);
 
           await supabase
             .from("courses")

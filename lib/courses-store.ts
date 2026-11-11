@@ -36,6 +36,11 @@ export function sanitizeQuotas(raw?: unknown, fallbackCap = 40): TargetGroupQuot
 }
 
 const cachedGlobalTimelineByCourseId = new Map<number, Record<string, unknown>>();
+export const cachedReviewsByCourseId = new Map<number, Record<string, unknown>>();
+
+export function setCachedCourseReviews(courseId: number, reviews: Record<string, unknown>) {
+  cachedReviewsByCourseId.set(courseId, reviews);
+}
 
 export function buildQuotasPayload(
   quotas: TargetGroupQuotas | undefined,
@@ -63,9 +68,16 @@ export function buildQuotasPayload(
     typeof courseId === "number"
       ? cachedGlobalTimelineByCourseId.get(courseId)
       : undefined;
+  const existingReviews =
+    typeof courseId === "number"
+      ? cachedReviewsByCourseId.get(courseId)
+      : undefined;
   const payload: Record<string, unknown> = {
     ...cleanQ,
     ...(existingGlobalTimeline ? { _globalTimeline: existingGlobalTimeline } : {}),
+    ...(existingReviews && Object.keys(existingReviews).length > 0
+      ? { _reviews: existingReviews }
+      : {}),
     _schedule: {
       registrationDate: schedule.registrationDate?.trim() || DEFAULT_GLOBAL_REGISTRATION_DATE,
       resultDate: schedule.resultDate?.trim() || DEFAULT_GLOBAL_RESULT_DATE,
@@ -300,6 +312,13 @@ function mapCloudCourse(
   const rawCloudQuotas = (c as { target_quotas?: any }).target_quotas;
   if (rawCloudQuotas?._globalTimeline && typeof rawCloudQuotas._globalTimeline === "object") {
     cachedGlobalTimelineByCourseId.set(c.id, rawCloudQuotas._globalTimeline);
+  }
+  if (rawCloudQuotas?._reviews && typeof rawCloudQuotas._reviews === "object") {
+    const existing = cachedReviewsByCourseId.get(c.id) || {};
+    cachedReviewsByCourseId.set(c.id, {
+      ...existing,
+      ...rawCloudQuotas._reviews,
+    });
   }
   const cloudSchedule = rawCloudQuotas?._schedule as EmbeddedSchedule | undefined;
   const cloudMeta = rawCloudQuotas?._metadata as Record<string, any> | undefined;
