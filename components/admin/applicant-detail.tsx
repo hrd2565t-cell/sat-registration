@@ -19,12 +19,15 @@ import {
   promoteReserveToApproved,
   reviewApplication,
   useApplication,
+  useApplications,
   type ApplicantDocument,
 } from "@/lib/applications-store";
 import { adminUser } from "@/lib/admin-data";
 import { getDocumentFromStorage } from "@/lib/document-storage";
 import { resolveSupabaseDocumentUrl } from "@/lib/supabase/sync";
 import { useAlumniStore, addTrainee } from "@/lib/alumni-store";
+import { useCourses } from "@/lib/courses-store";
+import { TARGET_GROUPS, getTargetGroupKey } from "@/lib/courses";
 
 const emptySubscribe = () => () => {};
 
@@ -35,6 +38,8 @@ function useMounted() {
     () => false
   );
 }
+
+const aiPriority = { fail: 0, review: 1, pass: 2 } as const;
 
 const aiToneStyles = {
   pass: {
@@ -86,30 +91,6 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
         {value}
       </dd>
     </div>
-  );
-}
-
-function DocumentIcon() {
-  return (
-    <svg
-      className="h-5 w-5"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      aria-hidden="true"
-    >
-      <path
-        strokeLinejoin="round"
-        strokeWidth="1.7"
-        d="M6 3.5h8l4 4v13H6z"
-      />
-      <path strokeLinejoin="round" strokeWidth="1.7" d="M14 3.5v4h4" />
-      <path
-        strokeLinecap="round"
-        strokeWidth="1.7"
-        d="M9 12h6M9 15.5h6"
-      />
-    </svg>
   );
 }
 
@@ -188,6 +169,14 @@ function ClockIcon() {
   );
 }
 
+const quickNoteTemplates = [
+  "เอกสารครบถ้วนสมบูรณ์ ตรงตามเกณฑ์",
+  "หนังสือนำส่งไม่ระบุวันที่ หรือตราประทับไม่ชัดเจน",
+  "รูปถ่ายไม่ถูกต้องตามระเบียบ",
+  "โทรประสานงานแจ้งผู้สมัครเรียบร้อยแล้ว",
+  "คุณสมบัติตรงตามเกณฑ์การพิจารณา",
+];
+
 export function ApplicantDetail({
   refId,
   mode,
@@ -196,6 +185,8 @@ export function ApplicantDetail({
   mode: "review" | "list";
 }) {
   const applicant = useApplication(refId);
+  const { applications } = useApplications();
+  const { courses } = useCourses();
   const mounted = useMounted();
   const [decision, setDecision] = useState<ReviewDecision | null>(null);
   const [selectedDocument, setSelectedDocument] =
@@ -203,6 +194,66 @@ export function ApplicantDetail({
   const [note, setNote] = useState("");
   const [notice, setNotice] = useState("");
   const [copied, setCopied] = useState(false);
+
+  // Queue navigation in review mode
+  const pendingQueue = useMemo(
+    () =>
+      applications
+        .filter((item) => item.status === "pending")
+        .sort((a, b) => {
+          const priority = aiPriority[a.ai.tone] - aiPriority[b.ai.tone];
+          if (priority !== 0) return priority;
+          return (
+            new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime()
+          );
+        }),
+    [applications]
+  );
+
+  const currentIndex = useMemo(
+    () => pendingQueue.findIndex((a) => a.ref === applicant?.ref),
+    [pendingQueue, applicant?.ref]
+  );
+  const prevApplicant = currentIndex > 0 ? pendingQueue[currentIndex - 1] : null;
+  const nextApplicant =
+    currentIndex >= 0 && currentIndex < pendingQueue.length - 1
+      ? pendingQueue[currentIndex + 1]
+      : null;
+
+  // Course & Target Group details
+  const currentCourse = useMemo(
+    () => courses.find((c) => c.id === applicant?.courseId),
+    [courses, applicant?.courseId]
+  );
+
+  const targetGroupKey = useMemo(
+    () => getTargetGroupKey(applicant?.affiliation),
+    [applicant?.affiliation]
+  );
+
+  const targetGroupObj = useMemo(
+    () => TARGET_GROUPS.find((g) => g.key === targetGroupKey),
+    [targetGroupKey]
+  );
+  const targetGroupName = targetGroupObj?.label ?? "หน่วยงานทั่วไป";
+
+  const quotaAllocated = currentCourse?.targetQuotas?.[targetGroupKey] ?? 0;
+  const approvedInGroup = useMemo(() => {
+    if (!applicant) return 0;
+    return applications.filter(
+      (a) =>
+        a.courseId === applicant.courseId &&
+        a.status === "approved" &&
+        getTargetGroupKey(a.affiliation) === targetGroupKey
+    ).length;
+  }, [applications, applicant, targetGroupKey]);
+
+  const totalApprovedInCourse = useMemo(() => {
+    if (!applicant) return 0;
+    return applications.filter(
+      (a) => a.courseId === applicant.courseId && a.status === "approved"
+    ).length;
+  }, [applications, applicant]);
 
   const photoDoc =
     applicant?.documents?.find(
@@ -402,14 +453,53 @@ export function ApplicantDetail({
 
   return (
     <div className="mx-auto w-full max-w-[1220px] pb-24 lg:pb-0">
+      {/* Top Bar with Queue Navigation */}
       <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-        <Link
-          href={backHref}
-          className="inline-flex h-8 items-center gap-1.5 rounded-[5px] px-1 text-[11.5px] font-medium text-[#1e3a8a] transition-colors hover:text-[#1e40af]"
-        >
-          <ArrowLeftIcon className="h-3.5 w-3.5" />
-          {backLabel}
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={backHref}
+            className="inline-flex h-8 items-center gap-1.5 rounded-[5px] border border-[#d1d5db] bg-white px-2.5 text-[11px] font-medium text-[#374151] transition-colors hover:bg-[#f8fafc]"
+          >
+            <ArrowLeftIcon className="h-3.5 w-3.5" />
+            <span>{backLabel}</span>
+          </Link>
+
+          {/* Queue Navigation Buttons */}
+          {mode === "review" && pendingQueue.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex h-8 items-center rounded-[5px] bg-[#e0e7ff] px-2.5 text-[10.5px] font-bold text-[#3730a3]">
+                คิวที่ {currentIndex >= 0 ? currentIndex + 1 : "-"} จาก {pendingQueue.length}
+              </span>
+              {prevApplicant ? (
+                <Link
+                  href={`/admin/applicants/${encodeURIComponent(prevApplicant.ref)}?mode=review`}
+                  className="inline-flex h-8 items-center gap-1 rounded-[5px] border border-[#cbd5e1] bg-white px-2.5 text-[11px] font-semibold text-[#1e3a8a] shadow-2xs transition hover:bg-[#eff6ff]"
+                  title={`ตรวจคนก่อนหน้า: ${prevApplicant.name}`}
+                >
+                  <span>← คนก่อนหน้า</span>
+                </Link>
+              ) : (
+                <span className="inline-flex h-8 cursor-not-allowed items-center rounded-[5px] border border-[#e2e8f0] bg-[#f8fafc] px-2.5 text-[11px] font-medium text-[#94a3b8]">
+                  ← คนก่อนหน้า
+                </span>
+              )}
+
+              {nextApplicant ? (
+                <Link
+                  href={`/admin/applicants/${encodeURIComponent(nextApplicant.ref)}?mode=review`}
+                  className="inline-flex h-8 items-center gap-1 rounded-[5px] border border-[#cbd5e1] bg-white px-2.5 text-[11px] font-semibold text-[#1e3a8a] shadow-2xs transition hover:bg-[#eff6ff]"
+                  title={`ตรวจคนถัดไป: ${nextApplicant.name}`}
+                >
+                  <span>คนถัดไป →</span>
+                </Link>
+              ) : (
+                <span className="inline-flex h-8 cursor-not-allowed items-center rounded-[5px] border border-[#e2e8f0] bg-[#f8fafc] px-2.5 text-[11px] font-medium text-[#94a3b8]">
+                  คนถัดไป →
+                </span>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <Link
@@ -463,6 +553,7 @@ export function ApplicantDetail({
         </div>
       )}
 
+      {/* Main Profile Header Card (Cleaned of duplicated action buttons) */}
       <section className="rounded-lg border border-[#e3e6ea] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.05)]">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -473,7 +564,7 @@ export function ApplicantDetail({
               "/assets/avatar-placeholder.svg"
             }
             alt={`รูปถ่าย ${applicant.name}`}
-            className="h-[76px] w-16 shrink-0 rounded-[5px] border border-[#d1d5db] object-cover"
+            className="h-[76px] w-16 shrink-0 rounded-[5px] border border-[#d1d5db] object-cover shadow-2xs"
           />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -481,6 +572,9 @@ export function ApplicantDetail({
                 {applicant.name}
               </h1>
               <StatusBadge status={applicant.status} reserveOrder={applicant.reserveOrder} />
+              <span className="inline-flex items-center rounded-full bg-[#f1f5f9] px-2.5 py-0.5 text-[10px] font-semibold text-[#475569]">
+                กลุ่ม: {targetGroupName}
+              </span>
             </div>
             <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[#4b5563]">
               {applicant.courseTitle}
@@ -502,62 +596,32 @@ export function ApplicantDetail({
             </div>
           </div>
 
-          <div className="hidden shrink-0 flex-wrap gap-2 sm:flex">
+          {/* Right side of profile header card: Status info & anchor link */}
+          <div className="hidden shrink-0 flex-col items-end gap-1.5 sm:flex">
             {applicant.status === "reserve" && (
               <button
                 type="button"
                 onClick={handlePromote}
-                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[6px] bg-[#1e3a8a] px-3.5 text-[12px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1e40af] sm:h-9"
+                className="inline-flex h-8 items-center justify-center gap-1 rounded-[5px] bg-[#1e3a8a] px-3 text-[11px] font-semibold text-white shadow-xs transition hover:bg-[#1e40af]"
               >
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                </svg>
                 เลื่อนเป็นตัวจริง
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => setDecision("approved")}
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[6px] bg-[#078A43] px-3 text-[12px] font-semibold text-white transition-colors hover:bg-[#067537] sm:h-9"
+            <a
+              href="#decision-panel"
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-[#1e3a8a] hover:underline"
             >
-              <CheckIcon />
-              อนุมัติ
-            </button>
-            <button
-              type="button"
-              onClick={() => setDecision("reserve")}
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[6px] border border-[#93c5fd] bg-[#eff6ff] px-3 text-[12px] font-semibold text-[#1e40af] transition-colors hover:bg-[#dbeafe] sm:h-9"
-            >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <circle cx="12" cy="12" r="9" strokeWidth="2" />
-                <path strokeLinecap="round" strokeWidth="2" d="M12 7v5l3 3" />
-              </svg>
-              บัญชีสำรอง
-            </button>
-            <button
-              type="button"
-              onClick={() => setDecision("action_required")}
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[6px] border border-[#fed7aa] bg-[#fff7ed] px-3 text-[12px] font-semibold text-[#c2410c] transition-colors hover:bg-[#ffedd5] sm:h-9"
-            >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              ขอเอกสารเพิ่ม
-            </button>
-            <button
-              type="button"
-              onClick={() => setDecision("rejected")}
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[6px] border border-[#d8a0a3] bg-[#fce8e9] px-3 text-[12px] font-semibold text-[#9e2a30] transition-colors hover:bg-[#f8d9da] sm:h-9"
-            >
-              <XIcon />
-              ไม่อนุมัติ
-            </button>
+              <span>ไปยังส่วนลงผลการตรวจสอบ ↓</span>
+            </a>
           </div>
         </div>
       </section>
 
+      {/* Main Content Layout */}
       <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
+        {/* Left Column: Details, Requirements, Documents & Audit Trail */}
         <div className="min-w-0 space-y-3">
+          {/* Section 1: ข้อมูลผู้สมัคร */}
           <section className="rounded-lg border border-[#e3e6ea] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.05)]">
             <SectionTitle title="ข้อมูลผู้สมัคร" />
             <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
@@ -581,10 +645,18 @@ export function ApplicantDetail({
                   </span>
                 }
               />
-              <Field label="โทรศัพท์" value={applicant.phone} />
+              <Field label="โทรศัพท์" value={applicant.phone || "-"} />
               <Field label="อีเมล" value={applicant.email || "-"} />
               <Field label="สังกัด" value={applicant.affiliation} />
               <Field label="ตำแหน่ง" value={applicant.position} />
+              <Field
+                label="กลุ่มเป้าหมายโควตา"
+                value={
+                  <span className="font-semibold text-[#1e3a8a]">
+                    {targetGroupName}
+                  </span>
+                }
+              />
               <Field label="หลักสูตรที่สมัคร" value={applicant.courseTitle} />
               <Field
                 label="วันที่สมัคร"
@@ -593,38 +665,108 @@ export function ApplicantDetail({
             </dl>
           </section>
 
+          {/* Section 2: เกณฑ์คุณสมบัติของผู้สมัครตามหลักสูตร */}
+          {currentCourse?.qualifications && currentCourse.qualifications.length > 0 && (
+            <section className="rounded-lg border border-[#e3e6ea] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.05)]">
+              <SectionTitle
+                title="เกณฑ์คุณสมบัติของผู้สมัครตามหลักสูตร"
+                description="รายการคุณสมบัติที่กำหนดไว้ในหลักสูตรนี้ เพื่อใช้ตรวจสอบเทียบกับข้อมูลผู้สมัคร"
+              />
+              <div className="mt-3 space-y-2">
+                {currentCourse.qualifications.map((q, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-start gap-2.5 rounded-[6px] border border-[#e2e8f0] bg-[#f8fafc] p-2.5 text-[11.5px] leading-relaxed text-[#334155]"
+                  >
+                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#1e3a8a] text-[9.5px] font-bold text-white">
+                      {idx + 1}
+                    </span>
+                    <span className="flex-1">{q}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Section 3: เอกสารประกอบการสมัคร */}
           <section
             id="documents"
             className="scroll-mt-16 rounded-lg border border-[#e3e6ea] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.05)]"
           >
             <SectionTitle
               title="เอกสารประกอบการสมัคร"
-              description={`แนบมา ${applicant.documents.length} รายการ`}
+              description={`แนบมา ${applicant.documents.length} รายการ (ตรวจสอบความถูกต้องและเปิดดูไฟล์จริง)`}
             />
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {applicant.documents.map((file) => (
-                <button
-                  key={file.id}
-                  type="button"
-                  onClick={() => setSelectedDocument(file)}
-                  className="flex min-h-[60px] w-full items-center gap-2.5 rounded-[6px] border border-[#e5e7eb] bg-[#fbfcfd] p-2.5 text-left transition-colors hover:border-[#9db9de] hover:bg-[#f5f9ff]"
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[5px] bg-[#e8f1fc] text-[#1e3a8a]">
-                    <DocumentIcon />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[11.5px] font-medium text-[#111827]">
-                      {getDocumentLabel(file.kind)}
-                    </span>
-                    <span className="mt-0.5 block truncate text-[10px] text-[#6b7280]">
-                      {file.name} · {file.size}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-[10px] font-semibold text-[#1e3a8a]">
-                    เปิดดู
-                  </span>
-                </button>
-              ))}
+            <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              {applicant.documents.map((file) => {
+                const isPhoto = file.kind === "photo";
+                const isPdf =
+                  file.name.toLowerCase().endsWith(".pdf") ||
+                  file.dataUrl?.startsWith("data:application/pdf");
+                const hasRealFile = Boolean(file.dataUrl);
+
+                return (
+                  <div
+                    key={file.id}
+                    className="flex flex-col justify-between rounded-[7px] border border-[#e2e8f0] bg-[#fbfcfd] p-3 transition-colors hover:border-[#93c5fd] hover:bg-[#f8fbff]"
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <span
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] ${
+                          isPhoto
+                            ? "bg-[#ede9fe] text-[#6d28d9]"
+                            : isPdf
+                            ? "bg-[#fee2e2] text-[#dc2626]"
+                            : "bg-[#e0f2fe] text-[#0284c7]"
+                        }`}
+                      >
+                        {isPhoto ? (
+                          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        ) : (
+                          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        )}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate text-[12px] font-semibold text-[#111827]">
+                            {getDocumentLabel(file.kind)}
+                          </span>
+                          <span
+                            className={`inline-flex rounded-full px-1.5 py-0.2 text-[9px] font-medium ${
+                              hasRealFile
+                                ? "bg-[#dcfce7] text-[#15803d]"
+                                : "bg-[#fef3c7] text-[#b45309]"
+                            }`}
+                          >
+                            {hasRealFile ? "ไฟล์จริง" : "ตัวอย่าง"}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 truncate text-[10px] text-[#64748b]" title={file.name}>
+                          {file.name} · {file.size}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-2.5 flex items-center justify-end gap-1.5 border-t border-[#f1f5f9] pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDocument(file)}
+                        className="inline-flex h-7 items-center gap-1 rounded-[4px] border border-[#cbd5e1] bg-white px-2.5 text-[10.5px] font-medium text-[#1e3a8a] transition hover:bg-[#f1f5f9]"
+                      >
+                        <svg className="h-3 w-3" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M2.458 10C3.732 7.943 7.523 5 10 5c2.478 0 6.268 2.943 7.542 5-1.274 2.057-5.064 5-7.542 5-2.477 0-6.268-2.943-7.542-5z" />
+                        </svg>
+                        <span>เปิดดูไฟล์</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
               {applicant.documents.length === 0 && (
                 <p className="rounded-[6px] border border-dashed border-[#d1d5db] px-3 py-6 text-center text-[11px] text-[#6b7280] sm:col-span-2">
                   ไม่มีเอกสารแนบ
@@ -633,6 +775,7 @@ export function ApplicantDetail({
             </div>
           </section>
 
+          {/* Section 4: ประวัติการดำเนินการ & หมายเหตุ */}
           <section className="rounded-lg border border-[#e3e6ea] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.05)]">
             <SectionTitle
               title="ประวัติการดำเนินการ"
@@ -645,13 +788,31 @@ export function ApplicantDetail({
               >
                 เพิ่มหมายเหตุ
               </label>
+
+              {/* Quick Note Tag Buttons */}
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] text-[#64748b]">ข้อความด่วน:</span>
+                {quickNoteTemplates.map((text, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() =>
+                      setNote((prev) => (prev ? `${prev} · ${text}` : text))
+                    }
+                    className="rounded-[4px] border border-[#e2e8f0] bg-[#f8fafc] px-2 py-0.5 text-[9.5px] text-[#475569] transition hover:border-[#93c5fd] hover:bg-[#eff6ff] hover:text-[#1e3a8a]"
+                  >
+                    + {text}
+                  </button>
+                ))}
+              </div>
+
               <textarea
                 id="applicant-note"
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 rows={2}
                 placeholder="เช่น โทรยืนยันเอกสารกับผู้สมัครแล้ว"
-                className="mt-1 block w-full resize-y rounded-[6px] border border-[#d1d5db] bg-white px-3 py-2 text-[12px] leading-relaxed text-[#1f2937] outline-none transition focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/20"
+                className="mt-2 block w-full resize-y rounded-[6px] border border-[#d1d5db] bg-white px-3 py-2 text-[12px] leading-relaxed text-[#1f2937] outline-none transition focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/20"
               />
               <div className="mt-2 flex justify-end">
                 <button
@@ -696,7 +857,9 @@ export function ApplicantDetail({
           </section>
         </div>
 
+        {/* Right Column: AI Verdict, Decision Panel & Quotas Status */}
         <div className="min-w-0 space-y-3">
+          {/* Section 1: ผลประเมินโดย AI */}
           <section
             className={`rounded-lg border p-4 shadow-[0_1px_3px_rgba(16,24,40,0.05)] ${styles.wrapper}`}
           >
@@ -742,9 +905,13 @@ export function ApplicantDetail({
             </p>
           </section>
 
-          <section className="rounded-lg border border-[#e3e6ea] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.05)]">
+          {/* Section 2: ผลการตรวจสอบ (Primary Decision Panel) */}
+          <section
+            id="decision-panel"
+            className="scroll-mt-16 rounded-lg border border-[#e3e6ea] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.05)]"
+          >
             <SectionTitle
-              title="ผลการตรวจสอบ"
+              title="ผลการตรวจสอบคุณสมบัติ"
               description="การเปลี่ยนแปลงจะมีผลกับหน้าสถานะและใบรับสมัครทันที"
             />
 
@@ -755,7 +922,7 @@ export function ApplicantDetail({
                   รอเจ้าหน้าที่ตรวจสอบ
                 </p>
                 <p className="mt-1 text-[10.5px] leading-relaxed text-[#6b5b3e]">
-                  ตรวจสอบเอกสารและคุณสมบัติ แล้วเลือกผลที่ต้องการ
+                  ตรวจสอบเอกสารและคุณสมบัติ แล้วกดเลือกผลการพิจารณาด้านล่าง
                 </p>
               </div>
             ) : (
@@ -824,11 +991,55 @@ export function ApplicantDetail({
             </div>
           </section>
 
+          {/* Section 3: ข้อมูลโควตาและสถานะที่นั่งหลักสูตร */}
           <section className="rounded-lg border border-[#e3e6ea] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.05)]">
             <h2 className="text-[12px] font-semibold text-[#111827]">
-              ข้อมูลอ้างอิง
+              สถานะโควตาและที่นั่งของหลักสูตร
             </h2>
-            <dl className="mt-2.5 space-y-2 text-[10.5px]">
+
+            {/* Target Group Quota Tracking */}
+            <div className="mt-3 rounded-[6px] border border-[#e2e8f0] bg-[#f8fafc] p-3 text-[11px]">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-[#334155]">{targetGroupName}</span>
+                <span className="font-bold text-[#1e3a8a]">
+                  {approvedInGroup} / {quotaAllocated > 0 ? quotaAllocated : "-"} คน
+                </span>
+              </div>
+              <p className="mt-0.5 text-[9.5px] text-[#64748b]">
+                โควตาเฉพาะกลุ่มเป้าหมายของผู้สมัครรายนี้
+              </p>
+
+              {quotaAllocated > 0 && (
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#e2e8f0]">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      approvedInGroup >= quotaAllocated ? "bg-[#dc2626]" : "bg-[#1e3a8a]"
+                    }`}
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.round((approvedInGroup / quotaAllocated) * 100)
+                      )}%`,
+                    }}
+                  />
+                </div>
+              )}
+
+              {quotaAllocated > 0 && approvedInGroup >= quotaAllocated && (
+                <p className="mt-2 rounded bg-[#fee2e2] px-2 py-1 text-[9.5px] font-medium text-[#b91c1c]">
+                  ⚠️ โควตากลุ่มนี้เต็มแล้ว (แนะนำพิจารณาเข้าสู่บัญชีสำรอง)
+                </p>
+              )}
+            </div>
+
+            {/* Total Course Seats */}
+            <dl className="mt-3 space-y-2 text-[10.5px]">
+              <div className="flex justify-between gap-3 border-b border-[#f1f5f9] pb-1.5">
+                <dt className="text-[#6b7280]">ที่นั่งรวมของหลักสูตร</dt>
+                <dd className="font-semibold text-[#111827]">
+                  อนุมัติแล้ว {totalApprovedInCourse} / {currentCourse?.capacity ?? 40} ที่นั่ง
+                </dd>
+              </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-[#6b7280]">เลขที่อ้างอิง</dt>
                 <dd className="font-semibold text-[#1e3a8a]">
@@ -852,6 +1063,7 @@ export function ApplicantDetail({
         </div>
       </div>
 
+      {/* Mobile Sticky Bottom Action Bar */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#dbe2ea] bg-white/95 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2.5 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur lg:hidden print:hidden">
         <div className="flex gap-2">
           {applicant.status === "reserve" && (
@@ -896,6 +1108,7 @@ export function ApplicantDetail({
         </div>
       </div>
 
+      {/* Decision Dialog Modal */}
       {decision !== null && (
         <ReviewDecisionDialog
           key={`${applicant.ref}-${decision}`}
@@ -906,6 +1119,8 @@ export function ApplicantDetail({
           onConfirm={handleDecision}
         />
       )}
+
+      {/* Document Preview Dialog */}
       <DocumentPreviewDialog
         file={selectedDocument}
         applicant={applicant}
