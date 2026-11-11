@@ -200,8 +200,54 @@ export async function refreshApplicationsFromCloud(): Promise<void> {
               ? { ...cDoc, dataUrl: localDoc.dataUrl }
               : cDoc;
           });
+
+          const localReviewedAtMs = matchingLocal.reviewedAt
+            ? Date.parse(matchingLocal.reviewedAt)
+            : 0;
+          const cloudReviewedAtMs = cloudApp.reviewedAt
+            ? Date.parse(cloudApp.reviewedAt)
+            : 0;
+
+          // ป้องกันไม่ให้สถานะ pending เก่าจาก Cloud มาทับสถานะที่แอดมินเพิ่งตัดสินใจบนเครื่อง
+          const shouldKeepLocalReview =
+            matchingLocal.status !== "pending" &&
+            (cloudApp.status === "pending" || localReviewedAtMs >= cloudReviewedAtMs);
+
+          const finalStatus = shouldKeepLocalReview
+            ? matchingLocal.status
+            : cloudApp.status;
+          const finalReviewedBy = shouldKeepLocalReview
+            ? matchingLocal.reviewedBy
+            : cloudApp.reviewedBy;
+          const finalReviewedAt = shouldKeepLocalReview
+            ? matchingLocal.reviewedAt
+            : cloudApp.reviewedAt;
+          const finalReviewReason = shouldKeepLocalReview
+            ? matchingLocal.reviewReason
+            : cloudApp.reviewReason;
+          const finalReserveOrder = shouldKeepLocalReview
+            ? matchingLocal.reserveOrder
+            : cloudApp.reserveOrder;
+
+          // รวม notes ระหว่างเครื่องกับ Cloud เพื่อไม่ให้โน้ตที่เพิ่งพิมพ์หาย
+          const localNotes = matchingLocal.notes || [];
+          const cloudNotes = cloudApp.notes || [];
+          const notesMap = new Map<string, ApplicantRecord["notes"][number]>();
+          for (const n of [...cloudNotes, ...localNotes]) {
+            if (!n || !n.text) continue;
+            const key = n.id || `${n.at}-${n.text}`;
+            notesMap.set(key, n);
+          }
+          const finalNotes = Array.from(notesMap.values());
+
           return {
             ...cloudApp,
+            status: finalStatus,
+            reviewedBy: finalReviewedBy,
+            reviewedAt: finalReviewedAt,
+            reviewReason: finalReviewReason,
+            reserveOrder: finalReserveOrder,
+            notes: finalNotes,
             documents: mergedDocs,
           };
         });
@@ -260,6 +306,14 @@ function subscribeToApplicationsRealtime() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "applications" },
+        () => {
+          lastAppsFetchAt = 0;
+          void refreshApplicationsFromCloud();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "courses" },
         () => {
           lastAppsFetchAt = 0;
           void refreshApplicationsFromCloud();
@@ -593,6 +647,7 @@ export function reviewApplication(
             ? reason.trim() || "ขอเอกสารเพิ่มเติมประกอบการพิจารณา"
             : reason.trim() || "ไม่ผ่านการตรวจสอบคุณสมบัติ";
     void syncReviewToSupabase(ref, status, noteText, reviewer, now, {
+      courseId: updatedApp?.courseId,
       notes: updatedApp?.notes,
       reserveOrder: updatedApp?.reserveOrder,
       ai: updatedApp?.ai,
@@ -642,6 +697,7 @@ export function resubmitApplicantDocuments(
   if (isSupabaseConfigured()) {
     const app = state.applications.find((a) => a.ref === ref);
     void syncReviewToSupabase(ref, "pending", noteMsg, "ผู้สมัคร", now, {
+      courseId: app?.courseId,
       notes: app?.notes,
       reserveOrder: app?.reserveOrder,
       ai: app?.ai,
@@ -715,6 +771,7 @@ export function promoteReserveToApproved(
       reviewer,
       now,
       {
+        courseId: promotedApp?.courseId,
         notes: promotedApp?.notes,
         reserveOrder: undefined,
         ai: promotedApp?.ai,
@@ -730,6 +787,7 @@ export function promoteReserveToApproved(
           reviewer,
           now,
           {
+            courseId: shiftedApp.courseId,
             notes: shiftedApp.notes,
             reserveOrder: shiftedApp.reserveOrder,
             ai: shiftedApp.ai,
@@ -783,6 +841,7 @@ export function addApplicationNote(
         updatedApp.reviewedBy || author,
         now,
         {
+          courseId: updatedApp.courseId,
           notes: updatedApp.notes,
           reserveOrder: updatedApp.reserveOrder,
           ai: updatedApp.ai,
