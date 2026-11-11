@@ -4,11 +4,17 @@ const toneStyles: Record<
   AiVerdict["tone"],
   { wrapper: string; icon: string }
 > = {
-  pass: { wrapper: "bg-[#D3F4DF] text-[#146C38]", icon: "text-[#146C38]" },
-  fail: { wrapper: "bg-[#FCD0D1] text-[#A22A32]", icon: "text-[#A22A32]" },
+  pass: {
+    wrapper: "bg-[#dcfce7] text-[#15803d] border border-[#bbf7d0]",
+    icon: "text-[#15803d]",
+  },
+  fail: {
+    wrapper: "bg-[#fee2e2] text-[#b91c1c] border border-[#fecaca]",
+    icon: "text-[#b91c1c]",
+  },
   review: {
-    wrapper: "bg-[#DCE5EE] text-[#344054]",
-    icon: "text-[#344054]",
+    wrapper: "bg-[#eff6ff] text-[#1d4ed8] border border-[#bfdbfe]",
+    icon: "text-[#2563eb]",
   },
 };
 
@@ -53,22 +59,24 @@ export function AiVerdictBadge({
 
   return (
     <div
-      className={`flex w-full items-start rounded-[5px] ${
-        compact ? "gap-1 px-1 py-1" : "gap-2 rounded-[6px] px-2.5 py-2"
+      className={`flex w-full items-start rounded-[6px] ${
+        compact ? "gap-1.5 px-2 py-1.5" : "gap-2 px-2.5 py-2"
       } ${styles.wrapper} ${className ?? ""}`}
     >
       <RobotIcon
         className={`shrink-0 ${
-          compact ? "mt-px h-2.5 w-2.5" : "mt-0.5 h-5 w-5"
+          compact ? "mt-0.5 h-3.5 w-3.5" : "mt-0.5 h-5 w-5"
         } ${styles.icon}`}
       />
       <div
         className={`min-w-0 ${
-          compact ? "text-[8px] leading-[1.3]" : "text-[10.5px] leading-relaxed"
+          compact ? "text-[9.5px] leading-[1.35]" : "text-[11px] leading-relaxed"
         }`}
       >
         <p className="font-semibold">{verdict.line1}</p>
-        <p className={compact ? "" : "mt-0.5"}>{verdict.line2}</p>
+        <p className={compact ? "text-[8.5px] opacity-90" : "mt-0.5 text-[10px] opacity-90"}>
+          {verdict.line2}
+        </p>
       </div>
     </div>
   );

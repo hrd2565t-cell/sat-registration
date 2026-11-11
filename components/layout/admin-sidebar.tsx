@@ -166,8 +166,11 @@ function SidebarContent({
           className="h-auto w-[53px]"
           priority
         />
-        <p className="mt-[5px] text-center text-[12px] font-semibold leading-[13px] text-white">
-          ฝ่ายฝึกอบรมและระเบียบ
+        <p className="mt-[5px] text-center text-[11.5px] font-semibold leading-[14px] text-white">
+          กองพัฒนาบุคลากรกีฬา
+        </p>
+        <p className="mt-0.5 text-center text-[9px] text-white/70 leading-tight">
+          ฝ่ายพัฒนากีฬาเป็นเลิศ
         </p>
       </div>
 
@@ -268,7 +271,7 @@ export function AdminSidebar({
 
   return (
     <>
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[156px] flex-col bg-[#0E2554] lg:flex print:hidden">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[180px] flex-col bg-[#0E2554] lg:flex print:hidden">
         <SidebarContent activeKey={activeKey} />
       </aside>
 

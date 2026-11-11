@@ -43,7 +43,7 @@ export function AdminShell({
         activeKey={activeKey}
       />
 
-      <div className="flex min-h-screen flex-col lg:pl-[156px] print:pl-0">
+      <div className="flex min-h-screen flex-col lg:pl-[180px] print:pl-0">
         <AdminTopbar
           title={title}
           userName={userName}
