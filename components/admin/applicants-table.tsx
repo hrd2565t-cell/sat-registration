@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { statusLabel } from "@/lib/admin-data";
 import { getCourseKeyword } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
+import { auditApplicantDocuments } from "@/lib/document-checklist";
 import {
   formatThaiDate,
   reviewApplication,
@@ -463,19 +464,48 @@ export function ApplicantsTable({
                   </div>
                 </td>
                 <td className="py-1 pl-0.5 pr-1.5">
-                  {row.fileSize ? (
-                    <Link
-                      href={`/admin/applicants/${row.ref}#documents`}
-                      className="inline-flex min-h-5 items-center gap-1 rounded-[3px] bg-[#1378D0] px-1.5 py-0.5 text-[8.5px] font-semibold text-white transition-colors hover:bg-[#0f68b5]"
-                    >
-                      <FileIcon />
-                      เปิดไฟล์ ({row.fileSize} MB)
-                    </Link>
-                  ) : (
-                    <span className="text-[9px] text-[#6b7280]">
-                      ไม่มีไฟล์
-                    </span>
-                  )}
+                  {(() => {
+                    const courseItem = courses.find((c) => c.id === row.courseId);
+                    const docAudit = auditApplicantDocuments(row, courseItem);
+
+                    return (
+                      <div className="flex flex-col items-start gap-1">
+                        {/* Document Audit Badge */}
+                        {docAudit.status === "complete" && (
+                          <span className="inline-flex items-center gap-0.5 rounded-[3px] bg-[#dcfce7] px-1.5 py-0.2 text-[8px] font-semibold text-[#15803d]">
+                            ✓ ครบ ({docAudit.attachedRequiredCount}/{docAudit.requiredCount})
+                          </span>
+                        )}
+                        {docAudit.status === "incomplete" && (
+                          <span
+                            title={`ขาดเอกสารบังคับ: ${docAudit.missingRequiredLabels.join(", ")}`}
+                            className="inline-flex items-center gap-0.5 rounded-[3px] bg-[#fef3c7] px-1.5 py-0.2 text-[8px] font-semibold text-[#b45309]"
+                          >
+                            ⚠️ ไม่ครบ ({docAudit.attachedRequiredCount}/{docAudit.requiredCount})
+                          </span>
+                        )}
+                        {docAudit.status === "none" && (
+                          <span className="inline-flex items-center rounded-[3px] bg-[#f1f5f9] px-1.5 py-0.2 text-[8px] text-[#64748b]">
+                            {row.documents?.length || 0} รายการ
+                          </span>
+                        )}
+
+                        {row.fileSize ? (
+                          <Link
+                            href={`/admin/applicants/${row.ref}#documents`}
+                            className="inline-flex min-h-5 items-center gap-1 rounded-[3px] bg-[#1378D0] px-1.5 py-0.5 text-[8.5px] font-semibold text-white transition-colors hover:bg-[#0f68b5]"
+                          >
+                            <FileIcon />
+                            เปิดไฟล์ ({row.fileSize} MB)
+                          </Link>
+                        ) : (
+                          <span className="text-[9px] text-[#6b7280]">
+                            ไม่มีไฟล์
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className="px-1 py-1">
                   <AiVerdictBadge verdict={row.ai} />

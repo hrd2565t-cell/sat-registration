@@ -16,17 +16,19 @@ export function ReviewDecisionDialog({
   open,
   decision,
   applicantName,
+  defaultReason = "",
   onClose,
   onConfirm,
 }: {
   open: boolean;
   decision: ReviewDecision;
   applicantName: string;
+  defaultReason?: string;
   onClose: () => void;
   onConfirm: (reason: string) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState(defaultReason);
   const [error, setError] = useState("");
 
   useEffect(() => {

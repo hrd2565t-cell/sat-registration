@@ -30,6 +30,7 @@ import { resolveSupabaseDocumentUrl } from "@/lib/supabase/sync";
 import { useAlumniStore, addTrainee } from "@/lib/alumni-store";
 import { useCourses } from "@/lib/courses-store";
 import { TARGET_GROUPS, getTargetGroupKey } from "@/lib/courses";
+import { auditApplicantDocuments } from "@/lib/document-checklist";
 
 const emptySubscribe = () => () => {};
 
@@ -247,6 +248,11 @@ export function ApplicantDetail({
   const currentCourse = useMemo(
     () => courses.find((c) => c.id === applicant?.courseId),
     [courses, applicant?.courseId]
+  );
+
+  const docAudit = useMemo(
+    () => auditApplicantDocuments(applicant, currentCourse),
+    [applicant, currentCourse]
   );
 
   const targetGroupKey = useMemo(
@@ -726,84 +732,216 @@ export function ApplicantDetail({
             className="scroll-mt-16 rounded-lg border border-[#e3e6ea] bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.05)]"
           >
             <SectionTitle
-              title="เอกสารประกอบการสมัคร"
-              description={`แนบมา ${applicant.documents.length} รายการ (ตรวจสอบความถูกต้องและเปิดดูไฟล์จริง)`}
+              title="เอกสารประกอบการสมัคร & การตรวจสอบตามเกณฑ์"
+              description={`แนบมา ${applicant.documents.length} รายการ · เกณฑ์บังคับ ${docAudit.attachedRequiredCount}/${docAudit.requiredCount} รายการ`}
             />
-            <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              {applicant.documents.map((file) => {
-                const isPhoto = file.kind === "photo";
-                const isPdf =
-                  file.name.toLowerCase().endsWith(".pdf") ||
-                  file.dataUrl?.startsWith("data:application/pdf");
-                const hasRealFile = Boolean(file.dataUrl);
 
-                return (
-                  <div
-                    key={file.id}
-                    className="flex flex-col justify-between rounded-[7px] border border-[#e2e8f0] bg-[#fbfcfd] p-3 transition-colors hover:border-[#93c5fd] hover:bg-[#f8fbff]"
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <span
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] ${
-                          isPhoto
-                            ? "bg-[#ede9fe] text-[#6d28d9]"
-                            : isPdf
-                            ? "bg-[#fee2e2] text-[#dc2626]"
-                            : "bg-[#e0f2fe] text-[#0284c7]"
-                        }`}
-                      >
-                        {isPhoto ? (
-                          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                        ) : (
-                          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                        )}
+            {/* Audit Status Banner */}
+            {docAudit.status === "complete" && (
+              <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] p-3 text-[#166534]">
+                <svg className="h-5 w-5 shrink-0 text-[#16a34a]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-[12.5px] font-semibold text-[#166534]">
+                      เอกสารแนบครบถ้วนตามเกณฑ์บังคับของหลักสูตร ({docAudit.attachedRequiredCount}/{docAudit.requiredCount} รายการ)
+                    </p>
+                    <span className="rounded-full bg-[#dcfce7] px-2 py-0.5 text-[10px] font-bold text-[#15803d]">
+                      ✓ เอกสารครบถ้วน
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-[#15803d]">
+                    ผู้สมัครแนบเอกสารบังคับครบตามเกณฑ์ที่หลักสูตรกำหนดแล้ว เจ้าหน้าที่สามารถเปิดดูไฟล์จริงเพื่อตรวจความถูกต้อง
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {docAudit.status === "incomplete" && (
+              <div className="mt-3 flex flex-col gap-2.5 rounded-lg border border-[#fed7aa] bg-[#fffbeb] p-3 sm:flex-row sm:items-center sm:justify-between text-[#9a3412]">
+                <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                  <svg className="h-5 w-5 shrink-0 text-[#ea580c]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-[12.5px] font-semibold text-[#9a3412]">
+                        เอกสารแนบยังไม่ครบตามเกณฑ์บังคับ (แนบแล้ว {docAudit.attachedRequiredCount}/{docAudit.requiredCount} รายการ)
+                      </p>
+                      <span className="rounded-full bg-[#ffedd5] px-2 py-0.5 text-[10px] font-bold text-[#c2410c]">
+                        ขาด {docAudit.missingRequiredCount} รายการ
                       </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="truncate text-[12px] font-semibold text-[#111827]">
-                            {getDocumentLabel(file.kind)}
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-[#c2410c]">
+                      ยังขาดเอกสารบังคับ: <span className="font-semibold">{docAudit.missingRequiredLabels.join(", ")}</span>
+                    </p>
+                  </div>
+                </div>
+                {applicant.status === "pending" && (
+                  <button
+                    type="button"
+                    onClick={() => setDecision("action_required")}
+                    className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[#ea580c] px-3.5 text-[11px] font-semibold text-white shadow-xs transition hover:bg-[#c2410c]"
+                  >
+                    <span>ขอเอกสารเพิ่ม</span>
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Course Document Checklist Breakdown */}
+            {docAudit.items.length > 0 && (
+              <div className="mt-3 overflow-hidden rounded-lg border border-[#e2e8f0]">
+                <div className="border-b border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-[11px] font-semibold text-[#334155]">
+                  รายการตรวจสอบเทียบเกณฑ์ข้อกำหนดของหลักสูตร
+                </div>
+                <div className="divide-y divide-[#f1f5f9]">
+                  {docAudit.items.map((item) => (
+                    <div
+                      key={item.key}
+                      className="flex flex-col gap-2 p-2.5 sm:flex-row sm:items-center sm:justify-between text-[11.5px]"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                            item.isAttached
+                              ? "bg-[#dcfce7] text-[#15803d]"
+                              : item.required
+                              ? "bg-[#fee2e2] text-[#dc2626]"
+                              : "bg-[#f1f5f9] text-[#64748b]"
+                          }`}
+                        >
+                          {item.isAttached ? "✓" : item.required ? "✕" : "–"}
+                        </span>
+                        <span className="font-medium text-[#1e293b]">{item.label}</span>
+                        {item.required ? (
+                          <span className="rounded bg-[#fee2e2] px-1.5 py-0.2 text-[9px] font-semibold text-[#dc2626]">
+                            บังคับ
                           </span>
+                        ) : (
+                          <span className="rounded bg-[#f1f5f9] px-1.5 py-0.2 text-[9px] text-[#64748b]">
+                            ทางเลือก
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 pl-7 sm:pl-0">
+                        {item.isAttached && item.attachedDoc ? (
+                          <>
+                            <span className="truncate text-[10.5px] text-[#64748b]" title={item.attachedDoc.name}>
+                              {item.attachedDoc.name} ({item.attachedDoc.size})
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (item.attachedDoc) setSelectedDocument(item.attachedDoc);
+                              }}
+                              className="inline-flex h-6 items-center gap-1 rounded border border-[#cbd5e1] bg-white px-2 text-[10px] font-medium text-[#1e3a8a] hover:bg-[#f1f5f9]"
+                            >
+                              เปิดดู
+                            </button>
+                          </>
+                        ) : (
                           <span
-                            className={`inline-flex rounded-full px-1.5 py-0.2 text-[9px] font-medium ${
-                              hasRealFile
-                                ? "bg-[#dcfce7] text-[#15803d]"
-                                : "bg-[#fef3c7] text-[#b45309]"
+                            className={`text-[10.5px] font-medium ${
+                              item.required ? "text-[#dc2626]" : "text-[#94a3b8]"
                             }`}
                           >
-                            {hasRealFile ? "ไฟล์จริง" : "ตัวอย่าง"}
+                            {item.required ? "ยังไม่พบเอกสารแนบ" : "ไม่ได้แนบ (ไม่บังคับ)"}
                           </span>
-                        </div>
-                        <p className="mt-0.5 truncate text-[10px] text-[#64748b]" title={file.name}>
-                          {file.name} · {file.size}
-                        </p>
+                        )}
                       </div>
                     </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-                    <div className="mt-2.5 flex items-center justify-end gap-1.5 border-t border-[#f1f5f9] pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedDocument(file)}
-                        className="inline-flex h-7 items-center gap-1 rounded-[4px] border border-[#cbd5e1] bg-white px-2.5 text-[10.5px] font-medium text-[#1e3a8a] transition hover:bg-[#f1f5f9]"
-                      >
-                        <svg className="h-3 w-3" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M2.458 10C3.732 7.943 7.523 5 10 5c2.478 0 6.268 2.943 7.542 5-1.274 2.057-5.064 5-7.542 5-2.477 0-6.268-2.943-7.542-5z" />
-                        </svg>
-                        <span>เปิดดูไฟล์</span>
-                      </button>
+            {/* All uploaded files grid */}
+            <div className="mt-4">
+              <h3 className="mb-2 text-[12px] font-semibold text-[#475569]">
+                ไฟล์แนบทั้งหมดที่บันทึกในระบบ ({applicant.documents.length} รายการ)
+              </h3>
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                {applicant.documents.map((file) => {
+                  const isPhoto = file.kind === "photo";
+                  const isPdf =
+                    file.name.toLowerCase().endsWith(".pdf") ||
+                    file.dataUrl?.startsWith("data:application/pdf");
+                  const hasRealFile = Boolean(file.dataUrl);
+
+                  return (
+                    <div
+                      key={file.id}
+                      className="flex flex-col justify-between rounded-[7px] border border-[#e2e8f0] bg-[#fbfcfd] p-3 transition-colors hover:border-[#93c5fd] hover:bg-[#f8fbff]"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <span
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] ${
+                            isPhoto
+                              ? "bg-[#ede9fe] text-[#6d28d9]"
+                              : isPdf
+                              ? "bg-[#fee2e2] text-[#dc2626]"
+                              : "bg-[#e0f2fe] text-[#0284c7]"
+                          }`}
+                        >
+                          {isPhoto ? (
+                            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          ) : (
+                            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          )}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate text-[12px] font-semibold text-[#111827]">
+                              {getDocumentLabel(file.kind)}
+                            </span>
+                            <span
+                              className={`inline-flex rounded-full px-1.5 py-0.2 text-[9px] font-medium ${
+                                hasRealFile
+                                  ? "bg-[#dcfce7] text-[#15803d]"
+                                  : "bg-[#fef3c7] text-[#b45309]"
+                              }`}
+                            >
+                              {hasRealFile ? "ไฟล์จริง" : "ตัวอย่าง"}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 truncate text-[10px] text-[#64748b]" title={file.name}>
+                            {file.name} · {file.size}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-2.5 flex items-center justify-end gap-1.5 border-t border-[#f1f5f9] pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDocument(file)}
+                          className="inline-flex h-7 items-center gap-1 rounded-[4px] border border-[#cbd5e1] bg-white px-2.5 text-[10.5px] font-medium text-[#1e3a8a] transition hover:bg-[#f1f5f9]"
+                        >
+                          <svg className="h-3 w-3" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M2.458 10C3.732 7.943 7.523 5 10 5c2.478 0 6.268 2.943 7.542 5-1.274 2.057-5.064 5-7.542 5-2.477 0-6.268-2.943-7.542-5z" />
+                          </svg>
+                          <span>เปิดดูไฟล์</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-              {applicant.documents.length === 0 && (
-                <p className="rounded-[6px] border border-dashed border-[#d1d5db] px-3 py-6 text-center text-[11px] text-[#6b7280] sm:col-span-2">
-                  ไม่มีเอกสารแนบ
-                </p>
-              )}
+                  );
+                })}
+                {applicant.documents.length === 0 && (
+                  <p className="rounded-[6px] border border-dashed border-[#d1d5db] px-3 py-6 text-center text-[11px] text-[#6b7280] sm:col-span-2">
+                    ไม่มีเอกสารแนบ
+                  </p>
+                )}
+              </div>
             </div>
           </section>
 
@@ -1159,6 +1297,11 @@ export function ApplicantDetail({
           open
           decision={decision}
           applicantName={applicant.name}
+          defaultReason={
+            decision === "action_required" && docAudit.missingRequiredLabels.length > 0
+              ? `ขอความกรุณาแนบเอกสารเพิ่มเติม: ${docAudit.missingRequiredLabels.join(", ")}`
+              : undefined
+          }
           onClose={() => setDecision(null)}
           onConfirm={handleDecision}
         />

@@ -9,6 +9,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Select } from "@/components/ui/select";
 import { getCourseKeyword } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
+import { auditApplicantDocuments } from "@/lib/document-checklist";
 import {
   formatThaiDateTime,
   getDocumentLabel,
@@ -434,8 +435,9 @@ export function ReviewQueue() {
         {/* Applicant Card Rows */}
         <div className="mt-3 space-y-2.5">
           {rows.map((item) => {
-            const courseTitle =
-              courses.find((c) => c.id === item.courseId)?.title ?? item.courseTitle;
+            const courseItem = courses.find((c) => c.id === item.courseId);
+            const courseTitle = courseItem?.title ?? item.courseTitle;
+            const docAudit = auditApplicantDocuments(item, courseItem);
 
             return (
               <div
@@ -478,16 +480,38 @@ export function ReviewQueue() {
                     </p>
 
                     {/* Metadata & Quick Document Preview Chips */}
-                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] text-[#64748b]">
-                      <span>ยื่นเมื่อ {formatThaiDateTime(item.submittedAt)}</span>
-                      {item.phone && (
-                        <span>โทร {item.phone}</span>
-                      )}
+                    <div className="mt-2 flex flex-col gap-1.5 text-[10px] text-[#64748b]">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span>ยื่นเมื่อ {formatThaiDateTime(item.submittedAt)}</span>
+                        {item.phone && <span>โทร {item.phone}</span>}
+
+                        {/* Document Audit Status Badge */}
+                        {docAudit.status === "complete" && (
+                          <span className="inline-flex items-center gap-1 rounded-[4px] bg-[#dcfce7] px-2 py-0.5 text-[9.5px] font-semibold text-[#15803d]">
+                            <span>✓</span>
+                            <span>เอกสารครบ ({docAudit.attachedRequiredCount}/{docAudit.requiredCount})</span>
+                          </span>
+                        )}
+                        {docAudit.status === "incomplete" && (
+                          <span
+                            title={`ขาดเอกสารบังคับ: ${docAudit.missingRequiredLabels.join(", ")}`}
+                            className="inline-flex items-center gap-1 rounded-[4px] bg-[#fef3c7] px-2 py-0.5 text-[9.5px] font-semibold text-[#b45309]"
+                          >
+                            <span>⚠️</span>
+                            <span>ขาดเอกสารบังคับ ({docAudit.attachedRequiredCount}/{docAudit.requiredCount}): ขาด {docAudit.missingRequiredLabels.join(", ")}</span>
+                          </span>
+                        )}
+                        {docAudit.status === "none" && (
+                          <span className="inline-flex items-center rounded-[4px] bg-[#f1f5f9] px-2 py-0.5 text-[9.5px] text-[#64748b]">
+                            เอกสาร {item.documents?.length || 0} รายการ
+                          </span>
+                        )}
+                      </div>
 
                       {/* Document Quick Preview Chips */}
                       {item.documents && item.documents.length > 0 && (
                         <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                          <span className="text-[#94a3b8]">เอกสาร:</span>
+                          <span className="text-[#94a3b8]">คลิกเปิดดู:</span>
                           {item.documents.map((doc) => {
                             const isPhoto = doc.kind === "photo";
                             const isId = doc.kind === "idcard" || doc.kind === "certificate";
