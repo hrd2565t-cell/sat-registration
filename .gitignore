@@ -46,3 +46,4 @@ opencode-history.md.json
 *.jsonl
 *.backup.json
 scratch/
+CHAT_HISTORY_EXPORT.md
