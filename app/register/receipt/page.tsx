@@ -115,6 +115,40 @@ function ReceiptContent() {
     record?.documents?.find((d) => d.kind === "photo");
   const [loadedPhotoUrl, setLoadedPhotoUrl] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [resendStatus, setResendStatus] = useState<"idle" | "sent" | "error">("idle");
+
+  const handleResendEmail = async () => {
+    if (!record || !record.email || resendingEmail) return;
+    setResendingEmail(true);
+    setResendStatus("idle");
+    try {
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: record.email,
+          applicantName: record.name,
+          receiptNo: record.receiptNo,
+          ref: record.ref,
+          courseTitle: record.courseTitle,
+          courseDate: course.date,
+          courseLocation: course.location,
+          idCard: record.idCard,
+          affiliation: record.affiliation,
+        }),
+      });
+      if (res.ok) {
+        setResendStatus("sent");
+      } else {
+        setResendStatus("error");
+      }
+    } catch {
+      setResendStatus("error");
+    } finally {
+      setResendingEmail(false);
+    }
+  };
 
   useEffect(() => {
     if (!record) return;
@@ -365,9 +399,29 @@ function ReceiptContent() {
         </Card>
 
         {record.email && (
-          <div className="mt-3 flex items-center justify-center gap-2 rounded-md border border-[#bfdbfe] bg-[#eff6ff] px-3 py-2 text-[11px] text-[#1e40af]">
-            <span>✉️</span>
-            <span>ระบบได้ส่งอีเมลยืนยันการรับสมัครไปยัง <strong>{record.email}</strong> แล้ว</span>
+          <div className="mt-3 flex flex-col items-center justify-between gap-2 rounded-md border border-[#bfdbfe] bg-[#eff6ff] p-2.5 text-[11px] text-[#1e40af] sm:flex-row">
+            <div className="flex items-center gap-2">
+              <span>✉️</span>
+              <span>
+                ระบบส่งอีเมลยืนยันไปยัง <strong>{record.email}</strong> แล้ว
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleResendEmail}
+              disabled={resendingEmail}
+              className="inline-flex h-6 shrink-0 items-center gap-1 rounded bg-[#1e40af] px-2.5 text-[10px] font-medium text-white transition hover:bg-[#1e3a8a] disabled:opacity-50"
+            >
+              {resendingEmail ? (
+                <span>กำลังส่ง...</span>
+              ) : resendStatus === "sent" ? (
+                <span>✓ ส่งซ้ำเรียบร้อย</span>
+              ) : resendStatus === "error" ? (
+                <span>⚠️ ส่งไม่สำเร็จ ลองใหม่</span>
+              ) : (
+                <span>กดส่งอีเมลอีกครั้ง</span>
+              )}
+            </button>
           </div>
         )}
 

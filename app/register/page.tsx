@@ -422,7 +422,7 @@ function RegistrationContent() {
     }
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError("");
 
@@ -602,11 +602,12 @@ function RegistrationContent() {
       documents,
     });
 
-    // ส่งอีเมลยืนยันการรับสมัครไปยังอีเมลของผู้สมัครอัตโนมัติ
+    // ส่งอีเมลยืนยันการรับสมัครไปยังอีเมลของผู้สมัครอัตโนมัติ (await + keepalive เพื่อป้องกัน browser ตัดการเชื่อมต่อตอนเปลี่ยนหน้า)
     try {
-      fetch("/api/send-email", {
+      const emailPromise = fetch("/api/send-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        keepalive: true,
         body: JSON.stringify({
           to: record.email,
           applicantName: record.name,
@@ -618,9 +619,11 @@ function RegistrationContent() {
           idCard: record.idCard,
           affiliation: record.affiliation,
         }),
-      }).catch((err) => {
-        console.warn("Email confirmation trigger error:", err);
       });
+
+      // รอผลการส่งอีเมลสูงสุด 3.5 วินาที เพื่อให้ส่งสำเร็จแน่นอนก่อนเปลี่ยนหน้า
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3500));
+      await Promise.race([emailPromise, timeoutPromise]);
     } catch (e) {
       console.warn("Failed to initiate email send:", e);
     }
