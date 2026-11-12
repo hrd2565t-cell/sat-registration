@@ -116,7 +116,7 @@ export async function POST(request: Request) {
       try {
         const { data: courseRow } = await supabase
           .from("courses")
-          .select("id, target_quotas")
+          .select("id, seats, seats_left, target_quotas")
           .eq("id", targetCourseId)
           .maybeSingle();
 
@@ -148,11 +148,32 @@ export async function POST(request: Request) {
             },
           };
 
+          // คำนวณจำนวนคนที่อนุมัติแล้วคงเหลือ
+          let approvedTotal = 0;
+          for (const k of Object.keys(nextReviews)) {
+            const rev = nextReviews[k] as { status?: string };
+            if (rev && rev.status === "approved") {
+              approvedTotal++;
+            }
+          }
+
+          const parsedCap = Number(courseRow.seats?.match(/\d+/)?.[0]);
+          const cap = Number.isFinite(parsedCap) && parsedCap > 0 ? parsedCap : 40;
+          const newSeatsLeft = Math.max(0, cap - approvedTotal);
+
+          const existingMeta =
+            quotas._metadata && typeof quotas._metadata === "object"
+              ? { ...(quotas._metadata as Record<string, unknown>) }
+              : {};
+          existingMeta.seatsLeft = newSeatsLeft;
+
           const { error: courseUpErr } = await supabase
             .from("courses")
             .update({
+              seats_left: newSeatsLeft,
               target_quotas: {
                 ...quotas,
+                _metadata: existingMeta,
                 _reviews: nextReviews,
               } as unknown as Json,
             })

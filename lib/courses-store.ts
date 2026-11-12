@@ -1306,17 +1306,14 @@ export function syncCourseSeatsWithApprovedCounts(
 
     if (
       course.capacity !== capacity ||
-      (approvedCount > 0 && course.seatsLeft !== computedSeatsLeft) ||
+      course.seatsLeft !== computedSeatsLeft ||
       course.status !== computedStatus
     ) {
       changed = true;
       return {
         ...course,
         capacity,
-        seatsLeft:
-          approvedCount > 0
-            ? computedSeatsLeft
-            : (course.seatsLeft ?? computedSeatsLeft),
+        seatsLeft: computedSeatsLeft,
         status: computedStatus,
       };
     }

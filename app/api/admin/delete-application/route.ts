@@ -102,22 +102,47 @@ export async function POST(request: Request) {
       try {
         const { data: courseRow } = await supabase
           .from("courses")
-          .select("id, target_quotas")
+          .select("id, seats, seats_left, target_quotas")
           .eq("id", targetCourseId)
           .maybeSingle();
 
         if (courseRow && courseRow.target_quotas && typeof courseRow.target_quotas === "object") {
           const quotas = { ...(courseRow.target_quotas as Record<string, unknown>) };
-          if (quotas._reviews && typeof quotas._reviews === "object") {
-            const nextReviews = { ...(quotas._reviews as Record<string, unknown>) };
-            delete nextReviews[ref];
-            quotas._reviews = nextReviews;
+          const existingReviews =
+            quotas._reviews && typeof quotas._reviews === "object"
+              ? { ...(quotas._reviews as Record<string, unknown>) }
+              : {};
 
-            await supabase
-              .from("courses")
-              .update({ target_quotas: quotas as unknown as Json })
-              .eq("id", targetCourseId);
+          delete existingReviews[ref];
+          quotas._reviews = existingReviews;
+
+          // คำนวณจำนวนคนที่อนุมัติแล้วคงเหลือ
+          let approvedRemaining = 0;
+          for (const k of Object.keys(existingReviews)) {
+            const rev = existingReviews[k] as { status?: string };
+            if (rev && rev.status === "approved") {
+              approvedRemaining++;
+            }
           }
+
+          const parsedCap = Number(courseRow.seats?.match(/\d+/)?.[0]);
+          const cap = Number.isFinite(parsedCap) && parsedCap > 0 ? parsedCap : 40;
+          const newSeatsLeft = Math.max(0, cap - approvedRemaining);
+
+          const existingMeta =
+            quotas._metadata && typeof quotas._metadata === "object"
+              ? { ...(quotas._metadata as Record<string, unknown>) }
+              : {};
+          existingMeta.seatsLeft = newSeatsLeft;
+          quotas._metadata = existingMeta;
+
+          await supabase
+            .from("courses")
+            .update({
+              seats_left: newSeatsLeft,
+              target_quotas: quotas as unknown as Json,
+            })
+            .eq("id", targetCourseId);
         }
       } catch (courseErr) {
         console.warn("Course reviews cleanup warning:", courseErr);

@@ -283,9 +283,9 @@ function buildEmailHtml(data: SendApplicationEmailRequest, siteUrl: string): str
       <div class="footer">
         <strong>กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ การกีฬาแห่งประเทศไทย (กกท.)</strong><br>
         286 ถนนรามคำแหง แขวงหัวหมาก เขตบางกะปิ กรุงเทพฯ 10240<br>
-        โทรศัพท์: 02-186-7111 ต่อ 8151<br>
-        <span style="color: #94a3b8; font-size: 10.5px; display: inline-block; margin-top: 6px;">
-          ข้อความนี้ถูกส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับอีเมลนี้
+        โทรศัพท์: 02-186-7111 ต่อ 8151 | อีเมล: <a href="mailto:hrd2565t@gmail.com" style="color: #1e3a8a; font-weight: 600; text-decoration: none;">hrd2565t@gmail.com</a><br>
+        <span style="color: #64748b; font-size: 11px; display: inline-block; margin-top: 8px;">
+          หากท่านมีข้อสงสัยหรือต้องการสอบถามข้อมูลเพิ่มเติม สามารถตอบกลับอีเมลนี้ หรือติดต่อมาที่ hrd2565t@gmail.com ได้โดยตรง
         </span>
       </div>
     </div>
@@ -334,6 +334,7 @@ export async function POST(request: Request) {
         body: JSON.stringify({
           from: fromEmail,
           to: [to],
+          reply_to: "hrd2565t@gmail.com",
           subject,
           html: emailHtml,
         }),
@@ -376,6 +377,7 @@ export async function POST(request: Request) {
 
       const info = await transporter.sendMail({
         from: process.env.EMAIL_FROM || `"กองพัฒนาบุคลากรกีฬา กกท." <${smtpUser}>`,
+        replyTo: "hrd2565t@gmail.com",
         to,
         subject,
         html: emailHtml,
