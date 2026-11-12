@@ -321,7 +321,43 @@ export async function POST(request: Request) {
 
     const subject = `[กกท.] ยืนยันการสมัครเข้ารับการฝึกอบรม: ${courseTitle} (${receiptNo})`;
 
-    // 1. ตรวจสอบการส่งผ่าน Resend API
+    // 1. ตรวจสอบการส่งผ่าน SMTP ก่อน (เช่น Gmail ของ กกท. หรือ Server ของหน่วยงาน)
+    const smtpHost = process.env.SMTP_HOST;
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+
+    if (smtpHost && smtpUser && smtpPass) {
+      try {
+        const transporter = nodemailer.createTransport({
+          host: smtpHost,
+          port: Number(process.env.SMTP_PORT || 465),
+          secure: process.env.SMTP_SECURE === "true" || process.env.SMTP_PORT === "465",
+          auth: {
+            user: smtpUser,
+            pass: smtpPass,
+          },
+        });
+
+        const info = await transporter.sendMail({
+          from: process.env.EMAIL_FROM || `"กองพัฒนาบุคลากรกีฬา กกท." <${smtpUser}>`,
+          replyTo: "hrd2565t@gmail.com",
+          to,
+          subject,
+          html: emailHtml,
+        });
+
+        return NextResponse.json({
+          success: true,
+          provider: "smtp",
+          messageId: info.messageId,
+          message: "ส่งอีเมลยืนยันสำเร็จผ่าน SMTP",
+        });
+      } catch (smtpErr) {
+        console.warn("[SMTP Warning] SMTP delivery failed, falling back:", smtpErr);
+      }
+    }
+
+    // 2. ตรวจสอบการส่งผ่าน Resend API
     const resendApiKey = process.env.RESEND_API_KEY;
     if (resendApiKey) {
       const fromEmail = process.env.EMAIL_FROM || "กองพัฒนาบุคลากรกีฬา กกท. <onboarding@resend.dev>";
@@ -357,38 +393,6 @@ export async function POST(request: Request) {
           );
         }
       }
-    }
-
-    // 2. ตรวจสอบการส่งผ่าน SMTP (เช่น Gmail, Microsoft 365, หรือ Mail Server ของ กกท.)
-    const smtpHost = process.env.SMTP_HOST;
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
-
-    if (smtpHost && smtpUser && smtpPass) {
-      const transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: Number(process.env.SMTP_PORT || 587),
-        secure: process.env.SMTP_SECURE === "true" || process.env.SMTP_PORT === "465",
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
-        },
-      });
-
-      const info = await transporter.sendMail({
-        from: process.env.EMAIL_FROM || `"กองพัฒนาบุคลากรกีฬา กกท." <${smtpUser}>`,
-        replyTo: "hrd2565t@gmail.com",
-        to,
-        subject,
-        html: emailHtml,
-      });
-
-      return NextResponse.json({
-        success: true,
-        provider: "smtp",
-        messageId: info.messageId,
-        message: "ส่งอีเมลยืนยันสำเร็จผ่าน SMTP",
-      });
     }
 
     // 3. Simulation Mode (เมื่อยังไม่ได้ตั้งค่า credentials ในสภาพแวดล้อม)
