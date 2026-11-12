@@ -386,25 +386,31 @@ function ApplicantStatusCard({
               title="ผ่านการตรวจสอบคุณสมบัติแล้ว"
               description="ยินดีด้วย! ท่านได้รับการอนุมัติเป็นผู้มีสิทธิ์เข้ารับการอบรม (ตัวจริง) กรุณาพิมพ์บัตรเข้าร่วมอบรมเพื่อนำมาแสดงในวันรายงานตัว"
               action={
-                <div className="flex w-full flex-col gap-2 sm:flex-row">
+                <div className="flex w-full flex-col gap-2">
                   <a
                     href={`/print/pass?ref=${encodeURIComponent(result.ref)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[5px] bg-[#059669] text-[11.5px] font-semibold text-white transition-colors hover:bg-[#047857]"
+                    className="flex h-9 w-full items-center justify-center gap-2 rounded-[6px] bg-[#059669] text-[12px] font-semibold text-white shadow-xs transition-colors hover:bg-[#047857] active:scale-[0.99]"
                   >
                     <DownloadIcon />
-                    พิมพ์บัตรเข้าร่วมอบรม (Pass PDF)
+                    <span>พิมพ์บัตรเข้าร่วมอบรม (Pass PDF)</span>
                   </a>
-                  <a
-                    href={`/print/receipt?ref=${encodeURIComponent(result.ref)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[5px] border border-[#0b3c92] bg-white text-[11.5px] font-semibold text-[#0b3c92] transition-colors hover:bg-[#eff6ff]"
-                  >
-                    <DownloadIcon />
-                    พิมพ์ใบรับการสมัคร (A4)
-                  </a>
+
+                  <div className="flex flex-wrap items-center justify-center gap-1 pt-0.5 text-[11px] text-[#64748b]">
+                    <span>หากต้องการใช้ประกอบการเบิกจ่ายหรือเสนอต้นสังกัด:</span>
+                    <a
+                      href={`/print/receipt?ref=${encodeURIComponent(result.ref)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-0.5 font-medium text-[#1e3a8a] underline underline-offset-2 transition-colors hover:text-[#0b3c92]"
+                    >
+                      <span>พิมพ์ใบรับการสมัคร (A4)</span>
+                      <svg className="h-3 w-3" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M7 13l6-6m0 0H7m6 0v6" />
+                      </svg>
+                    </a>
+                  </div>
                 </div>
               }
             />
