@@ -42,6 +42,73 @@ export interface ApplicantDocument {
   type?: string;
 }
 
+/**
+ * แปลงข้อความขนาดไฟล์ (เช่น "40 KB", "1.5 MB", "500 Bytes") ให้เป็นจำนวน Bytes
+ */
+export function parseDocumentSizeToBytes(sizeStr: string | number | null | undefined): number {
+  if (typeof sizeStr === "number") {
+    if (sizeStr < 1000) return Math.round(sizeStr * 1024 * 1024);
+    return Math.round(sizeStr);
+  }
+  if (!sizeStr) return 0;
+  const match = String(sizeStr).match(/([\d.]+)\s*(bytes?|kb|mb|gb)?/i);
+  if (!match) return 0;
+  const val = parseFloat(match[1]);
+  if (!Number.isFinite(val)) return 0;
+  const unit = (match[2] || "bytes").toLowerCase();
+  if (unit.startsWith("gb")) return Math.round(val * 1024 * 1024 * 1024);
+  if (unit.startsWith("mb")) return Math.round(val * 1024 * 1024);
+  if (unit.startsWith("kb")) return Math.round(val * 1024);
+  return Math.round(val);
+}
+
+/**
+ * คำนวณขนาดไฟล์รวมของเอกสารทั้งหมดในหน่วย MB สำหรับเก็บใน fileSize
+ */
+export function computeTotalFileSizeMB(documents: ApplicantDocument[] | undefined | null): number | null {
+  if (!documents || documents.length === 0) return null;
+  let totalBytes = 0;
+  for (const doc of documents) {
+    totalBytes += parseDocumentSizeToBytes(doc.size);
+  }
+  if (totalBytes <= 0) return null;
+  return Math.round((totalBytes / (1024 * 1024)) * 100) / 100;
+}
+
+/**
+ * จัดรูปแบบขนาดไฟล์รวมทั้งหมดของผู้สมัครให้แสดงผลได้อย่างถูกต้อง (เช่น "247 KB" หรือ "2.5 MB")
+ */
+export function formatApplicantTotalFileSize(applicant: ApplicantRecord | null | undefined): string {
+  if (!applicant) return "ไม่มีไฟล์";
+
+  if (applicant.documents && applicant.documents.length > 0) {
+    let totalBytes = 0;
+    for (const doc of applicant.documents) {
+      totalBytes += parseDocumentSizeToBytes(doc.size);
+    }
+    if (totalBytes > 0) {
+      if (totalBytes < 1024 * 1024) {
+        return `${Math.max(1, Math.round(totalBytes / 1024))} KB`;
+      }
+      return `${(totalBytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+  }
+
+  if (applicant.fileSize && applicant.fileSize > 0) {
+    // ป้องกันกรณีข้อมูลเดิมที่เคยบันทึกตัวเลข KB ไว้โดยตรง (เช่น 247)
+    if (applicant.fileSize >= 10) {
+      return `${Math.round(applicant.fileSize)} KB`;
+    }
+    const bytes = applicant.fileSize * 1024 * 1024;
+    if (bytes < 1024 * 1024) {
+      return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    }
+    return `${applicant.fileSize.toFixed(1)} MB`;
+  }
+
+  return "ไม่มีไฟล์";
+}
+
 export interface ReviewNote {
   id: string;
   at: string;
@@ -479,10 +546,7 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
   if (existingIndex >= 0) {
     const existing = state.applications[existingIndex];
     if (existing.status !== "rejected") {
-      const fileSize = input.documents.reduce((total, document) => {
-        const value = Number.parseFloat(document.size);
-        return total + (Number.isFinite(value) ? value : 0);
-      }, 0);
+      const fileSize = computeTotalFileSizeMB(input.documents);
 
       const updatedRecord: ApplicantRecord = {
         ...existing,
@@ -492,7 +556,7 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
         affiliation: input.affiliation,
         position: input.position.trim(),
         documents: input.documents.length > 0 ? input.documents : existing.documents,
-        fileSize: fileSize > 0 ? Math.round(fileSize * 10) / 10 : existing.fileSize,
+        fileSize: fileSize !== null ? fileSize : existing.fileSize,
         updatedAt: now,
       };
 
@@ -520,10 +584,7 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
   const nextRef = Math.max(4, ...numericRefs) + 1;
   const ref = padRef(nextRef);
   const id = Math.max(10, ...state.applications.map((item) => item.id)) + 1;
-  const fileSize = input.documents.reduce((total, document) => {
-    const value = Number.parseFloat(document.size);
-    return total + (Number.isFinite(value) ? value : 0);
-  }, 0);
+  const fileSize = computeTotalFileSizeMB(input.documents);
 
   const record: ApplicantRecord = {
     id,
@@ -540,7 +601,7 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
     courseTitle: course?.title ?? courseOption?.title ?? "หลักสูตรอบรม กกท.",
     submittedAt: now,
     updatedAt: now,
-    fileSize: fileSize > 0 ? Math.round(fileSize * 10) / 10 : null,
+    fileSize,
     documents: input.documents,
     ai: {
       tone: "review",

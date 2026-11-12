@@ -7,6 +7,7 @@ import { getCourseKeyword } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
 import { auditApplicantDocuments } from "@/lib/document-checklist";
 import {
+  formatApplicantTotalFileSize,
   formatThaiDate,
   reviewApplication,
   useApplications,
@@ -242,17 +243,20 @@ export function ApplicantsTable({
       "วันที่สมัคร",
     ];
 
-    const data = filteredRows.map((row, index) => [
-      index + 1,
-      row.ref,
-      row.name,
-      row.idCard,
-      courses.find((c) => c.id === row.courseId)?.title ?? row.course,
-      row.fileSize ? `เปิดไฟล์ (${row.fileSize} MB)` : "ไม่มีไฟล์",
-      `${row.ai.line1} ${row.ai.line2}`,
-      statusLabel(row.status),
-      formatThaiDate(row.submittedAt, true),
-    ]);
+    const data = filteredRows.map((row, index) => {
+      const fileText = formatApplicantTotalFileSize(row);
+      return [
+        index + 1,
+        row.ref,
+        row.name,
+        row.idCard,
+        courses.find((c) => c.id === row.courseId)?.title ?? row.course,
+        fileText !== "ไม่มีไฟล์" ? `เปิดไฟล์ (${fileText})` : "ไม่มีไฟล์",
+        `${row.ai.line1} ${row.ai.line2}`,
+        statusLabel(row.status),
+        formatThaiDate(row.submittedAt, true),
+      ];
+    });
 
     const escapeCell = (value: string | number) =>
       `"${String(value).replace(/"/g, '""')}"`;
@@ -490,19 +494,25 @@ export function ApplicantsTable({
                           </span>
                         )}
 
-                        {row.fileSize ? (
-                          <Link
-                            href={`/admin/applicants/${row.ref}#documents`}
-                            className="inline-flex min-h-5 items-center gap-1 rounded-[3px] bg-[#1378D0] px-1.5 py-0.5 text-[8.5px] font-semibold text-white transition-colors hover:bg-[#0f68b5]"
-                          >
-                            <FileIcon />
-                            เปิดไฟล์ ({row.fileSize} MB)
-                          </Link>
-                        ) : (
-                          <span className="text-[9px] text-[#6b7280]">
-                            ไม่มีไฟล์
-                          </span>
-                        )}
+                        {(() => {
+                          const fileText = formatApplicantTotalFileSize(row);
+                          if (fileText === "ไม่มีไฟล์") {
+                            return (
+                              <span className="text-[9px] text-[#6b7280]">
+                                ไม่มีไฟล์
+                              </span>
+                            );
+                          }
+                          return (
+                            <Link
+                              href={`/admin/applicants/${row.ref}#documents`}
+                              className="inline-flex min-h-5 items-center gap-1 rounded-[3px] bg-[#1378D0] px-1.5 py-0.5 text-[8.5px] font-semibold text-white transition-colors hover:bg-[#0f68b5]"
+                            >
+                              <FileIcon />
+                              เปิดไฟล์ ({fileText})
+                            </Link>
+                          );
+                        })()}
                       </div>
                     );
                   })()}

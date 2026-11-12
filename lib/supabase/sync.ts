@@ -1,5 +1,9 @@
 import { getSupabaseClient, isSupabaseConfigured } from "./client";
-import type { ApplicantRecord, ApplicantDocument } from "@/lib/applications-store";
+import {
+  computeTotalFileSizeMB,
+  type ApplicantRecord,
+  type ApplicantDocument,
+} from "@/lib/applications-store";
 import type { HistoricalTrainee, DutyRecord } from "@/lib/alumni-store";
 import { setCachedCourseReviews } from "@/lib/courses-store";
 import { getDocumentFromStorage } from "@/lib/document-storage";
@@ -782,7 +786,12 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
         courseTitle: app.course_title,
         submittedAt: app.submitted_at,
         updatedAt: app.updated_at,
-        fileSize: app.file_size ? app.file_size / (1024 * 1024) : null,
+        fileSize:
+          docs.length > 0
+            ? computeTotalFileSizeMB(docs)
+            : app.file_size
+            ? app.file_size / (1024 * 1024)
+            : null,
         documents: docs,
         ai: {
           tone:
