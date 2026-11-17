@@ -562,6 +562,117 @@ export async function syncReviewToSupabase(
 }
 
 /**
+ * บันทึกลำดับผู้สมัครที่ผู้บริหารกำหนด (Candidate Rankings) ขึ้น Supabase แบบ Dual-Layer
+ * 1. ตาราง applications (ฟิลด์ ai._candidateOrder)
+ * 2. ตาราง courses (ฟิลด์ target_quotas._reviews[ref].candidateOrder)
+ */
+export async function syncRankingsToSupabase(
+  rankings: { ref: string; candidateOrder: number; courseId?: number }[]
+): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  if (!supabase || rankings.length === 0) return false;
+
+  try {
+    const now = new Date().toISOString();
+
+    // 1. Dual-Layer: บันทึกลงตาราง applications (ฟิลด์ ai._candidateOrder)
+    for (const item of rankings) {
+      try {
+        const { data: appRow } = await supabase
+          .from("applications")
+          .select("ai")
+          .eq("ref", item.ref)
+          .maybeSingle();
+
+        const currentAi =
+          appRow?.ai && typeof appRow.ai === "object" && !Array.isArray(appRow.ai)
+            ? (appRow.ai as Record<string, unknown>)
+            : {
+                tone: "review",
+                line1: "รอการตรวจสอบ",
+                line2: "อยู่ระหว่างตรวจเอกสารโดยเจ้าหน้าที่",
+              };
+
+        await supabase
+          .from("applications")
+          .update({
+            ai: {
+              ...currentAi,
+              _candidateOrder: item.candidateOrder,
+            } as unknown as Json,
+            updated_at: now,
+          })
+          .eq("ref", item.ref);
+      } catch (appErr) {
+        console.warn("Direct application candidateOrder update warning:", appErr);
+      }
+    }
+
+    // 2. Dual-Layer: บันทึกลง courses.target_quotas._reviews เพื่อเป็น Secondary Single Source of Truth
+    const { data: coursesData } = await supabase
+      .from("courses")
+      .select("id, target_quotas");
+
+    if (coursesData && coursesData.length > 0) {
+      for (const c of coursesData) {
+        const quotas =
+          c.target_quotas &&
+          typeof c.target_quotas === "object" &&
+          !Array.isArray(c.target_quotas)
+            ? (c.target_quotas as Record<string, unknown>)
+            : {};
+
+        const existingReviews =
+          quotas._reviews &&
+          typeof quotas._reviews === "object" &&
+          !Array.isArray(quotas._reviews)
+            ? { ...(quotas._reviews as Record<string, unknown>) }
+            : {};
+
+        let hasChange = false;
+        for (const item of rankings) {
+          const isTargetCourse =
+            item.courseId === c.id ||
+            (!item.courseId && (existingReviews[item.ref] !== undefined || coursesData.length === 1));
+
+          if (isTargetCourse) {
+            const curReview =
+              existingReviews[item.ref] && typeof existingReviews[item.ref] === "object"
+                ? (existingReviews[item.ref] as Record<string, unknown>)
+                : {};
+
+            existingReviews[item.ref] = {
+              ...curReview,
+              candidateOrder: item.candidateOrder,
+              updatedAt: now,
+            };
+            hasChange = true;
+          }
+        }
+
+        if (hasChange) {
+          setCachedCourseReviews(c.id, existingReviews);
+          await supabase
+            .from("courses")
+            .update({
+              target_quotas: {
+                ...quotas,
+                _reviews: existingReviews,
+              } as unknown as Json,
+            })
+            .eq("id", c.id);
+        }
+      }
+    }
+
+    return true;
+  } catch (err) {
+    console.warn("Failed to sync rankings to Supabase:", err);
+    return false;
+  }
+}
+
+/**
  * Fetches applications from Supabase Cloud to hydrate the state
  */
 export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[] | null> {
@@ -620,6 +731,7 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
         reviewer?: string;
         reviewedAt?: string;
         reserveOrder?: number;
+        candidateOrder?: number;
         notes?: ApplicantRecord["notes"];
       }
     >();
@@ -637,15 +749,19 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
           for (const [rRef, rVal] of Object.entries(revs)) {
             if (rVal && typeof rVal === "object") {
               const rData = rVal as Record<string, unknown>;
-              if (typeof rData.status === "string") {
+              if (typeof rData.status === "string" || typeof rData.candidateOrder === "number") {
                 cloudReviewsMap.set(rRef, {
-                  status: rData.status as ApplicantRecord["status"],
+                  status: (rData.status as ApplicantRecord["status"]) || "pending",
                   reason: typeof rData.reason === "string" ? rData.reason : undefined,
                   reviewer: typeof rData.reviewer === "string" ? rData.reviewer : undefined,
                   reviewedAt: typeof rData.reviewedAt === "string" ? rData.reviewedAt : undefined,
                   reserveOrder:
                     typeof rData.reserveOrder === "number"
                       ? rData.reserveOrder
+                      : undefined,
+                  candidateOrder:
+                    typeof rData.candidateOrder === "number"
+                      ? rData.candidateOrder
                       : undefined,
                   notes: Array.isArray(rData.notes)
                     ? (rData.notes as ApplicantRecord["notes"])
@@ -763,9 +879,12 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
           : (app.reserve_order ?? undefined));
 
       const realCandidateOrder =
-        typeof rawAi._candidateOrder === "number"
+        (typeof cloudReview?.candidateOrder === "number"
+          ? cloudReview.candidateOrder
+          : undefined) ??
+        (typeof rawAi._candidateOrder === "number"
           ? rawAi._candidateOrder
-          : undefined;
+          : undefined);
 
       const realReviewedBy =
         cloudReview?.reviewer ?? app.reviewed_by ?? undefined;

@@ -179,11 +179,16 @@ export function ApplicantsTable({
 
   const rows = useMemo(
     () =>
-      [...applications].sort(
-        (left, right) =>
-          Date.parse(right.submittedAt) - Date.parse(left.submittedAt)
-      ),
-    [applications]
+      [...applications].sort((left, right) => {
+        // เมื่อเลือกดูเฉพาะหลักสูตร และมีการจัดลำดับผู้บริหาร ให้เรียงตาม candidateOrder ลำดับ 1, 2, 3...
+        if (courseFilter !== "") {
+          const ordA = left.candidateOrder ?? 999999;
+          const ordB = right.candidateOrder ?? 999999;
+          if (ordA !== ordB) return ordA - ordB;
+        }
+        return Date.parse(right.submittedAt) - Date.parse(left.submittedAt);
+      }),
+    [applications, courseFilter]
   );
 
   const filteredRows = useMemo(() => {

@@ -276,13 +276,26 @@ export function ApplicantExecutiveReportModal({
   // จัดการการเปลี่ยนตัวเลขลำดับในช่อง Input
   const handleOrderChange = (ref: string, val: string) => {
     const num = parseInt(val, 10);
+    const newOrder = Number.isFinite(num) && num > 0 ? num : 0;
     setOrderMap((prev) => ({
       ...prev,
-      [ref]: Number.isFinite(num) && num > 0 ? num : 0,
+      [ref]: newOrder,
     }));
   };
 
-  // จัดเรียงรายการใหม่ตามตัวเลขที่พิมพ์
+  // บันทึกลำดับลงระบบ Store และ Supabase Cloud
+  const persistRankings = (
+    mapping: Record<string, number>,
+    applicantsList: ApplicantRecord[]
+  ) => {
+    const payload = applicantsList.map((app, idx) => ({
+      ref: app.ref,
+      candidateOrder: mapping[app.ref] || idx + 1,
+    }));
+    updateApplicantRankings(payload);
+  };
+
+  // จัดเรียงรายการใหม่ตามตัวเลขที่พิมพ์ และบันทึกถาวรทันที
   const handleReorder = () => {
     const nextSorted = [...sortedApplicants].sort((a, b) => {
       const ordA = orderMap[a.ref] || 999999;
@@ -291,18 +304,32 @@ export function ApplicantExecutiveReportModal({
       return Date.parse(a.submittedAt) - Date.parse(b.submittedAt);
     });
     setSortedApplicants(nextSorted);
-    setSavedNotice("จัดเรียงลำดับเรียบร้อยแล้ว (สามารถกดปุ่มบันทึกลำดับขึ้นคลาวด์ได้)");
+    persistRankings(orderMap, nextSorted);
+    setSavedNotice("✓ จัดเรียงและบันทึกลำดับขึ้น Cloud เรียบร้อยแล้ว (เปิดครั้งต่อไปจะแสดงตามลำดับนี้เสมอ)");
     setTimeout(() => setSavedNotice(""), 4500);
   };
 
-  // บันทึกลำดับลงระบบและซิงก์ Cloud
-  const handleSaveRankings = () => {
-    const payload = sortedApplicants.map((app, idx) => ({
-      ref: app.ref,
-      candidateOrder: orderMap[app.ref] || idx + 1,
-    }));
-    updateApplicantRankings(payload);
-    setSavedNotice("✓ บันทึกลำดับขึ้นระบบและ Cloud สำเร็จเรียบร้อย ทุกเครื่องจะเห็นตรงกัน");
+  // บันทึกลำดับเมื่อออกจากช่อง input (onBlur)
+  const handleAutoSave = () => {
+    persistRankings(orderMap, sortedApplicants);
+  };
+
+  // รีเซ็ตลำดับกลับไปตามเวลาที่ยื่นใบสมัครเดิม
+  const handleResetOrder = () => {
+    if (!confirm("คุณต้องการรีเซ็ตลำดับผู้สมัครกลับไปตามเวลาที่ยื่นใบสมัครเดิมใช่หรือไม่?")) {
+      return;
+    }
+    const defaultSorted = [...sortedApplicants].sort(
+      (a, b) => Date.parse(a.submittedAt) - Date.parse(b.submittedAt)
+    );
+    const newMap: Record<string, number> = {};
+    defaultSorted.forEach((app, idx) => {
+      newMap[app.ref] = idx + 1;
+    });
+    setOrderMap(newMap);
+    setSortedApplicants(defaultSorted);
+    persistRankings(newMap, defaultSorted);
+    setSavedNotice("✓ รีเซ็ตลำดับกลับตามเวลาที่ยื่นสมัครเรียบร้อยแล้ว");
     setTimeout(() => setSavedNotice(""), 4500);
   };
 
@@ -386,31 +413,31 @@ export function ApplicantExecutiveReportModal({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Action 1: Re-order button */}
+            {/* Action 1: Re-order & Save button */}
             <button
               type="button"
               onClick={handleReorder}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-900 shadow-2xs transition hover:bg-blue-100 active:scale-[0.98] cursor-pointer"
-              title="จัดเรียงแถวในตารางใหม่ตามตัวเลขลำดับที่พิมพ์"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#16265E] px-3.5 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-[#111e4a] active:scale-[0.98] cursor-pointer"
+              title="จัดเรียงแถวตามตัวเลขลำดับที่พิมพ์ และบันทึกขึ้นระบบคลาวด์ถาวร"
             >
-              <span>🔄 จัดเรียงตามลำดับ</span>
+              <span>🔄 จัดเรียงและบันทึกลำดับ</span>
             </button>
 
-            {/* Action 2: Save Rankings button */}
+            {/* Action 2: Reset to original submission order */}
             <button
               type="button"
-              onClick={handleSaveRankings}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-[#15803d] px-3.5 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-[#166534] active:scale-[0.98] cursor-pointer"
-              title="บันทึกลำดับที่ผู้บริหารกำหนดขึ้นคลาวด์ Supabase ถาวร"
+              onClick={handleResetOrder}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-2xs transition hover:bg-gray-50 active:scale-[0.98] cursor-pointer"
+              title="รีเซ็ตลำดับกลับไปตามเวลาที่ยื่นสมัครเดิม"
             >
-              <span>💾 บันทึกลำดับ</span>
+              <span>↺ คืนค่าเดิม</span>
             </button>
 
             {/* Action 3: Print button */}
             <button
               type="button"
               onClick={handlePrint}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#16265E] px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-[#111e4a] active:scale-[0.98] cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-emerald-800 active:scale-[0.98] cursor-pointer"
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="6 9 6 2 18 2 18 9" />
@@ -507,8 +534,8 @@ export function ApplicantExecutiveReportModal({
               </div>
             </div>
 
-            {/* Strategic KPI Summary Cards (4 Cards) */}
-            <div className="mt-2.5 grid grid-cols-4 gap-2 text-xs">
+            {/* Strategic KPI Summary Cards (3 Cards) */}
+            <div className="mt-2.5 grid grid-cols-3 gap-3 text-xs">
               {/* Card 1: Total Applicants vs Capacity */}
               <div className="rounded-lg border border-gray-200 bg-gray-50/70 p-2.5">
                 <p className="text-[10px] font-semibold text-gray-500 uppercase">1. ผู้สมัครทั้งหมด / ความจุ</p>
@@ -526,7 +553,7 @@ export function ApplicantExecutiveReportModal({
                 </p>
               </div>
 
-              {/* Card 2: 5 Target Groups Breakdown (ตรงตามข้อ 3 และรูปของผู้ใช้) */}
+              {/* Card 2: 5 Target Groups Breakdown */}
               <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-2.5">
                 <div className="flex items-center justify-between">
                   <p className="text-[10px] font-bold text-blue-900 uppercase">2. กลุ่มเป้าหมาย / สังกัดหลัก</p>
@@ -556,27 +583,9 @@ export function ApplicantExecutiveReportModal({
                 </div>
               </div>
 
-              {/* Card 3: Document Readiness */}
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-2.5">
-                <p className="text-[10px] font-semibold text-emerald-800 uppercase">3. ความพร้อมเอกสารคุณสมบัติ</p>
-                <div className="mt-1.5 flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] text-emerald-700">✓ เอกสารครบ 100%</p>
-                    <p className="text-base font-black text-emerald-800">{executiveStats.docsReady} คน</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] text-amber-700">⚠️ รอเอกสารเพิ่ม</p>
-                    <p className="text-base font-black text-amber-800">{executiveStats.docsPending} คน</p>
-                  </div>
-                </div>
-                <p className="mt-1 text-[9.5px] text-gray-500">
-                  ผู้ที่เอกสารครบพร้อมพิจารณาอนุมัติทันที
-                </p>
-              </div>
-
-              {/* Card 4: Ranking & Quota Allocation */}
+              {/* Card 3: Ranking & Quota Allocation */}
               <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-2.5">
-                <p className="text-[10px] font-semibold text-purple-900 uppercase">4. ผลจัดสรรตามลำดับผู้บริหาร</p>
+                <p className="text-[10px] font-semibold text-purple-900 uppercase">3. ผลจัดสรรตามลำดับผู้บริหาร</p>
                 <div className="mt-1.5 flex items-center justify-between">
                   <div>
                     <p className="text-[10px] text-purple-800">🌟 ตัวจริง (ลำดับ 1-{capacity})</p>
@@ -594,26 +603,25 @@ export function ApplicantExecutiveReportModal({
             </div>
 
             {/* Screen Helper Banner */}
-            <div className="mt-2.5 flex items-center justify-between rounded-md bg-amber-50 px-3 py-1.5 text-[10.5px] text-amber-800 border border-amber-200 print:hidden">
+            <div className="mt-2.5 flex items-center justify-between rounded-md bg-blue-50/80 px-3 py-1.5 text-[10.5px] text-blue-900 border border-blue-200 print:hidden">
               <span className="flex items-center gap-1.5">
                 <span>💡</span>
                 <span>
-                  <strong>การจัดลำดับ:</strong> สามารถพิมพ์แก้ไขตัวเลขในช่อง <strong>"ลำดับ"</strong> ได้โดยตรง เมื่อแก้เสร็จให้กดปุ่ม <strong>"🔄 จัดเรียงตามลำดับ"</strong> และกด <strong>"💾 บันทึกลำดับ"</strong>
+                  <strong>การจัดลำดับ:</strong> สามารถพิมพ์ตัวเลขในช่อง <strong>"ลำดับ"</strong> ได้โดยตรง (ระบบจะบันทึกอัตโนมัติ) และกดปุ่ม <strong>"🔄 จัดเรียงและบันทึกลำดับ"</strong> เพื่อสลับแถว เมื่อเปิดเข้ามาใหม่ครั้งต่อไปจะจดจำลำดับนี้เสมอ
                 </span>
               </span>
             </div>
 
-            {/* Applicants Table (6 Main Columns + Executive Remarks) */}
+            {/* Applicants Table (6 Main Columns) */}
             <div className="mt-3 overflow-hidden rounded-lg border border-gray-300">
               <table className="w-full table-fixed border-collapse text-left text-[11px]">
                 <colgroup>
-                  <col className="w-[6%]" />
-                  <col className="w-[7%]" />
-                  <col className="w-[18%]" />
-                  <col className="w-[25%]" />
-                  <col className="w-[13%]" />
+                  <col className="w-[8%]" />
+                  <col className="w-[9%]" />
+                  <col className="w-[24%]" />
+                  <col className="w-[33%]" />
+                  <col className="w-[14%]" />
                   <col className="w-[12%]" />
-                  <col className="w-[19%]" />
                 </colgroup>
                 <thead>
                   <tr className="border-b border-gray-300 bg-gray-100 text-[10.5px] font-bold text-gray-900">
@@ -622,8 +630,7 @@ export function ApplicantExecutiveReportModal({
                     <th className="border-r border-gray-300 px-2 py-1.5">ชื่อ-นามสกุล</th>
                     <th className="border-r border-gray-300 px-2 py-1.5">ตำแหน่ง / หน่วยงานต้นสังกัด</th>
                     <th className="border-r border-gray-300 px-1.5 py-1.5 text-center">เบอร์โทรศัพท์</th>
-                    <th className="border-r border-gray-300 px-1.5 py-1.5 text-center">ตรวจเอกสาร</th>
-                    <th className="px-2 py-1.5 text-center bg-amber-50/60">หมายเหตุผู้บริหาร (สลับตำแหน่ง)</th>
+                    <th className="px-1.5 py-1.5 text-center">ตรวจเอกสาร</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -655,8 +662,9 @@ export function ApplicantExecutiveReportModal({
                               min="1"
                               value={orderMap[app.ref] !== undefined ? (orderMap[app.ref] === 0 ? "" : orderMap[app.ref]) : index + 1}
                               onChange={(e) => handleOrderChange(app.ref, e.target.value)}
+                              onBlur={handleAutoSave}
                               className="h-7 w-12 rounded border border-gray-300 bg-white text-center font-bold text-gray-900 shadow-2xs focus:border-[#16265E] focus:bg-blue-50/40 focus:outline-none"
-                              title="พิมพ์เปลี่ยนลำดับที่นี่"
+                              title="พิมพ์เปลี่ยนลำดับที่นี่ (บันทึกอัตโนมัติ)"
                             />
                             {isWithinCapacity ? (
                               <span className="mt-0.5 text-[8px] font-semibold text-emerald-700">ตัวจริง</span>
@@ -705,7 +713,7 @@ export function ApplicantExecutiveReportModal({
                         </td>
 
                         {/* 6. ตรวจเอกสาร */}
-                        <td className="border-r border-gray-300 px-1.5 py-1.5 text-center align-middle">
+                        <td className="px-1.5 py-1.5 text-center align-middle">
                           {audit.status === "complete" ? (
                             <span className="inline-block rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800">
                               ✓ ครบ ({audit.attachedRequiredCount}/{audit.requiredCount})
@@ -720,23 +728,13 @@ export function ApplicantExecutiveReportModal({
                             </span>
                           )}
                         </td>
-
-                        {/* 7. หมายเหตุผู้บริหาร (สำหรับสลับตำแหน่ง / ข้อสั่งการ) */}
-                        <td className="px-2 py-1.5 bg-amber-50/20 align-top">
-                          {app.reviewReason ? (
-                            <p className="text-[9px] font-medium text-gray-700 leading-tight mb-1">
-                              • {app.reviewReason}
-                            </p>
-                          ) : null}
-                          <div className="h-6 w-full border-b border-dashed border-gray-300" />
-                        </td>
                       </tr>
                     );
                   })}
 
                   {sortedApplicants.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-xs text-gray-500">
+                      <td colSpan={6} className="py-8 text-center text-xs text-gray-500">
                         ไม่พบข้อมูลผู้สมัครตามเงื่อนไขที่เลือก
                       </td>
                     </tr>
@@ -774,7 +772,7 @@ export function ApplicantExecutiveReportModal({
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input type="checkbox" className="h-3.5 w-3.5 rounded border-gray-400" />
-                      <span>เห็นชอบโดยมีเงื่อนไข / สลับลำดับตามที่ระบุในช่องหมายเหตุ</span>
+                      <span>เห็นชอบโดยมีเงื่อนไข / มอบหมายให้ปรับปรุงลำดับเพิ่มเติม</span>
                     </label>
                     <div className="flex items-center gap-2">
                       <input type="checkbox" className="h-3.5 w-3.5 rounded border-gray-400" />

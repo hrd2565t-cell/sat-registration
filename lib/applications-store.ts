@@ -22,6 +22,7 @@ import {
   deleteApplicationFromSupabase,
   fetchApplicationsFromSupabase,
   syncApplicationToSupabase,
+  syncRankingsToSupabase,
   syncReviewToSupabase,
 } from "@/lib/supabase/sync";
 import { getDocumentFromStorage } from "@/lib/document-storage";
@@ -886,28 +887,14 @@ export function updateApplicantRankings(
   emit();
 
   if (isSupabaseConfigured()) {
-    const supabase = getSupabaseClient();
-    if (supabase) {
-      for (const item of rankings) {
-        const app = state.applications.find((a) => a.ref === item.ref);
-        if (app) {
-          const aiPayload = {
-            ...app.ai,
-            _realStatus: app.status,
-            _reserveOrder: app.reserveOrder ?? null,
-            _candidateOrder: item.candidateOrder,
-            _notes: app.notes ?? [],
-          };
-          void supabase
-            .from("applications")
-            .update({
-              ai: aiPayload as unknown as import("@/lib/supabase/types").Json,
-              updated_at: now,
-            })
-            .eq("ref", item.ref);
-        }
-      }
-    }
+    const payloadWithCourse = rankings.map((r) => {
+      const app = state.applications.find((a) => a.ref === r.ref);
+      return {
+        ...r,
+        courseId: app?.courseId,
+      };
+    });
+    void syncRankingsToSupabase(payloadWithCourse);
   }
 }
 
