@@ -137,6 +137,7 @@ export interface ApplicantRecord {
   ai: AiVerdict;
   status: ApplicantStatus;
   reserveOrder?: number;
+  candidateOrder?: number;
   reviewReason?: string;
   reviewedAt?: string;
   reviewedBy?: string;
@@ -315,6 +316,7 @@ export async function refreshApplicationsFromCloud(): Promise<void> {
             reviewedAt: finalReviewedAt,
             reviewReason: finalReviewReason,
             reserveOrder: finalReserveOrder,
+            candidateOrder: matchingLocal.candidateOrder ?? cloudApp.candidateOrder,
             notes: finalNotes,
             documents: mergedDocs,
           };
@@ -855,6 +857,55 @@ export function promoteReserveToApproved(
             ai: shiftedApp.ai,
           }
         );
+      }
+    }
+  }
+}
+
+export function updateApplicantRankings(
+  rankings: { ref: string; candidateOrder: number }[]
+) {
+  const rankingMap = new Map(rankings.map((r) => [r.ref, r.candidateOrder]));
+  const now = new Date().toISOString();
+
+  state = {
+    applications: state.applications.map((app) => {
+      if (rankingMap.has(app.ref)) {
+        const newOrder = rankingMap.get(app.ref);
+        return {
+          ...app,
+          candidateOrder: newOrder,
+          updatedAt: now,
+        };
+      }
+      return app;
+    }),
+    revision: state.revision + 1,
+  };
+  persist();
+  emit();
+
+  if (isSupabaseConfigured()) {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      for (const item of rankings) {
+        const app = state.applications.find((a) => a.ref === item.ref);
+        if (app) {
+          const aiPayload = {
+            ...app.ai,
+            _realStatus: app.status,
+            _reserveOrder: app.reserveOrder ?? null,
+            _candidateOrder: item.candidateOrder,
+            _notes: app.notes ?? [],
+          };
+          void supabase
+            .from("applications")
+            .update({
+              ai: aiPayload as unknown as import("@/lib/supabase/types").Json,
+              updated_at: now,
+            })
+            .eq("ref", item.ref);
+        }
       }
     }
   }

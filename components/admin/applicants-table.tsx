@@ -378,6 +378,14 @@ export function ApplicantsTable({
               <button
                 type="button"
                 onClick={() => setShowExecutiveReportModal(true)}
+                className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[5px] border border-[#bfdbfe] bg-[#eff6ff] px-2.5 text-[12px] font-semibold text-[#1e40af] transition hover:bg-[#dbeafe] active:scale-[0.98] sm:h-[30px] sm:text-[11px]"
+                title="จัดลำดับผู้สมัคร (หมายเลข 1, 2, 3...) เสนอผู้บริหาร"
+              >
+                <span>🎯 จัดลำดับผู้สมัคร</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowExecutiveReportModal(true)}
                 className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[5px] bg-[#1e3a8a] px-3 text-[12px] font-semibold text-white shadow-xs transition hover:bg-[#1e40af] active:scale-[0.98] sm:h-[30px] sm:text-[11px]"
                 title="พิมพ์รายงานสรุปรายชื่อผู้สมัครเสนอผู้บริหารพิจารณา (PDF / A4)"
               >

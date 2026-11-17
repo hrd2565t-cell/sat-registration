@@ -45,7 +45,14 @@ export function exportApplicantsToExcel(
   ];
 
   // Data rows
-  const rows = applicants.map((app, index) => {
+  const sortedApplicants = [...applicants].sort((a, b) => {
+    if (a.candidateOrder && b.candidateOrder) return a.candidateOrder - b.candidateOrder;
+    if (a.candidateOrder) return -1;
+    if (b.candidateOrder) return 1;
+    return 0;
+  });
+
+  const rows = sortedApplicants.map((app, index) => {
     const courseName =
       courseMap.get(app.courseId) || app.courseTitle || app.course || "-";
     const statusText = statusLabel(app.status);
@@ -58,7 +65,7 @@ export function exportApplicantsToExcel(
     const reserveText = app.reserveOrder ? `ลำดับที่ ${app.reserveOrder}` : "-";
 
     return [
-      index + 1,
+      app.candidateOrder ?? (index + 1),
       app.ref,
       app.receiptNo || app.ref,
       app.name,

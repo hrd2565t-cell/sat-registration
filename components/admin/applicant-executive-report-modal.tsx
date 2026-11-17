@@ -1,10 +1,16 @@
 "use client";
 
-import { useMemo, useEffect, useRef } from "react";
+import { useMemo, useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import type { ApplicantRecord } from "@/lib/applications-store";
+import {
+  type ApplicantRecord,
+  type ApplicantDocument,
+  updateApplicantRankings,
+} from "@/lib/applications-store";
 import type { Course } from "@/lib/courses";
 import { auditApplicantDocuments } from "@/lib/document-checklist";
+import { getDocumentFromStorage } from "@/lib/document-storage";
+import { resolveSupabaseDocumentUrl } from "@/lib/supabase/sync";
 
 interface ApplicantExecutiveReportModalProps {
   isOpen: boolean;
@@ -15,15 +21,173 @@ interface ApplicantExecutiveReportModalProps {
   statusFilter?: string;
 }
 
+/**
+ * จำแนกกลุ่มเป้าหมาย / สังกัดหลัก ทั้ง 5 กลุ่มของ กกท.
+ */
+function classifyTargetGroup(affiliation: string = ""): {
+  key: "sat" | "nsdf" | "nationalAssoc" | "provincialAssoc" | "external";
+  label: string;
+  shortLabel: string;
+  badgeClass: string;
+} {
+  const text = (affiliation || "").toLowerCase();
+  if (text.includes("การกีฬาแห่งประเทศไทย") || text.includes("กกท")) {
+    return {
+      key: "sat",
+      label: "การกีฬาแห่งประเทศไทย",
+      shortLabel: "กกท.",
+      badgeClass: "bg-blue-100 text-blue-900 border-blue-200",
+    };
+  }
+  if (text.includes("กองทุน") || text.includes("nsdf")) {
+    return {
+      key: "nsdf",
+      label: "กองทุนพัฒนาการกีฬาแห่งชาติ",
+      shortLabel: "กองทุนกีฬาฯ",
+      badgeClass: "bg-amber-100 text-amber-900 border-amber-200",
+    };
+  }
+  if (text.includes("จังหวัด")) {
+    return {
+      key: "provincialAssoc",
+      label: "สมาคมกีฬาแห่งจังหวัด",
+      shortLabel: "สมาคมกีฬาจังหวัด",
+      badgeClass: "bg-emerald-100 text-emerald-900 border-emerald-200",
+    };
+  }
+  if (text.includes("สมาคมกีฬา")) {
+    return {
+      key: "nationalAssoc",
+      label: "สมาคมกีฬาแห่งประเทศไทย",
+      shortLabel: "สมาคมกีฬาแห่งประเทศไทย",
+      badgeClass: "bg-purple-100 text-purple-900 border-purple-200",
+    };
+  }
+  return {
+    key: "external",
+    label: "หน่วยงานภายนอก",
+    shortLabel: "หน่วยงานภายนอก",
+    badgeClass: "bg-gray-100 text-gray-800 border-gray-300",
+  };
+}
+
+/**
+ * คอมโพเนนต์แสดงรูปถ่ายหน้าตรงของผู้สมัครในขนาด Passport
+ */
+function ApplicantPhotoCell({
+  documents,
+  name,
+}: {
+  documents?: ApplicantDocument[];
+  name: string;
+}) {
+  const photoDoc = documents?.find((d) => d.kind === "photo");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(
+    photoDoc?.dataUrl?.startsWith("data:") ? photoDoc.dataUrl : null
+  );
+
+  useEffect(() => {
+    let active = true;
+    if (!photoDoc) {
+      setPhotoUrl(null);
+      return;
+    }
+    if (photoDoc.dataUrl?.startsWith("data:")) {
+      setPhotoUrl(photoDoc.dataUrl);
+      return;
+    }
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem(`sat-doc-${photoDoc.id}`);
+      if (cached) {
+        setPhotoUrl(cached);
+        return;
+      }
+    }
+    (async () => {
+      if (photoDoc.id) {
+        const localDoc = await getDocumentFromStorage(photoDoc.id, photoDoc.name);
+        if (active && localDoc?.dataUrl) {
+          setPhotoUrl(localDoc.dataUrl);
+          return;
+        }
+      }
+      if (photoDoc.dataUrl) {
+        const resolved = await resolveSupabaseDocumentUrl(photoDoc.dataUrl);
+        if (active && resolved) {
+          setPhotoUrl(resolved);
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [photoDoc?.id, photoDoc?.name, photoDoc?.dataUrl]);
+
+  return (
+    <div className="relative mx-auto h-12 w-10 shrink-0 overflow-hidden rounded-[4px] border border-gray-300 bg-gray-100 shadow-2xs print:border-gray-400">
+      {photoUrl ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={photoUrl}
+          alt={`รูปถ่าย ${name}`}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-gray-100 text-gray-400">
+          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+          </svg>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ApplicantExecutiveReportModal({
   isOpen,
   onClose,
   applicants,
   course,
   courses,
-  statusFilter = "all",
 }: ApplicantExecutiveReportModalProps) {
   const printDocRef = useRef<HTMLDivElement>(null);
+  const [savedNotice, setSavedNotice] = useState<string>("");
+
+  // Map เก็บตัวเลขลำดับของผู้สมัครแต่ละคน (แก้ไขตัวเลขได้โดยตรง)
+  const [orderMap, setOrderMap] = useState<Record<string, number>>(() => {
+    const initial: Record<string, number> = {};
+    applicants.forEach((app, idx) => {
+      initial[app.ref] = app.candidateOrder ?? idx + 1;
+    });
+    return initial;
+  });
+
+  // รายชื่อผู้สมัครที่เรียงตามลำดับที่ผู้บริหารกำหนด
+  const [sortedApplicants, setSortedApplicants] = useState<ApplicantRecord[]>(() => {
+    return [...applicants].sort((a, b) => {
+      const ordA = a.candidateOrder ?? 999999;
+      const ordB = b.candidateOrder ?? 999999;
+      if (ordA !== ordB) return ordA - ordB;
+      return Date.parse(a.submittedAt) - Date.parse(b.submittedAt);
+    });
+  });
+
+  // Sync state เมื่อ applicants prop เปลี่ยน
+  useEffect(() => {
+    const nextMap: Record<string, number> = {};
+    applicants.forEach((app, idx) => {
+      nextMap[app.ref] = app.candidateOrder ?? idx + 1;
+    });
+    setOrderMap(nextMap);
+
+    const nextSorted = [...applicants].sort((a, b) => {
+      const ordA = a.candidateOrder ?? 999999;
+      const ordB = b.candidateOrder ?? 999999;
+      if (ordA !== ordB) return ordA - ordB;
+      return Date.parse(a.submittedAt) - Date.parse(b.submittedAt);
+    });
+    setSortedApplicants(nextSorted);
+  }, [applicants]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -47,32 +211,100 @@ export function ApplicantExecutiveReportModal({
     return `${d} ${m} พ.ศ. ${y}`;
   }, []);
 
-  const stats = useMemo(() => {
-    let approved = 0;
-    let reserve = 0;
-    let pending = 0;
-    let actionRequired = 0;
-    let rejected = 0;
+  // การคำนวณสถิติความจุ และ 5 กลุ่มเป้าหมาย
+  const capacity = course?.capacity || Number(course?.seats?.match(/\d+/)?.[0]) || 40;
+  const targetQuotas = course?.targetQuotas || {
+    sat: 5,
+    nationalAssoc: 15,
+    provincialAssoc: 15,
+    nsdf: 0,
+    external: 5,
+  };
 
-    for (const app of applicants) {
-      if (app.status === "approved") approved++;
-      else if (app.status === "reserve") reserve++;
-      else if (app.status === "action_required") actionRequired++;
-      else if (app.status === "rejected") rejected++;
-      else pending++;
+  const executiveStats = useMemo(() => {
+    let docsReady = 0;
+    let docsPending = 0;
+    const groupCounts = {
+      sat: 0,
+      nsdf: 0,
+      nationalAssoc: 0,
+      provincialAssoc: 0,
+      external: 0,
+    };
+
+    for (const app of sortedApplicants) {
+      const courseObj = courses.find((c) => c.id === app.courseId);
+      const audit = auditApplicantDocuments(app, courseObj);
+      if (audit.status === "complete") {
+        docsReady++;
+      } else {
+        docsPending++;
+      }
+
+      const grp = classifyTargetGroup(app.affiliation);
+      groupCounts[grp.key]++;
     }
 
+    // คำนวณจำนวนตัวจริง vs สำรอง ตามลำดับที่ระบุ
+    let candidateApproved = 0;
+    let candidateReserve = 0;
+    sortedApplicants.forEach((app) => {
+      const currentOrder = orderMap[app.ref] ?? 999;
+      if (currentOrder <= capacity) {
+        candidateApproved++;
+      } else {
+        candidateReserve++;
+      }
+    });
+
+    const occupancyRate = capacity > 0 ? Math.round((sortedApplicants.length / capacity) * 100) : 0;
+
     return {
-      total: applicants.length,
-      approved,
-      reserve,
-      pending,
-      actionRequired,
-      rejected,
+      total: sortedApplicants.length,
+      capacity,
+      occupancyRate,
+      groupCounts,
+      docsReady,
+      docsPending,
+      candidateApproved,
+      candidateReserve,
     };
-  }, [applicants]);
+  }, [capacity, courses, orderMap, sortedApplicants]);
 
   if (!isOpen) return null;
+
+  // จัดการการเปลี่ยนตัวเลขลำดับในช่อง Input
+  const handleOrderChange = (ref: string, val: string) => {
+    const num = parseInt(val, 10);
+    setOrderMap((prev) => ({
+      ...prev,
+      [ref]: Number.isFinite(num) && num > 0 ? num : 0,
+    }));
+  };
+
+  // จัดเรียงรายการใหม่ตามตัวเลขที่พิมพ์
+  const handleReorder = () => {
+    const nextSorted = [...sortedApplicants].sort((a, b) => {
+      const ordA = orderMap[a.ref] || 999999;
+      const ordB = orderMap[b.ref] || 999999;
+      if (ordA !== ordB) return ordA - ordB;
+      return Date.parse(a.submittedAt) - Date.parse(b.submittedAt);
+    });
+    setSortedApplicants(nextSorted);
+    setSavedNotice("จัดเรียงลำดับเรียบร้อยแล้ว (สามารถกดปุ่มบันทึกลำดับขึ้นคลาวด์ได้)");
+    setTimeout(() => setSavedNotice(""), 4500);
+  };
+
+  // บันทึกลำดับลงระบบและซิงก์ Cloud
+  const handleSaveRankings = () => {
+    const payload = sortedApplicants.map((app, idx) => ({
+      ref: app.ref,
+      candidateOrder: orderMap[app.ref] || idx + 1,
+    }));
+    updateApplicantRankings(payload);
+    setSavedNotice("✓ บันทึกลำดับขึ้นระบบและ Cloud สำเร็จเรียบร้อย ทุกเครื่องจะเห็นตรงกัน");
+    setTimeout(() => setSavedNotice(""), 4500);
+  };
 
   const handlePrint = () => {
     window.print();
@@ -84,7 +316,7 @@ export function ApplicantExecutiveReportModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-2 sm:p-4 backdrop-blur-xs print:static print:inset-auto print:block print:bg-white print:p-0">
-      {/* Dynamic Print CSS to ensure only the report prints cleanly in landscape */}
+      {/* Print CSS Rules */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -130,7 +362,7 @@ export function ApplicantExecutiveReportModal({
       />
 
       {/* Modal Dialog Card */}
-      <div className="relative my-auto flex max-h-[96vh] w-full max-w-[1240px] flex-col rounded-2xl bg-white shadow-2xl print:my-0 print:max-h-none print:w-full print:rounded-none print:shadow-none">
+      <div className="relative my-auto flex max-h-[96vh] w-full max-w-[1280px] flex-col rounded-2xl bg-white shadow-2xl print:my-0 print:max-h-none print:w-full print:rounded-none print:shadow-none">
         {/* Top Control Bar (Hidden on Print) */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-gray-50/90 px-6 py-3.5 print:hidden">
           <div className="flex items-center gap-3">
@@ -145,15 +377,36 @@ export function ApplicantExecutiveReportModal({
             </div>
             <div>
               <h3 className="text-sm font-bold text-[#16265E] sm:text-base">
-                พิมพ์รายงานสรุปรายชื่อผู้สมัครเสนอผู้บริหารพิจารณา (Executive Report)
+                พิมพ์รายงานสรุปรายชื่อผู้สมัครเสนอผู้บริหาร (Executive Report & Ranking)
               </h3>
               <p className="text-[11px] text-gray-500">
-                เอกสารทางการ A4 แนวนอน (Landscape) พร้อมช่องหมายเหตุสำหรับผู้บริหารพิจารณาสลับตำแหน่ง และช่องลงนาม
+                พิมพ์ตัวเลขลำดับ (1, 2, 3...) ได้โดยตรง พร้อมรูปถ่ายหน้าตรง และ 5 กลุ่มเป้าหมาย/สังกัดหลัก กกท.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Action 1: Re-order button */}
+            <button
+              type="button"
+              onClick={handleReorder}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-blue-300 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-900 shadow-2xs transition hover:bg-blue-100 active:scale-[0.98] cursor-pointer"
+              title="จัดเรียงแถวในตารางใหม่ตามตัวเลขลำดับที่พิมพ์"
+            >
+              <span>🔄 จัดเรียงตามลำดับ</span>
+            </button>
+
+            {/* Action 2: Save Rankings button */}
+            <button
+              type="button"
+              onClick={handleSaveRankings}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#15803d] px-3.5 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-[#166534] active:scale-[0.98] cursor-pointer"
+              title="บันทึกลำดับที่ผู้บริหารกำหนดขึ้นคลาวด์ Supabase ถาวร"
+            >
+              <span>💾 บันทึกลำดับ</span>
+            </button>
+
+            {/* Action 3: Print button */}
             <button
               type="button"
               onClick={handlePrint}
@@ -166,6 +419,8 @@ export function ApplicantExecutiveReportModal({
               </svg>
               <span>🖨️ พิมพ์เอกสาร / บันทึก PDF</span>
             </button>
+
+            {/* Action 4: Close button */}
             <button
               type="button"
               onClick={onClose}
@@ -176,12 +431,19 @@ export function ApplicantExecutiveReportModal({
           </div>
         </div>
 
-        {/* Scrollable Preview Wrapper */}
+        {/* Saved Toast Notification */}
+        {savedNotice && (
+          <div className="bg-emerald-600 px-6 py-2 text-xs font-semibold text-white print:hidden">
+            {savedNotice}
+          </div>
+        )}
+
+        {/* Scrollable Preview Container */}
         <div className="overflow-y-auto p-4 sm:p-6 print:p-0 print:overflow-visible">
           {/* Document Sheet */}
           <div
             ref={printDocRef}
-            className="executive-print-container mx-auto w-full max-w-[1150px] bg-white p-6 text-gray-900 border border-gray-200 shadow-xs print:border-0 print:shadow-none print:p-0"
+            className="executive-print-container mx-auto w-full max-w-[1180px] bg-white p-6 text-gray-900 border border-gray-200 shadow-xs print:border-0 print:shadow-none print:p-0"
             style={{ fontFamily: "'Sarabun', 'Noto Sans Thai', sans-serif" }}
           >
             {/* Header: Official SAT Branding & Emblem */}
@@ -213,7 +475,9 @@ export function ApplicantExecutiveReportModal({
                 <span className="inline-block rounded-md bg-blue-50 px-2.5 py-0.5 font-bold text-[#16265E] border border-blue-200">
                   เอกสารเสนอผู้บริหาร
                 </span>
-                <p className="mt-1 text-gray-600">วันที่พิมพ์รายงาน: <strong className="text-gray-900">{printedDateThai}</strong></p>
+                <p className="mt-1 text-gray-600">
+                  วันที่พิมพ์รายงาน: <strong className="text-gray-900">{printedDateThai}</strong>
+                </p>
                 <p className="text-[10px] text-gray-500">ระบบรับสมัครบุคลากรกีฬา กกท. ออนไลน์</p>
               </div>
             </div>
@@ -237,130 +501,211 @@ export function ApplicantExecutiveReportModal({
                 </div>
                 {course?.seats && (
                   <div className="text-right font-medium text-gray-600">
-                    ความจุที่เปิดรับ: <strong className="text-blue-900">{course.seats}</strong>
+                    ความจุเปิดรับ: <strong className="text-blue-900">{course.seats}</strong>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Summary KPI Strip */}
-            <div className="mt-2.5 grid grid-cols-5 gap-2 text-center text-xs">
-              <div className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5">
-                <p className="text-[10px] text-gray-500">ผู้สมัครในรายงาน</p>
-                <p className="text-sm font-black text-gray-800">{stats.total} <span className="text-[10px] font-normal">คน</span></p>
+            {/* Strategic KPI Summary Cards (4 Cards) */}
+            <div className="mt-2.5 grid grid-cols-4 gap-2 text-xs">
+              {/* Card 1: Total Applicants vs Capacity */}
+              <div className="rounded-lg border border-gray-200 bg-gray-50/70 p-2.5">
+                <p className="text-[10px] font-semibold text-gray-500 uppercase">1. ผู้สมัครทั้งหมด / ความจุ</p>
+                <div className="mt-1 flex items-baseline gap-1.5">
+                  <span className="text-lg font-black text-gray-900">{executiveStats.total}</span>
+                  <span className="text-xs text-gray-500 font-medium">/ {capacity} ที่นั่ง</span>
+                </div>
+                <p className="mt-0.5 text-[10px] text-gray-600">
+                  คิดเป็น <strong>{executiveStats.occupancyRate}%</strong>{" "}
+                  {executiveStats.total > capacity ? (
+                    <span className="font-bold text-rose-600">(เกินโควตา {executiveStats.total - capacity} คน)</span>
+                  ) : (
+                    <span className="text-emerald-700 font-medium">(อยู่ในเกณฑ์ความจุ)</span>
+                  )}
+                </p>
               </div>
-              <div className="rounded-md border border-emerald-200 bg-emerald-50/60 px-2 py-1.5">
-                <p className="text-[10px] text-emerald-800">ผ่านคุณสมบัติ (ตัวจริง)</p>
-                <p className="text-sm font-black text-emerald-700">{stats.approved} <span className="text-[10px] font-normal">คน</span></p>
+
+              {/* Card 2: 5 Target Groups Breakdown (ตรงตามข้อ 3 และรูปของผู้ใช้) */}
+              <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-2.5">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-bold text-blue-900 uppercase">2. กลุ่มเป้าหมาย / สังกัดหลัก</p>
+                  <span className="text-[9px] text-blue-700 font-semibold">(5 กลุ่มสังกัด)</span>
+                </div>
+                <div className="mt-1 space-y-0.5 text-[9.5px] leading-tight text-gray-700">
+                  <div className="flex justify-between">
+                    <span>🏛️ กกท.:</span>
+                    <strong>{executiveStats.groupCounts.sat} <span className="font-normal text-gray-500">(เป้า {targetQuotas.sat})</span></strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>💰 กองทุนกีฬาฯ:</span>
+                    <strong>{executiveStats.groupCounts.nsdf} <span className="font-normal text-gray-500">(เป้า {targetQuotas.nsdf})</span></strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>🏅 สมาคมแห่งประเทศ:</span>
+                    <strong>{executiveStats.groupCounts.nationalAssoc} <span className="font-normal text-gray-500">(เป้า {targetQuotas.nationalAssoc})</span></strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>🗺️ สมาคมจังหวัด:</span>
+                    <strong>{executiveStats.groupCounts.provincialAssoc} <span className="font-normal text-gray-500">(เป้า {targetQuotas.provincialAssoc})</span></strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>🏢 หน่วยงานภายนอก:</span>
+                    <strong>{executiveStats.groupCounts.external} <span className="font-normal text-gray-500">(เป้า {targetQuotas.external})</span></strong>
+                  </div>
+                </div>
               </div>
-              <div className="rounded-md border border-blue-200 bg-blue-50/60 px-2 py-1.5">
-                <p className="text-[10px] text-blue-800">บัญชีสำรอง</p>
-                <p className="text-sm font-black text-blue-700">{stats.reserve} <span className="text-[10px] font-normal">คน</span></p>
+
+              {/* Card 3: Document Readiness */}
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-2.5">
+                <p className="text-[10px] font-semibold text-emerald-800 uppercase">3. ความพร้อมเอกสารคุณสมบัติ</p>
+                <div className="mt-1.5 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] text-emerald-700">✓ เอกสารครบ 100%</p>
+                    <p className="text-base font-black text-emerald-800">{executiveStats.docsReady} คน</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] text-amber-700">⚠️ รอเอกสารเพิ่ม</p>
+                    <p className="text-base font-black text-amber-800">{executiveStats.docsPending} คน</p>
+                  </div>
+                </div>
+                <p className="mt-1 text-[9.5px] text-gray-500">
+                  ผู้ที่เอกสารครบพร้อมพิจารณาอนุมัติทันที
+                </p>
               </div>
-              <div className="rounded-md border border-amber-200 bg-amber-50/60 px-2 py-1.5">
-                <p className="text-[10px] text-amber-800">รอการตรวจสอบ</p>
-                <p className="text-sm font-black text-amber-700">{stats.pending + stats.actionRequired} <span className="text-[10px] font-normal">คน</span></p>
-              </div>
-              <div className="rounded-md border border-rose-200 bg-rose-50/60 px-2 py-1.5">
-                <p className="text-[10px] text-rose-800">ไม่ผ่านคุณสมบัติ</p>
-                <p className="text-sm font-black text-rose-700">{stats.rejected} <span className="text-[10px] font-normal">คน</span></p>
+
+              {/* Card 4: Ranking & Quota Allocation */}
+              <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-2.5">
+                <p className="text-[10px] font-semibold text-purple-900 uppercase">4. ผลจัดสรรตามลำดับผู้บริหาร</p>
+                <div className="mt-1.5 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] text-purple-800">🌟 ตัวจริง (ลำดับ 1-{capacity})</p>
+                    <p className="text-base font-black text-purple-900">{executiveStats.candidateApproved} คน</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] text-gray-600">⏳ บัญชีสำรอง</p>
+                    <p className="text-base font-black text-gray-700">{executiveStats.candidateReserve} คน</p>
+                  </div>
+                </div>
+                <p className="mt-1 text-[9.5px] text-gray-500">
+                  จัดลำดับตามตัวเลขที่กำหนดในตาราง
+                </p>
               </div>
             </div>
 
-            {/* Applicants Executive Table */}
+            {/* Screen Helper Banner */}
+            <div className="mt-2.5 flex items-center justify-between rounded-md bg-amber-50 px-3 py-1.5 text-[10.5px] text-amber-800 border border-amber-200 print:hidden">
+              <span className="flex items-center gap-1.5">
+                <span>💡</span>
+                <span>
+                  <strong>การจัดลำดับ:</strong> สามารถพิมพ์แก้ไขตัวเลขในช่อง <strong>"ลำดับ"</strong> ได้โดยตรง เมื่อแก้เสร็จให้กดปุ่ม <strong>"🔄 จัดเรียงตามลำดับ"</strong> และกด <strong>"💾 บันทึกลำดับ"</strong>
+                </span>
+              </span>
+            </div>
+
+            {/* Applicants Table (6 Main Columns + Executive Remarks) */}
             <div className="mt-3 overflow-hidden rounded-lg border border-gray-300">
               <table className="w-full table-fixed border-collapse text-left text-[11px]">
                 <colgroup>
-                  <col className="w-[4%]" />
-                  <col className="w-[10%]" />
-                  <col className="w-[15%]" />
-                  <col className="w-[13%]" />
+                  <col className="w-[6%]" />
+                  <col className="w-[7%]" />
                   <col className="w-[18%]" />
-                  <col className="w-[11%]" />
-                  <col className="w-[9%]" />
-                  <col className="w-[10%]" />
-                  <col className="w-[10%]" />
+                  <col className="w-[25%]" />
+                  <col className="w-[13%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[19%]" />
                 </colgroup>
                 <thead>
                   <tr className="border-b border-gray-300 bg-gray-100 text-[10.5px] font-bold text-gray-900">
-                    <th className="border-r border-gray-300 px-1.5 py-1.5 text-center">ลำดับ</th>
-                    <th className="border-r border-gray-300 px-1.5 py-1.5 text-center">รหัสใบสมัคร</th>
+                    <th className="border-r border-gray-300 px-1 py-1.5 text-center">ลำดับ</th>
+                    <th className="border-r border-gray-300 px-1 py-1.5 text-center">รูปผู้สมัคร</th>
                     <th className="border-r border-gray-300 px-2 py-1.5">ชื่อ-นามสกุล</th>
-                    <th className="border-r border-gray-300 px-1.5 py-1.5 text-center">เลขบัตรประชาชน</th>
                     <th className="border-r border-gray-300 px-2 py-1.5">ตำแหน่ง / หน่วยงานต้นสังกัด</th>
                     <th className="border-r border-gray-300 px-1.5 py-1.5 text-center">เบอร์โทรศัพท์</th>
                     <th className="border-r border-gray-300 px-1.5 py-1.5 text-center">ตรวจเอกสาร</th>
-                    <th className="border-r border-gray-300 px-1.5 py-1.5 text-center">สถานะการพิจารณา</th>
-                    <th className="px-2 py-1.5 text-center bg-amber-50/50">หมายเหตุผู้บริหาร (สลับตำแหน่ง)</th>
+                    <th className="px-2 py-1.5 text-center bg-amber-50/60">หมายเหตุผู้บริหาร (สลับตำแหน่ง)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {applicants.map((app, index) => {
+                  {sortedApplicants.map((app, index) => {
                     const courseObj = courses.find((c) => c.id === app.courseId);
                     const audit = auditApplicantDocuments(app, courseObj);
+                    const group = classifyTargetGroup(app.affiliation);
+                    const currentOrderNum = orderMap[app.ref] ?? index + 1;
+                    const isWithinCapacity = currentOrderNum <= capacity && currentOrderNum > 0;
+
                     const formattedIdCard = app.idCard?.replace(
                       /(\d{1})(\d{4})(\d{5})(\d{2})(\d{1})/,
                       "$1-$2-$3-$4-$5"
                     ) || "-";
 
-                    let statusBadge = (
-                      <span className="font-semibold text-amber-700">รอตรวจสอบ</span>
-                    );
-                    if (app.status === "approved") {
-                      statusBadge = (
-                        <span className="font-bold text-emerald-700">✓ ผ่านคุณสมบัติ</span>
-                      );
-                    } else if (app.status === "reserve") {
-                      statusBadge = (
-                        <span className="font-bold text-blue-700">
-                          สำรอง {app.reserveOrder ? `#${app.reserveOrder}` : ""}
-                        </span>
-                      );
-                    } else if (app.status === "action_required") {
-                      statusBadge = (
-                        <span className="font-semibold text-orange-700">ขอเอกสารเพิ่ม</span>
-                      );
-                    } else if (app.status === "rejected") {
-                      statusBadge = (
-                        <span className="font-semibold text-rose-700">ไม่ผ่าน</span>
-                      );
-                    }
-
                     return (
                       <tr key={app.ref} className="text-[10px] text-gray-800 hover:bg-gray-50/50">
-                        {/* 1. ลำดับ (Index) */}
-                        <td className="border-r border-gray-300 px-1.5 py-1.5 text-center font-bold text-gray-900">
-                          {index + 1}
+                        {/* 1. ลำดับ (ช่องพิมพ์ตัวเลขโดยตรงบนหน้าจอ / ตัวเลขข้อความคมชัดตอนพิมพ์) */}
+                        <td className="border-r border-gray-300 px-1 py-1.5 text-center align-middle">
+                          {/* Print Mode: Plain bold text */}
+                          <div className="hidden print:block font-black text-sm text-gray-900">
+                            {currentOrderNum}
+                          </div>
+
+                          {/* Screen Mode: Interactive number input */}
+                          <div className="flex flex-col items-center justify-center print:hidden">
+                            <input
+                              type="number"
+                              min="1"
+                              value={orderMap[app.ref] !== undefined ? (orderMap[app.ref] === 0 ? "" : orderMap[app.ref]) : index + 1}
+                              onChange={(e) => handleOrderChange(app.ref, e.target.value)}
+                              className="h-7 w-12 rounded border border-gray-300 bg-white text-center font-bold text-gray-900 shadow-2xs focus:border-[#16265E] focus:bg-blue-50/40 focus:outline-none"
+                              title="พิมพ์เปลี่ยนลำดับที่นี่"
+                            />
+                            {isWithinCapacity ? (
+                              <span className="mt-0.5 text-[8px] font-semibold text-emerald-700">ตัวจริง</span>
+                            ) : (
+                              <span className="mt-0.5 text-[8px] font-semibold text-blue-700">สำรอง</span>
+                            )}
+                          </div>
                         </td>
 
-                        {/* 2. รหัสใบสมัคร */}
-                        <td className="border-r border-gray-300 px-1.5 py-1.5 text-center font-mono font-bold text-[#16265E]">
-                          {app.ref}
+                        {/* 2. รูปผู้สมัคร (ขนาด Passport คมชัด) */}
+                        <td className="border-r border-gray-300 px-1 py-1.5 text-center align-middle">
+                          <ApplicantPhotoCell documents={app.documents} name={app.name} />
                         </td>
 
-                        {/* 3. ชื่อ-นามสกุล */}
-                        <td className="border-r border-gray-300 px-2 py-1.5 font-bold text-gray-900 leading-snug">
-                          {app.name}
+                        {/* 3. ชื่อ-นามสกุล และ เลขบัตร ปชช. */}
+                        <td className="border-r border-gray-300 px-2 py-1.5 leading-tight align-middle">
+                          <p className="font-bold text-gray-900 text-[11px]">{app.name}</p>
+                          <p className="mt-0.5 font-mono text-[9px] text-gray-500">
+                            {formattedIdCard}
+                          </p>
+                          <p className="text-[8.5px] font-mono text-gray-400">
+                            รหัส: {app.ref}
+                          </p>
                         </td>
 
-                        {/* 4. เลขบัตรประชาชน */}
-                        <td className="border-r border-gray-300 px-1.5 py-1.5 text-center font-mono text-[9.5px]">
-                          {formattedIdCard}
+                        {/* 4. ตำแหน่ง / หน่วยงานต้นสังกัด และ 5 กลุ่มเป้าหมายหลัก */}
+                        <td className="border-r border-gray-300 px-2 py-1.5 leading-snug align-middle">
+                          <p className="font-semibold text-gray-900 text-[10.5px]">
+                            {app.position || "-"}
+                          </p>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                            <span className={`inline-block rounded px-1.5 py-0.2 text-[8.5px] font-bold border ${group.badgeClass}`}>
+                              {group.label}
+                            </span>
+                          </div>
+                          {app.affiliation && app.affiliation !== group.label && (
+                            <p className="mt-0.5 text-[9px] text-gray-600 line-clamp-1">
+                              {app.affiliation}
+                            </p>
+                          )}
                         </td>
 
-                        {/* 5. ตำแหน่ง และ สังกัด */}
-                        <td className="border-r border-gray-300 px-2 py-1.5 leading-tight">
-                          <p className="font-semibold text-gray-900">{app.position || "-"}</p>
-                          <p className="text-[9px] text-gray-600">{app.affiliation || "-"}</p>
-                        </td>
-
-                        {/* 6. เบอร์โทรศัพท์ */}
-                        <td className="border-r border-gray-300 px-1.5 py-1.5 text-center font-mono text-[9.5px]">
+                        {/* 5. เบอร์โทรศัพท์ */}
+                        <td className="border-r border-gray-300 px-1.5 py-1.5 text-center font-mono text-[10px] align-middle">
                           {app.phone || "-"}
                         </td>
 
-                        {/* 7. ตรวจเอกสาร */}
-                        <td className="border-r border-gray-300 px-1.5 py-1.5 text-center">
+                        {/* 6. ตรวจเอกสาร */}
+                        <td className="border-r border-gray-300 px-1.5 py-1.5 text-center align-middle">
                           {audit.status === "complete" ? (
                             <span className="inline-block rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800">
                               ✓ ครบ ({audit.attachedRequiredCount}/{audit.requiredCount})
@@ -376,12 +721,7 @@ export function ApplicantExecutiveReportModal({
                           )}
                         </td>
 
-                        {/* 8. สถานะการพิจารณา */}
-                        <td className="border-r border-gray-300 px-1.5 py-1.5 text-center text-[9.5px]">
-                          {statusBadge}
-                        </td>
-
-                        {/* 9. หมายเหตุ (สำหรับผู้บริหารบันทึกความเห็น / สลับตำแหน่ง) */}
+                        {/* 7. หมายเหตุผู้บริหาร (สำหรับสลับตำแหน่ง / ข้อสั่งการ) */}
                         <td className="px-2 py-1.5 bg-amber-50/20 align-top">
                           {app.reviewReason ? (
                             <p className="text-[9px] font-medium text-gray-700 leading-tight mb-1">
@@ -394,9 +734,9 @@ export function ApplicantExecutiveReportModal({
                     );
                   })}
 
-                  {applicants.length === 0 && (
+                  {sortedApplicants.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="py-8 text-center text-xs text-gray-500">
+                      <td colSpan={7} className="py-8 text-center text-xs text-gray-500">
                         ไม่พบข้อมูลผู้สมัครตามเงื่อนไขที่เลือก
                       </td>
                     </tr>
@@ -412,7 +752,7 @@ export function ApplicantExecutiveReportModal({
                 <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-3.5">
                   <p className="font-bold text-[#16265E]">เรียน ผู้บริหารเพื่อโปรดพิจารณา</p>
                   <p className="mt-1 text-[11px] text-gray-600 leading-relaxed">
-                    ได้ตรวจสอบคุณสมบัติและเอกสารประกอบการสมัครเข้ารับการฝึกอบรมของรายชื่อข้างต้นถูกต้องตามเกณฑ์ระเบียบเรียบร้อยแล้ว จึงเรียนมาเพื่อโปรดพิจารณาอนุมัติ / จัดลำดับ
+                    ได้ตรวจสอบคุณสมบัติ เอกสารประกอบ และสัดส่วน 5 กลุ่มเป้าหมายของผู้สมัครเข้ารับการฝึกอบรมเรียบร้อยแล้ว จึงเรียนมาเพื่อโปรดพิจารณาอนุมัติ / จัดลำดับผู้มีสิทธิ์เข้ารับการฝึกอบรม
                   </p>
 
                   <div className="mt-6 text-center">

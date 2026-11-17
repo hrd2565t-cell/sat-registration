@@ -162,6 +162,7 @@ export async function syncApplicationToSupabase(
       ...record.ai,
       _realStatus: record.status,
       _reserveOrder: record.reserveOrder ?? null,
+      _candidateOrder: record.candidateOrder ?? null,
       _notes: record.notes ?? [],
     };
 
@@ -761,6 +762,11 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
           ? rawAi._reserveOrder
           : (app.reserve_order ?? undefined));
 
+      const realCandidateOrder =
+        typeof rawAi._candidateOrder === "number"
+          ? rawAi._candidateOrder
+          : undefined;
+
       const realReviewedBy =
         cloudReview?.reviewer ?? app.reviewed_by ?? undefined;
       const realReviewedAt =
@@ -805,6 +811,7 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
         },
         status: realStatus,
         reserveOrder: realReserveOrder,
+        candidateOrder: realCandidateOrder,
         reviewReason: realReviewReason,
         reviewedAt: realReviewedAt,
         reviewedBy: realReviewedBy,
