@@ -16,6 +16,7 @@ import { exportApplicantsToExcel } from "@/lib/export-excel";
 import { AiVerdictBadge } from "@/components/admin/ai-verdict-badge";
 import { ReviewDecisionDialog } from "@/components/admin/review-decision-dialog";
 import { DeleteApplicantDialog } from "@/components/admin/delete-applicant-dialog";
+import { ApplicantExecutiveReportModal } from "@/components/admin/applicant-executive-report-modal";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { Pagination } from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
@@ -163,6 +164,7 @@ export function ApplicantsTable({
     ref: string;
     name: string;
   } | null>(null);
+  const [showExecutiveReportModal, setShowExecutiveReportModal] = useState(false);
 
   const courseOptions = useMemo(
     () => [
@@ -375,10 +377,24 @@ export function ApplicantsTable({
               </button>
               <button
                 type="button"
-                onClick={() => window.print()}
-                className="inline-flex h-9 items-center gap-1 whitespace-nowrap rounded-[5px] bg-[#e5e7eb] px-3 text-[12px] font-medium text-[#1f2937] transition-colors hover:bg-[#d1d5db] sm:h-[30px] sm:text-[11px]"
+                onClick={() => setShowExecutiveReportModal(true)}
+                className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[5px] bg-[#1e3a8a] px-3 text-[12px] font-semibold text-white shadow-xs transition hover:bg-[#1e40af] active:scale-[0.98] sm:h-[30px] sm:text-[11px]"
+                title="พิมพ์รายงานสรุปรายชื่อผู้สมัครเสนอผู้บริหารพิจารณา (PDF / A4)"
               >
-                พิมพ์รายงาน (PDF)
+                <svg
+                  className="h-3.5 w-3.5 shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="6 9 6 2 18 2 18 9" />
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                  <rect x="6" y="14" width="12" height="8" />
+                </svg>
+                <span>พิมพ์รายงาน (PDF)</span>
               </button>
             </div>
           )}
@@ -424,15 +440,15 @@ export function ApplicantsTable({
           </thead>
 
           <tbody>
-            {visibleRows.map((row) => (
+            {visibleRows.map((row, index) => (
               <tr
                 key={row.ref}
                 data-testid="applicant-row"
                 data-ref={row.ref}
                 className="h-[48px] border-b border-[#e7eaee] align-middle text-[9.5px] text-[#1f2937] transition-colors hover:bg-[#f8fafc]"
               >
-                <td className="px-1.5 py-1 text-center text-[#374151]">
-                  {row.id}
+                <td className="px-1.5 py-1 text-center font-medium text-[#374151]">
+                  {startIndex + index + 1}
                 </td>
                 <td className="px-1.5 py-1">
                   <span className="whitespace-nowrap font-medium text-[#1e3a8a]">
@@ -708,6 +724,17 @@ export function ApplicantsTable({
             setNotice(`ลบใบสมัครของ ${deleteTarget.name} (รหัส ${deleteTarget.ref}) สำเร็จเรียบร้อยแล้ว`);
             setDeleteTarget(null);
           }}
+        />
+      )}
+
+      {showExecutiveReportModal && (
+        <ApplicantExecutiveReportModal
+          isOpen={showExecutiveReportModal}
+          onClose={() => setShowExecutiveReportModal(false)}
+          applicants={filteredRows}
+          course={courses.find((c) => c.id === Number(courseFilter))}
+          courses={courses}
+          statusFilter={statusFilter}
         />
       )}
     </section>
