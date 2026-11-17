@@ -174,7 +174,7 @@ export function CourseDetailDialog({
               </div>
               <div className="flex items-center gap-2">
                 <a
-                  href={course.announcementFile.dataUrl}
+                  href={`/api/announcements/${course.id}?download=1`}
                   download={course.announcementFile.name}
                   className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-800 transition active:scale-95"
                 >

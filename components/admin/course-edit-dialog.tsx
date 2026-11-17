@@ -1479,6 +1479,7 @@ export function CourseEditDialog({
           isOpen={Boolean(previewPdfModal)}
           onClose={() => setPreviewPdfModal(null)}
           pdfUrl={previewPdfModal}
+          courseId={course.id}
           fileName={currentAnnouncement?.name}
           fileSize={currentAnnouncement?.fileSize}
           title={`ประกาศรายชื่อผู้มีสิทธิ์เข้ารับการฝึกอบรม: ${course.title}`}

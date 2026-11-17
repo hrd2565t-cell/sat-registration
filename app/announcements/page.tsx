@@ -32,6 +32,7 @@ function AnnouncementsContent() {
   const [statusFilter, setStatusFilter] = useState<"all" | "published" | "pending">("all");
   const [previewFile, setPreviewFile] = useState<{
     file: CourseAnnouncementFile;
+    courseId: number;
     courseTitle: string;
   } | null>(null);
 
@@ -272,6 +273,7 @@ function AnnouncementsContent() {
                           onClick={() =>
                             setPreviewFile({
                               file: course.announcementFile!,
+                              courseId: course.id,
                               courseTitle: course.title,
                             })
                           }
@@ -282,7 +284,7 @@ function AnnouncementsContent() {
                         </button>
 
                         <a
-                          href={course.announcementFile!.dataUrl}
+                          href={`/api/announcements/${course.id}?download=1`}
                           download={course.announcementFile!.name}
                           className="flex-1 lg:flex-initial inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-xs font-bold text-emerald-900 shadow-2xs transition hover:bg-emerald-100 active:scale-95"
                         >
@@ -334,6 +336,7 @@ function AnnouncementsContent() {
           isOpen={Boolean(previewFile)}
           onClose={() => setPreviewFile(null)}
           pdfUrl={previewFile.file.dataUrl}
+          courseId={previewFile.courseId}
           fileName={previewFile.file.name}
           fileSize={previewFile.file.fileSize}
           title={`ประกาศรายชื่อผู้มีสิทธิ์เข้ารับการฝึกอบรม: ${previewFile.courseTitle}`}

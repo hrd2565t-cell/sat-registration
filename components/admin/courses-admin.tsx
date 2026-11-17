@@ -144,6 +144,7 @@ export function CoursesAdmin() {
   const [notice, setNotice] = useState("");
   const [previewPdf, setPreviewPdf] = useState<{
     url: string;
+    courseId?: number;
     name?: string;
     title: string;
   } | null>(null);
@@ -582,7 +583,8 @@ export function CoursesAdmin() {
                         type="button"
                         onClick={() =>
                           setPreviewPdf({
-                            url: course.announcementFile!.dataUrl!,
+                            url: course.announcementFile!.dataUrl || `/api/announcements/${course.id}`,
+                            courseId: course.id,
                             name: course.announcementFile!.name,
                             title: course.title,
                           })
@@ -657,6 +659,7 @@ export function CoursesAdmin() {
           isOpen={Boolean(previewPdf)}
           onClose={() => setPreviewPdf(null)}
           pdfUrl={previewPdf.url}
+          courseId={previewPdf.courseId}
           fileName={previewPdf.name}
           title={`ประกาศรายชื่อผู้มีสิทธิ์เข้ารับการฝึกอบรม: ${previewPdf.title}`}
           subtitle="การกีฬาแห่งประเทศไทย (กกท.) · กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ"

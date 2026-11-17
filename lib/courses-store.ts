@@ -481,10 +481,20 @@ function mapCloudCourse(
           },
         }
       : seed?.documentConfig,
-    announcementFile:
-      cloudMeta && cloudMeta.announcementFile !== undefined
-        ? (cloudMeta.announcementFile as import("@/lib/courses").CourseAnnouncementFile)
-        : existing?.announcementFile ?? seed?.announcementFile ?? null,
+    announcementFile: (() => {
+      const rawAnn =
+        cloudMeta && cloudMeta.announcementFile !== undefined
+          ? (cloudMeta.announcementFile as import("@/lib/courses").CourseAnnouncementFile)
+          : existing?.announcementFile ?? seed?.announcementFile ?? null;
+      if (!rawAnn) return null;
+      if (rawAnn.dataUrl?.includes("/sat-documents/")) {
+        return {
+          ...rawAnn,
+          dataUrl: `/api/announcements/${c.id}`,
+        };
+      }
+      return rawAnn;
+    })(),
   };
 }
 
@@ -1366,13 +1376,14 @@ export async function uploadCourseAnnouncementPdf(
 
     let publicUrl = dataUrl;
     if (isSupabaseConfigured()) {
-      const uploadedUrl = await uploadDocumentToSupabaseStorage(
+      const uploadedPath = await uploadDocumentToSupabaseStorage(
         "sat-documents",
         storagePath,
         dataUrl
       );
-      if (uploadedUrl) {
-        publicUrl = uploadedUrl;
+      if (uploadedPath) {
+        // ใช้ Local Stream API Route เสมอ เนื่องจากถัง sat-documents เป็น Private Bucket
+        publicUrl = `/api/announcements/${courseId}`;
       }
     }
 
