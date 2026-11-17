@@ -27,9 +27,10 @@ import {
   type TargetGroupQuotas,
   type CourseDocumentConfig,
 } from "@/lib/courses";
-import { getSeedCourse, useCourses, type CourseUpdate } from "@/lib/courses-store";
+import { getSeedCourse, useCourses, uploadCourseAnnouncementPdf, type CourseUpdate } from "@/lib/courses-store";
 import { useSportsEvents } from "@/lib/sports-events-store";
 import { ThaiCalendarRangePicker } from "@/components/ui/thai-calendar-picker";
+import { PdfPreviewModal } from "@/components/ui/pdf-preview-modal";
 import {
   ACCEPTED_IMAGE_TYPES,
   MAX_SOURCE_IMAGE_BYTES,
@@ -154,6 +155,29 @@ export function CourseEditDialog({
     getCourseDocumentConfig(course)
   );
   const [error, setError] = useState("");
+
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const [currentAnnouncement, setCurrentAnnouncement] = useState<import("@/lib/courses").CourseAnnouncementFile | null>(
+    course.announcementFile ?? null
+  );
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [previewPdfModal, setPreviewPdfModal] = useState<string | null>(null);
+
+  const handlePdfChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      setError("กรุณาเลือกไฟล์เอกสารนามสกุล .pdf เท่านั้น");
+      return;
+    }
+    if (file.size > 30 * 1024 * 1024) {
+      setError("ขนาดไฟล์ PDF ต้องไม่เกิน 30 MB");
+      return;
+    }
+    setPdfFile(file);
+    setError("");
+  };
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -323,9 +347,9 @@ export function CourseEditDialog({
     (c) => c.id !== course.id && isCourseDateOverlapping(date, c.date)
   );
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (imageBusy) return;
+    if (imageBusy || pdfBusy) return;
 
     const trimmedTitle = title.trim();
     const trimmedShortTitle = shortTitle.trim();
@@ -382,6 +406,16 @@ export function CourseEditDialog({
       .map((s) => s.trim())
       .filter(Boolean);
 
+    let finalAnnouncement = currentAnnouncement;
+    if (pdfFile) {
+      setPdfBusy(true);
+      const uploaded = await uploadCourseAnnouncementPdf(course.id, pdfFile);
+      if (uploaded) {
+        finalAnnouncement = uploaded;
+      }
+      setPdfBusy(false);
+    }
+
     const result = onSave({
       title: trimmedTitle,
       shortTitle: trimmedShortTitle || undefined,
@@ -403,6 +437,7 @@ export function CourseEditDialog({
       satSupport: satSup,
       expensesPolicy: expensesPolicy.trim(),
       documentConfig: docConfig,
+      announcementFile: finalAnnouncement,
       ...(course.id === 0 || image !== course.image ? { image } : {}),
     });
     if (typeof result === "string") {
@@ -1305,6 +1340,113 @@ export function CourseEditDialog({
                 className="mt-1 w-full resize-y rounded-[5px] border border-[#d1d5db] bg-white px-3 py-2 text-[12.5px] leading-relaxed text-[#1f2937] outline-none transition focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/20"
               />
             </div>
+
+            {/* Section: เอกสารประกาศรายชื่อผู้มีสิทธิ์เข้ารับการฝึกอบรม (ลงนามโดยผู้ว่าการ กกท.) */}
+            <div className="border-t border-[#e5e7eb] pt-3">
+              <h3 className="text-[12px] font-bold text-[#16265E] flex items-center gap-1.5">
+                <span>📢</span>
+                <span>เอกสารประกาศรายชื่อผู้มีสิทธิ์เข้ารับการฝึกอบรม (ลงนามโดยผู้ว่าการ กกท.)</span>
+              </h3>
+              <p className="mt-0.5 text-[11px] text-[#6b7280]">
+                แนบไฟล์สแกน PDF ที่ผู้ว่าการการกีฬาแห่งประเทศไทยลงนามแล้ว เพื่อเผยแพร่สู่บอร์ดประกาศสาธารณะ
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] p-3 text-xs">
+              <input
+                ref={pdfInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                onChange={handlePdfChange}
+              />
+
+              {pdfFile ? (
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-emerald-900">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-base">📄</span>
+                    <div className="min-w-0">
+                      <p className="font-bold truncate text-[11.5px]">{pdfFile.name}</p>
+                      <p className="text-[10px] text-emerald-700">
+                        พร้อมอัปโหลด ({(pdfFile.size / 1024).toFixed(1)} KB) · จะถูกบันทึกเมื่อกด "บันทึกการแก้ไข"
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => pdfInputRef.current?.click()}
+                      className="rounded border border-emerald-300 bg-white px-2 py-1 text-[10.5px] font-semibold text-emerald-800 hover:bg-emerald-50 cursor-pointer"
+                    >
+                      เปลี่ยนไฟล์
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPdfFile(null)}
+                      className="rounded border border-red-200 bg-white px-2 py-1 text-[10.5px] font-semibold text-red-600 hover:bg-red-50 cursor-pointer"
+                    >
+                      ยกเลิก
+                    </button>
+                  </div>
+                </div>
+              ) : currentAnnouncement ? (
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50/70 p-2.5 text-blue-950">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-base">📄</span>
+                    <div className="min-w-0">
+                      <p className="font-bold truncate text-[11.5px]">{currentAnnouncement.name}</p>
+                      <p className="text-[10px] text-blue-700">
+                        เผยแพร่อยู่ในระบบ {currentAnnouncement.fileSize ? `(${currentAnnouncement.fileSize})` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewPdfModal(currentAnnouncement.dataUrl || null)}
+                      className="rounded border border-blue-300 bg-white px-2 py-1 text-[10.5px] font-semibold text-blue-800 hover:bg-blue-50 cursor-pointer"
+                    >
+                      👁️ ดูเอกสาร
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => pdfInputRef.current?.click()}
+                      className="rounded border border-gray-300 bg-white px-2 py-1 text-[10.5px] font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer"
+                    >
+                      เปลี่ยน
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm("ต้องการลบเอกสารประกาศนี้ออกจากระบบใช่หรือไม่?")) {
+                          setCurrentAnnouncement(null);
+                        }
+                      }}
+                      className="rounded border border-red-200 bg-white px-2 py-1 text-[10.5px] font-semibold text-red-600 hover:bg-red-50 cursor-pointer"
+                    >
+                      ลบ
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-3 text-center">
+                  <span className="text-2xl mb-1">📤</span>
+                  <p className="font-semibold text-gray-700 text-[11.5px]">
+                    ยังไม่มีเอกสารประกาศรายชื่อที่ลงนาม
+                  </p>
+                  <p className="text-[10px] text-gray-500 mb-2">
+                    รองรับเฉพาะไฟล์เอกสาร .PDF เท่านั้น
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => pdfInputRef.current?.click()}
+                    className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-bold text-blue-900 shadow-2xs hover:bg-blue-50 transition cursor-pointer"
+                  >
+                    <span>+ เลือกไฟล์สแกน PDF ผู้ว่าการฯ</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {error && (
@@ -1327,10 +1469,22 @@ export function CourseEditDialog({
             form="course-edit-form"
             className="inline-flex h-10 items-center justify-center rounded-[5px] bg-[#1e3a8a] px-4 text-[12px] font-semibold text-white transition-colors hover:bg-[#1e40af] sm:h-9"
           >
-            บันทึกการแก้ไข
+            {pdfBusy ? "กำลังอัปโหลดเอกสาร..." : "บันทึกการแก้ไข"}
           </button>
         </div>
       </div>
+
+      {previewPdfModal && (
+        <PdfPreviewModal
+          isOpen={Boolean(previewPdfModal)}
+          onClose={() => setPreviewPdfModal(null)}
+          pdfUrl={previewPdfModal}
+          fileName={currentAnnouncement?.name}
+          fileSize={currentAnnouncement?.fileSize}
+          title={`ประกาศรายชื่อผู้มีสิทธิ์เข้ารับการฝึกอบรม: ${course.title}`}
+          subtitle="การกีฬาแห่งประเทศไทย (กกท.) · กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ"
+        />
+      )}
     </div>
   );
 }

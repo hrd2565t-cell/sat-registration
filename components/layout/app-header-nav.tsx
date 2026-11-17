@@ -6,7 +6,7 @@ import { useIsAdmin } from "@/lib/admin-auth";
 import { AdminNavButton } from "@/components/layout/admin-nav-button";
 
 interface AppHeaderNavProps {
-  page?: "home" | "courses" | "alumni" | "survey" | "status" | "verify" | "timeline";
+  page?: "home" | "courses" | "alumni" | "survey" | "status" | "verify" | "timeline" | "announcements";
   extraButtons?: React.ReactNode;
 }
 
@@ -41,6 +41,18 @@ export function AppHeaderNav({ page, extraButtons }: AppHeaderNavProps) {
           title="รายการหลักสูตรที่เปิดรับสมัคร"
         >
           📝 หลักสูตร
+        </Link>
+
+        <Link
+          href="/announcements"
+          className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+            pathname === "/announcements"
+              ? "bg-[#16265E] text-white shadow-xs"
+              : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+          }`}
+          title="บอร์ดประกาศรายชื่อผู้มีสิทธิ์เข้ารับการฝึกอบรม (เอกสารทางการ)"
+        >
+          📢 ประกาศผล
         </Link>
 
         <Link
@@ -124,6 +136,36 @@ export function AppHeaderNav({ page, extraButtons }: AppHeaderNavProps) {
             className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
           >
             กลับสู่หน้าแรก
+          </Link>
+          <Link
+            href="/announcements"
+            className="whitespace-nowrap rounded-lg border border-blue-200 bg-blue-50/60 px-3.5 py-1.5 text-xs font-semibold text-[#16265E] transition-colors hover:bg-blue-100"
+          >
+            📢 ประกาศผล
+          </Link>
+          <Link
+            href="/status"
+            className="whitespace-nowrap rounded-lg border border-[#d1d5db] bg-white px-3.5 py-1.5 text-xs font-semibold text-[#374151] transition-colors hover:bg-[#f8fafc]"
+          >
+            ตรวจสอบสถานะ
+          </Link>
+          <AdminNavButton />
+        </>
+      )}
+
+      {page === "announcements" && (
+        <>
+          <Link
+            href="/"
+            className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            กลับสู่หน้าแรก
+          </Link>
+          <Link
+            href="/courses"
+            className="rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            ดูหลักสูตรอบรม
           </Link>
           <Link
             href="/status"

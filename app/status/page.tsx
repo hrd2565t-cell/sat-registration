@@ -290,6 +290,39 @@ function ApplicantStatusCard({
         {/* 3-Step Progress Stepper */}
         <StatusStepper status={result.status} />
 
+        {/* Official Signed Announcement Notice (if published by Governor) */}
+        {course?.announcementFile?.dataUrl && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-xs text-emerald-950">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl">📢</span>
+              <div>
+                <p className="font-bold text-emerald-900">
+                  มีประกาศรายชื่อผู้มีสิทธิ์เข้ารับการฝึกอบรมฉบับทางการแล้ว (ลงนามโดยผู้ว่าการ กกท.)
+                </p>
+                <p className="text-[10.5px] text-emerald-700">
+                  เอกสาร: {course.announcementFile.name} {course.announcementFile.fileSize ? `(${course.announcementFile.fileSize})` : ""}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href={course.announcementFile.dataUrl}
+                download={course.announcementFile.name}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-800 transition active:scale-95"
+              >
+                <span>⬇️</span>
+                <span>ดาวน์โหลดประกาศ (PDF)</span>
+              </a>
+              <Link
+                href={`/announcements?course=${course.id}`}
+                className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-50 transition"
+              >
+                <span>บอร์ดประกาศรวม</span>
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Applicant Profile Summary + Photo */}
         <div className="flex flex-col gap-3.5 rounded-xl border border-[#e2e8f0] bg-[#fcfdfe] p-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3.5">
@@ -383,8 +416,14 @@ function ApplicantStatusCard({
           {result.status === "approved" && (
             <StatusPanel
               tone="approved"
-              title="ผ่านการตรวจสอบคุณสมบัติแล้ว"
-              description="ยินดีด้วย! ท่านได้รับการอนุมัติเป็นผู้มีสิทธิ์เข้ารับการอบรม (ตัวจริง) กรุณาพิมพ์ใบรับการสมัครเพื่อนำมาแสดงในวันรายงานตัวหรือใช้เป็นหลักฐาน"
+              title={
+                result.candidateOrder
+                  ? `ผ่านการตรวจสอบคุณสมบัติแล้ว (ผู้มีสิทธิ์เข้ารับการอบรมตัวจริง ลำดับที่ ${result.candidateOrder})`
+                  : "ผ่านการตรวจสอบคุณสมบัติแล้ว (ตัวจริง)"
+              }
+              description={`ยินดีด้วย! ท่านได้รับการอนุมัติเป็นผู้มีสิทธิ์เข้ารับการอบรม (ตัวจริง)${
+                result.candidateOrder ? ` อยู่ในลำดับที่ ${result.candidateOrder}` : ""
+              } กรุณาพิมพ์ใบรับการสมัครเพื่อนำมาแสดงในวันรายงานตัวหรือใช้เป็นหลักฐาน`}
               action={
                 <a
                   href={`/print/receipt?ref=${encodeURIComponent(result.ref)}`}

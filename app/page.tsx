@@ -233,6 +233,15 @@ function HomeContent() {
                 </Link>
 
                 <Link
+                  href="/announcements"
+                  className="flex items-center justify-center gap-1.5 rounded-xl border border-emerald-300 hover:border-emerald-500 bg-emerald-50/80 hover:bg-emerald-100/80 text-emerald-900 py-3.5 px-4 text-xs font-bold transition-colors shrink-0 shadow-2xs"
+                  title="ดูบอร์ดประกาศรายชื่อผู้มีสิทธิ์เข้ารับการอบรม (PDF ฉบับลงนาม)"
+                >
+                  <span>📢</span>
+                  <span>ประกาศรายชื่อ</span>
+                </Link>
+
+                <Link
                   href="/status"
                   className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-300 hover:border-gray-400 bg-white hover:bg-gray-50 text-gray-700 py-3.5 px-4 text-xs font-bold transition-colors shrink-0 shadow-2xs"
                 >

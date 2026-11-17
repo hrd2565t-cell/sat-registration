@@ -30,8 +30,15 @@ function classifyTargetGroup(affiliation: string = ""): {
   shortLabel: string;
   badgeClass: string;
 } {
-  const text = (affiliation || "").toLowerCase();
-  if (text.includes("การกีฬาแห่งประเทศไทย") || text.includes("กกท")) {
+  const raw = (affiliation || "").trim();
+  const text = raw.toLowerCase();
+
+  // ตรวจสอบชื่อกลุ่มเป้าหมายหลัก 5 กลุ่ม กกท. อย่างแม่นยำ
+  if (
+    raw.startsWith("การกีฬาแห่งประเทศไทย") ||
+    text.includes("การกีฬาแห่งประเทศไทย") ||
+    text.includes("กกท")
+  ) {
     return {
       key: "sat",
       label: "การกีฬาแห่งประเทศไทย",
@@ -39,7 +46,11 @@ function classifyTargetGroup(affiliation: string = ""): {
       badgeClass: "bg-blue-100 text-blue-900 border-blue-200",
     };
   }
-  if (text.includes("กองทุน") || text.includes("nsdf")) {
+  if (
+    raw.startsWith("กองทุนพัฒนาการกีฬาแห่งชาติ") ||
+    text.includes("กองทุน") ||
+    text.includes("nsdf")
+  ) {
     return {
       key: "nsdf",
       label: "กองทุนพัฒนาการกีฬาแห่งชาติ",
@@ -47,6 +58,36 @@ function classifyTargetGroup(affiliation: string = ""): {
       badgeClass: "bg-amber-100 text-amber-900 border-amber-200",
     };
   }
+  if (
+    raw.startsWith("สมาคมกีฬาแห่งจังหวัด") ||
+    text.includes("สมาคมกีฬาแห่งจังหวัด") ||
+    text.includes("สมาคมกีฬาจังหวัด")
+  ) {
+    return {
+      key: "provincialAssoc",
+      label: "สมาคมกีฬาแห่งจังหวัด",
+      shortLabel: "สมาคมกีฬาจังหวัด",
+      badgeClass: "bg-emerald-100 text-emerald-900 border-emerald-200",
+    };
+  }
+  if (raw.startsWith("สมาคมกีฬาแห่งประเทศไทย")) {
+    return {
+      key: "nationalAssoc",
+      label: "สมาคมกีฬาแห่งประเทศไทย",
+      shortLabel: "สมาคมกีฬาแห่งประเทศไทย",
+      badgeClass: "bg-purple-100 text-purple-900 border-purple-200",
+    };
+  }
+  if (raw.startsWith("หน่วยงานภายนอก")) {
+    return {
+      key: "external",
+      label: "หน่วยงานภายนอก",
+      shortLabel: "หน่วยงานภายนอก",
+      badgeClass: "bg-gray-100 text-gray-800 border-gray-300",
+    };
+  }
+
+  // Fallback สำหรับข้อมูลเก่าหรือกรอกอิสระ
   if (text.includes("จังหวัด")) {
     return {
       key: "provincialAssoc",

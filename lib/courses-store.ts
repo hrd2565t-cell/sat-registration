@@ -16,6 +16,7 @@ import {
   type TargetGroupQuotas,
 } from "@/lib/courses";
 import { isSupabaseConfigured, getSupabaseClient } from "@/lib/supabase/client";
+import { uploadDocumentToSupabaseStorage } from "@/lib/supabase/sync";
 
 interface EmbeddedSchedule {
   registrationDate?: string;
@@ -60,6 +61,7 @@ export function buildQuotasPayload(
     expensesPolicy?: string;
     documentConfig?: import("@/lib/courses").CourseDocumentConfig;
     seatsLeft?: number;
+    announcementFile?: import("@/lib/courses").CourseAnnouncementFile | null;
   },
   courseId?: number
 ): Record<string, unknown> {
@@ -95,6 +97,7 @@ export function buildQuotasPayload(
       ...(metadata.expensesPolicy !== undefined ? { expensesPolicy: metadata.expensesPolicy } : {}),
       ...(metadata.documentConfig !== undefined ? { documentConfig: metadata.documentConfig } : {}),
       ...(metadata.seatsLeft !== undefined ? { seatsLeft: metadata.seatsLeft } : {}),
+      ...(metadata.announcementFile !== undefined ? { announcementFile: metadata.announcementFile } : {}),
     };
   }
   return payload;
@@ -478,6 +481,10 @@ function mapCloudCourse(
           },
         }
       : seed?.documentConfig,
+    announcementFile:
+      cloudMeta && cloudMeta.announcementFile !== undefined
+        ? (cloudMeta.announcementFile as import("@/lib/courses").CourseAnnouncementFile)
+        : existing?.announcementFile ?? seed?.announcementFile ?? null,
   };
 }
 
@@ -507,6 +514,7 @@ async function pushCourseToSupabase(course: Course): Promise<boolean> {
       expensesPolicy: course.expensesPolicy,
       documentConfig: course.documentConfig,
       seatsLeft: course.seatsLeft,
+      announcementFile: course.announcementFile,
     },
     course.id
   );
@@ -799,6 +807,7 @@ export type CourseUpdate = Partial<
     | "satSupport"
     | "expensesPolicy"
     | "documentConfig"
+    | "announcementFile"
   >
 >;
 
@@ -916,6 +925,10 @@ export function updateCourse(
         patch.documentConfig !== undefined
           ? patch.documentConfig
           : course.documentConfig,
+      announcementFile:
+        patch.announcementFile !== undefined
+          ? patch.announcementFile
+          : course.announcementFile,
     };
 
     return updated;
@@ -960,6 +973,7 @@ export function updateCourse(
         expensesPolicy: updated.expensesPolicy,
         documentConfig: updated.documentConfig,
         seatsLeft: updated.seatsLeft,
+        announcementFile: updated.announcementFile,
       },
       id
     );
@@ -1327,5 +1341,71 @@ export function syncCourseSeatsWithApprovedCounts(
     };
     persist();
     emit();
+  }
+}
+
+/**
+ * อัปโหลดไฟล์สแกน PDF ประกาศรายชื่อทางการที่ผู้ว่าการ กกท. ลงนามแล้ว
+ * บันทึกลง Supabase Storage และซิงก์ข้อมูลหลักสูตรข้ามทุกเครื่อง
+ */
+export async function uploadCourseAnnouncementPdf(
+  courseId: number,
+  file: File
+): Promise<import("@/lib/courses").CourseAnnouncementFile | null> {
+  try {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+
+    const timestamp = Date.now();
+    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const storagePath = `announcements/course-${courseId}-${timestamp}-${sanitizedFileName}`;
+
+    let publicUrl = dataUrl;
+    if (isSupabaseConfigured()) {
+      const uploadedUrl = await uploadDocumentToSupabaseStorage(
+        "sat-documents",
+        storagePath,
+        dataUrl
+      );
+      if (uploadedUrl) {
+        publicUrl = uploadedUrl;
+      }
+    }
+
+    const sizeBytes = file.size;
+    const formattedSize =
+      sizeBytes < 1024 * 1024
+        ? `${Math.max(1, Math.round(sizeBytes / 1024))} KB`
+        : `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+
+    const announcement: import("@/lib/courses").CourseAnnouncementFile = {
+      name: file.name,
+      storagePath,
+      dataUrl: publicUrl,
+      uploadedAt: new Date().toISOString(),
+      fileSize: formattedSize,
+    };
+
+    updateCourse(courseId, { announcementFile: announcement });
+    return announcement;
+  } catch (err) {
+    console.warn("Failed to upload course announcement PDF:", err);
+    return null;
+  }
+}
+
+/**
+ * ลบไฟล์สแกน PDF ประกาศรายชื่อทางการของหลักสูตร
+ */
+export function removeCourseAnnouncementPdf(courseId: number): boolean {
+  try {
+    updateCourse(courseId, { announcementFile: null });
+    return true;
+  } catch {
+    return false;
   }
 }

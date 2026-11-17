@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { CourseEditDialog } from "@/components/admin/course-edit-dialog";
 import { GlobalScheduleCard } from "@/components/admin/global-schedule-card";
+import { PdfPreviewModal } from "@/components/ui/pdf-preview-modal";
 import {
   DEFAULT_EXPENSES_POLICY,
   DEFAULT_SAT_SUPPORT,
@@ -141,6 +142,11 @@ export function CoursesAdmin() {
   const [isCreating, setIsCreating] = useState(false);
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [notice, setNotice] = useState("");
+  const [previewPdf, setPreviewPdf] = useState<{
+    url: string;
+    name?: string;
+    title: string;
+  } | null>(null);
 
   const editingCourse =
     editingId === null
@@ -282,6 +288,15 @@ export function CoursesAdmin() {
             >
               <span>+ เพิ่มหลักสูตรใหม่</span>
             </button>
+            <Link
+              href="/announcements"
+              target="_blank"
+              className="inline-flex h-8 items-center gap-1 rounded-[5px] border border-blue-300 bg-blue-50 px-3 text-[11px] font-semibold text-blue-900 shadow-sm transition hover:bg-blue-100"
+              title="เปิดดูหน้าบอร์ดประกาศรายชื่อที่ประชาชนและผู้สมัครเห็น"
+            >
+              <span>📢</span>
+              <span>ดูบอร์ดประกาศสาธารณะ</span>
+            </Link>
             <Link
               href="/"
               className="inline-flex h-8 items-center rounded-[5px] border border-[#c7d7ea] bg-white px-3 text-[11px] font-semibold text-[#1e3a8a] transition-colors hover:bg-[#eff6ff]"
@@ -555,6 +570,50 @@ export function CoursesAdmin() {
                   </p>
                 )}
 
+                {/* Announcement PDF Status Strip */}
+                {course.announcementFile?.dataUrl ? (
+                  <div className="mt-2.5 flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50/80 px-2.5 py-1.5 text-[10px] text-emerald-900">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-sm">📄</span>
+                      <span className="font-bold truncate">ประกาศรายชื่อแล้ว (PDF)</span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPreviewPdf({
+                            url: course.announcementFile!.dataUrl!,
+                            name: course.announcementFile!.name,
+                            title: course.title,
+                          })
+                        }
+                        className="rounded bg-white border border-emerald-300 px-2 py-0.5 text-[9.5px] font-bold text-emerald-800 hover:bg-emerald-100 cursor-pointer shadow-2xs"
+                      >
+                        เปิดดู
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(course.id)}
+                        className="rounded bg-white border border-gray-300 px-1.5 py-0.5 text-[9.5px] font-semibold text-gray-700 hover:bg-gray-100 cursor-pointer shadow-2xs"
+                        title="เปลี่ยนหรือแก้ไขไฟล์ประกาศ"
+                      >
+                        แก้ไข
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-2.5 flex items-center justify-between rounded-md border border-gray-200 bg-gray-50/80 px-2.5 py-1.5 text-[10px] text-gray-600">
+                    <span className="text-[9.5px]">ยังไม่แนบประกาศรายชื่อ</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditingId(course.id)}
+                      className="rounded border border-blue-200 bg-blue-50/80 px-2 py-0.5 text-[9.5px] font-bold text-blue-900 hover:bg-blue-100 cursor-pointer shadow-2xs"
+                    >
+                      + แนบไฟล์ PDF
+                    </button>
+                  </div>
+                )}
+
                 <div className="mt-auto flex gap-2 pt-3">
                   <Link
                     href={`/admin/applicants?course=${course.id}`}
@@ -590,6 +649,17 @@ export function CoursesAdmin() {
           course={NEW_COURSE_TEMPLATE}
           onClose={() => setIsCreating(false)}
           onSave={handleCreate}
+        />
+      )}
+
+      {previewPdf && (
+        <PdfPreviewModal
+          isOpen={Boolean(previewPdf)}
+          onClose={() => setPreviewPdf(null)}
+          pdfUrl={previewPdf.url}
+          fileName={previewPdf.name}
+          title={`ประกาศรายชื่อผู้มีสิทธิ์เข้ารับการฝึกอบรม: ${previewPdf.title}`}
+          subtitle="การกีฬาแห่งประเทศไทย (กกท.) · กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ"
         />
       )}
     </div>

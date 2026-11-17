@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { getCourseScheduleDates } from "@/lib/courses";
+import { getCourseScheduleDates, type CourseAnnouncementFile } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
 import { useApplications } from "@/lib/applications-store";
 
@@ -22,6 +23,7 @@ export interface CourseCardProps {
   warningMessage?: string;
   selected?: boolean;
   scheduleOrder?: number;
+  announcementFile?: CourseAnnouncementFile | null;
   onSelect?: (id: number) => void;
   onViewDetails?: () => void;
 }
@@ -136,11 +138,14 @@ export function CourseCard({
   warningMessage,
   selected = false,
   scheduleOrder,
+  announcementFile,
   onSelect,
   onViewDetails,
 }: CourseCardProps) {
   const { courses } = useCourses();
   const { applications } = useApplications();
+  const currentCourse = courses.find((c) => c.id === id);
+  const activeAnnouncement = announcementFile || currentCourse?.announcementFile;
   const isClosed = status === "full";
   const matchCap = seats.match(/(\d+)/);
   const cap = matchCap ? parseInt(matchCap[1], 10) : 40;
@@ -248,6 +253,22 @@ export function CourseCard({
           <SearchIcon />
           ดูคุณสมบัติและเงื่อนไข
         </Button>
+
+        {activeAnnouncement?.dataUrl && (
+          <Link
+            href={`/announcements?course=${id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center justify-between gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11.5px] font-bold text-amber-900 transition hover:bg-amber-100"
+          >
+            <span className="flex items-center gap-1.5 truncate">
+              <span>📢</span>
+              <span className="truncate">ประกาศรายชื่อแล้ว (PDF ผู้ว่าการฯ)</span>
+            </span>
+            <span className="shrink-0 text-[10.5px] font-semibold text-amber-800 underline">
+              เปิดดู ›
+            </span>
+          </Link>
+        )}
 
         {warningMessage && (
           <p className="flex items-start gap-1.5 text-[11.5px] leading-snug text-[#b45309]">

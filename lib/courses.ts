@@ -187,6 +187,14 @@ export function getCourseDocumentConfig(
   };
 }
 
+export interface CourseAnnouncementFile {
+  name: string;
+  storagePath?: string;
+  dataUrl?: string; // Supabase Storage public URL or Base64 Data URL
+  uploadedAt: string;
+  fileSize?: string;
+}
+
 export interface Course {
   id: number;
   image: string;
@@ -211,6 +219,7 @@ export interface Course {
   satSupport?: string[];
   expensesPolicy?: string;
   documentConfig?: CourseDocumentConfig;
+  announcementFile?: CourseAnnouncementFile | null;
   updatedAt?: string;
 }
 

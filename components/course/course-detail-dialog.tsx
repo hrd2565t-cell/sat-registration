@@ -158,6 +158,39 @@ export function CourseDetailDialog({
             </div>
           </div>
 
+          {/* Official Signed Announcement Notice (if published by Governor) */}
+          {course.announcementFile?.dataUrl && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-300 bg-emerald-50/80 p-3 text-xs text-emerald-950">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📢</span>
+                <div>
+                  <p className="font-bold text-emerald-900">
+                    ประกาศรายชื่อผู้มีสิทธิ์เข้ารับการฝึกอบรมฉบับทางการ (PDF ลงนามแล้ว)
+                  </p>
+                  <p className="text-[10.5px] text-emerald-700">
+                    {course.announcementFile.name} {course.announcementFile.fileSize ? `(${course.announcementFile.fileSize})` : ""}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={course.announcementFile.dataUrl}
+                  download={course.announcementFile.name}
+                  className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-800 transition active:scale-95"
+                >
+                  ⬇️ ดาวน์โหลด PDF
+                </a>
+                <Link
+                  href={`/announcements?course=${course.id}`}
+                  onClick={onClose}
+                  className="rounded-lg border border-emerald-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-50 transition"
+                >
+                  ดูบอร์ดประกาศ
+                </Link>
+              </div>
+            </div>
+          )}
+
           {/* Quick Info Grid */}
           <div className="grid grid-cols-1 gap-2.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3.5 text-[12.5px] sm:grid-cols-2">
             <div className="flex items-start gap-2">
