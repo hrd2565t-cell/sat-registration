@@ -110,8 +110,19 @@ export function ApplicantExecutiveReportModal({
                 box-shadow: none !important;
                 border: none !important;
               }
+              thead {
+                display: table-header-group;
+              }
+              tbody {
+                display: table-row-group;
+              }
               tr {
                 page-break-inside: avoid;
+                break-inside: avoid;
+              }
+              .executive-signoff-section {
+                page-break-inside: avoid;
+                break-inside: avoid;
               }
             }
           `,
@@ -395,7 +406,7 @@ export function ApplicantExecutiveReportModal({
             </div>
 
             {/* Bottom Executive Sign-off Section */}
-            <div className="mt-6 border-t-2 border-gray-300 pt-4">
+            <div className="executive-signoff-section mt-6 border-t-2 border-gray-300 pt-4">
               <div className="grid grid-cols-2 gap-6 text-xs">
                 {/* Left: Officer Submission */}
                 <div className="rounded-lg border border-gray-200 bg-gray-50/50 p-3.5">
@@ -446,7 +457,7 @@ export function ApplicantExecutiveReportModal({
                 <span>
                   กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ การกีฬาแห่งประเทศไทย · ระบบรับสมัครออนไลน์
                 </span>
-                <span>หน้าที่ 1 จาก 1</span>
+                <span>พิมพ์เมื่อ: {printedDateThai}</span>
               </div>
             </div>
           </div>
