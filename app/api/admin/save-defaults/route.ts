@@ -157,6 +157,12 @@ export async function POST(request: Request) {
                   ...(typeof c.seatsLeft === "number"
                     ? { seatsLeft: c.seatsLeft }
                     : {}),
+                  ...(c.budget !== undefined ? { budget: c.budget } : {}),
+                  ...(c.province !== undefined ? { province: c.province } : {}),
+                  ...(c.fiscalYear !== undefined ? { fiscalYear: c.fiscalYear } : {}),
+                  ...(c.isHistorical !== undefined ? { isHistorical: c.isHistorical } : {}),
+                  ...(c.historicalCompleted !== undefined ? { historicalCompleted: c.historicalCompleted } : {}),
+                  ...(c.historicalApplicants !== undefined ? { historicalApplicants: c.historicalApplicants } : {}),
                 },
               };
 

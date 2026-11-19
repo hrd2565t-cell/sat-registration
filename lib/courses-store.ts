@@ -214,37 +214,29 @@ function mergeStoredCourses(stored: Course[]): Course[] {
     const seedQuotas = seed?.targetQuotas ?? balanceQuotasToCapacity(cap);
     const finalStoredQuotas = saved.targetQuotas ?? seedQuotas;
 
-    // หากเป็นหลักสูตรประวัติศาสตร์ย้อนหลัง (id >= 100) ให้ใช้ข้อมูลทางการจาก Timeline (seed) เสมอ
-    // โดยเปิดให้แอดมินแก้ไขงบประมาณเฉพาะรายหลักสูตรได้ตามจริง
-    if (saved.id >= 100 && seed) {
-      return {
-        ...seed,
-        budget: saved.budget !== undefined ? saved.budget : seed.budget,
-        targetQuotas: saved.targetQuotas ?? seed.targetQuotas,
-        isHistorical: true,
-      };
-    }
-
     return {
       ...(seed ?? {}),
       ...saved,
       id: saved.id,
-      title: saved.title,
+      title: saved.title || seed?.title || "",
       shortTitle:
-        saved.shortTitle === "วิทยาศาสตร์การกีฬา" && saved.title.includes("งบประมาณ")
+        saved.shortTitle === "วิทยาศาสตร์การกีฬา" && saved.title?.includes("งบประมาณ")
           ? "งบประมาณและพัสดุ"
           : saved.shortTitle !== undefined
           ? saved.shortTitle
           : seed?.shortTitle,
-      location: saved.location ?? seed?.location,
-      province: saved.province ?? seed?.province,
-      budget: saved.budget ?? seed?.budget,
-      historicalCompleted: saved.historicalCompleted ?? seed?.historicalCompleted,
-      historicalApplicants: saved.historicalApplicants ?? seed?.historicalApplicants,
-      date: finalDate,
+      location: saved.location || seed?.location || "",
+      province: saved.province || seed?.province || detectProvinceFromLocation(saved.location || seed?.location || ""),
+      budget: saved.budget !== undefined ? saved.budget : seed?.budget,
+      historicalCompleted: saved.historicalCompleted !== undefined ? saved.historicalCompleted : seed?.historicalCompleted,
+      historicalApplicants: saved.historicalApplicants !== undefined ? saved.historicalApplicants : seed?.historicalApplicants,
+      date: saved.date || finalDate,
+      seats: saved.seats || seed?.seats || `จำนวนที่นั่ง ${cap} คน`,
       targetQuotas: finalStoredQuotas,
+      isHistorical: saved.isHistorical !== undefined ? saved.isHistorical : (saved.id >= 100 ? true : (seed?.isHistorical ?? false)),
+      fiscalYear: saved.fiscalYear || seed?.fiscalYear || getCourseFiscalYear(saved),
       image: customImage ?? seed?.image ?? "/assets/course-executive-management.jpg",
-      imageAlt: saved.imageAlt || seed?.imageAlt || `${saved.title} - รูปประกอบ`,
+      imageAlt: saved.imageAlt || seed?.imageAlt || `${saved.title || seed?.title} - รูปประกอบ`,
       useCustomSchedule: isCustom,
       registrationDate: isCustom
         ? saved.registrationDate || seed?.registrationDate || globalSched.registrationDate
@@ -355,10 +347,10 @@ function mapCloudCourse(
   }
 
   const isOldCloudMock = c.id === 3 && c.date === "1-3 ธ.ค. 2569";
-  const finalDate = isOldCloudMock ? (seed?.date || "20-22 ม.ค. 2570") : (c.id >= 100 && seed ? seed.date : c.date);
-  const finalTitle = c.id >= 100 && seed ? seed.title : c.title;
-  const finalLocation = c.id >= 100 && seed ? seed.location : c.location;
-  const finalSeats = c.id >= 100 && seed ? seed.seats : c.seats;
+  const finalDate = isOldCloudMock ? (seed?.date || "20-22 ม.ค. 2570") : (c.date || seed?.date || "");
+  const finalTitle = c.title || seed?.title || "";
+  const finalLocation = c.location || seed?.location || "";
+  const finalSeats = c.seats || seed?.seats || `จำนวนที่นั่ง ${cap} คน`;
 
   const rawCloudQuotas = (c as { target_quotas?: any }).target_quotas;
   if (rawCloudQuotas?._globalTimeline && typeof rawCloudQuotas._globalTimeline === "object") {
@@ -474,9 +466,7 @@ function mapCloudCourse(
     id: c.id,
     title: finalTitle,
     shortTitle:
-      c.id >= 100 && seed
-        ? seed.shortTitle
-        : (c as { short_title?: string }).short_title || seed?.shortTitle || existing?.shortTitle,
+      (c as { short_title?: string }).short_title || seed?.shortTitle || existing?.shortTitle,
     date: finalDate,
     location: finalLocation,
     seats: finalSeats,
@@ -484,7 +474,7 @@ function mapCloudCourse(
     seatsLeft: finalSeatsLeft,
     status: c.status === "full" ? "full" : "open",
     updatedAt: cloudUpdatedAt || existing?.updatedAt,
-    image: (c.id >= 100 && seed ? seed.image : c.image) || seed?.image || "/assets/course-executive-management.jpg",
+    image: (c.image && !c.image.includes("course-executive-management.jpg") ? c.image : (seed?.image || c.image)) || "/assets/course-executive-management.jpg",
     imageAlt: c.image_alt || seed?.imageAlt || `${finalTitle} - รูปประกอบ`,
     warningMessage:
       c.id === 1 && c.warning_message?.includes("ต้องมีใบประกอบวิชาชีพ")
@@ -550,31 +540,25 @@ function mapCloudCourse(
         ? Number(cloudMeta.budget)
         : existing?.budget ?? seed?.budget ?? undefined,
     province:
-      c.id >= 100 && seed?.province
-        ? seed.province
-        : cloudMeta?.province !== undefined
+      cloudMeta?.province !== undefined
         ? String(cloudMeta.province)
         : existing?.province ?? seed?.province ?? detectProvinceFromLocation(finalLocation),
     fiscalYear:
-      c.id >= 100 && seed?.fiscalYear
-        ? seed.fiscalYear
-        : cloudMeta?.fiscalYear !== undefined
+      cloudMeta?.fiscalYear !== undefined
         ? String(cloudMeta.fiscalYear)
         : existing?.fiscalYear ?? seed?.fiscalYear ?? getCourseFiscalYear(existing ?? seed ?? ({ date: finalDate } as Course)),
     isHistorical:
-      c.id >= 100
-        ? true
-        : cloudMeta?.isHistorical !== undefined
+      cloudMeta?.isHistorical !== undefined
         ? Boolean(cloudMeta.isHistorical)
-        : existing?.isHistorical ?? seed?.isHistorical ?? false,
+        : (c.id >= 100 ? true : (existing?.isHistorical ?? seed?.isHistorical ?? false)),
     historicalCompleted:
       cloudMeta?.historicalCompleted !== undefined
         ? Number(cloudMeta.historicalCompleted)
-        : seed?.historicalCompleted ?? existing?.historicalCompleted ?? undefined,
+        : existing?.historicalCompleted ?? seed?.historicalCompleted ?? undefined,
     historicalApplicants:
       cloudMeta?.historicalApplicants !== undefined
         ? Number(cloudMeta.historicalApplicants)
-        : seed?.historicalApplicants ?? existing?.historicalApplicants ?? undefined,
+        : existing?.historicalApplicants ?? seed?.historicalApplicants ?? undefined,
   };
 }
 
