@@ -20,7 +20,12 @@ interface TrainingMapTabProps {
 }
 
 export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
-  const [selectedYear, setSelectedYear] = useState<string>("all");
+  // ตัวกรองช่วงปีงบประมาณ: "all" (ทุกปี) | "single" (ปีเดียว) | "range" (ช่วงปี เช่น 2568-2570)
+  const [yearFilterMode, setYearFilterMode] = useState<"all" | "single" | "range">("all");
+  const [selectedSingleYear, setSelectedSingleYear] = useState<string>("2570");
+  const [rangeStartYear, setRangeStartYear] = useState<string>("2568");
+  const [rangeEndYear, setRangeEndYear] = useState<string>("2570");
+
   const [selectedRegion, setSelectedRegion] = useState<ThaiRegionKey | "all">("all");
   const [selectedProvince, setSelectedProvince] = useState<ProvinceInfo | null>(null);
   const [hoveredProvince, setHoveredProvince] = useState<ProvinceInfo | null>(null);
@@ -36,8 +41,30 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
     yearsSet.add("2570");
     yearsSet.add("2569");
     yearsSet.add("2568");
+    yearsSet.add("2567");
     return Array.from(yearsSet).sort((a, b) => b.localeCompare(a));
   }, [courses]);
+
+  const isYearIncluded = (yr: string) => {
+    if (yearFilterMode === "all") return true;
+    if (yearFilterMode === "single") return yr === selectedSingleYear;
+    if (yearFilterMode === "range") {
+      const num = Number(yr);
+      const min = Math.min(Number(rangeStartYear), Number(rangeEndYear));
+      const max = Math.max(Number(rangeStartYear), Number(rangeEndYear));
+      return num >= min && num <= max;
+    }
+    return true;
+  };
+
+  const yearFilterLabel = useMemo(() => {
+    if (yearFilterMode === "all") return "ทุกปีงบประมาณ";
+    if (yearFilterMode === "single") return `ปีงบประมาณ พ.ศ. ${selectedSingleYear}`;
+    const min = Math.min(Number(rangeStartYear), Number(rangeEndYear));
+    const max = Math.max(Number(rangeStartYear), Number(rangeEndYear));
+    if (min === max) return `ปีงบประมาณ พ.ศ. ${min}`;
+    return `ช่วงปีงบประมาณ พ.ศ. ${min} – ${max}`;
+  }, [yearFilterMode, selectedSingleYear, rangeStartYear, rangeEndYear]);
 
   // คำนวณความถี่และสถิติรายจังหวัด
   const provinceStats = useMemo(() => {
@@ -61,8 +88,8 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
       };
     });
 
-    const filteredCourses = courses.filter(
-      (c) => selectedYear === "all" || getCourseFiscalYear(c) === selectedYear
+    const filteredCourses = courses.filter((c) =>
+      isYearIncluded(getCourseFiscalYear(c))
     );
 
     filteredCourses.forEach((course) => {
@@ -147,7 +174,7 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
       topHosts,
       blindSpots,
     };
-  }, [courses, applications, selectedYear]);
+  }, [courses, applications, yearFilterMode, selectedSingleYear, rangeStartYear, rangeEndYear]);
 
   // จังหวัดที่ผ่านการกรองตามภูมิภาค
   const filteredProvinces = useMemo(() => {
@@ -222,7 +249,8 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", `SAT_Training_Frequency_Provinces_${selectedYear}_${Date.now()}.csv`);
+    const cleanLabel = yearFilterLabel.replace(/[^0-9a-zA-Zก-๙]/g, "_");
+    link.setAttribute("download", `SAT_Training_Frequency_Provinces_${cleanLabel}_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -273,55 +301,172 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
         </div>
       </div>
 
-      {/* Year Filter Pills Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-xs">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-bold text-gray-500 flex items-center gap-1.5 mr-1">
-            <span>📅</span>
-            <span>ตัวกรองปีงบประมาณ:</span>
-          </span>
+      {/* Year Range Filter Bar */}
+      <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-[#16265E] font-bold text-sm">
+              📅
+            </span>
+            <div>
+              <span className="text-xs font-bold text-gray-800">ตัวกรองช่วงปีงบประมาณ</span>
+              <p className="text-[11px] text-gray-500">เลือกดูรายปีเดี่ยว หรือกำหนดช่วงปีย้อนหลังเพื่อวิเคราะห์การกระจายตัวของแผนที่</p>
+            </div>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => setSelectedYear("all")}
-            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition cursor-pointer ${
-              selectedYear === "all"
-                ? "bg-[#16265E] text-white shadow-xs"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            ทุกปีงบประมาณ ({courses.length})
-          </button>
+          {/* Quick Presets */}
+          <div className="flex flex-wrap items-center gap-1.5 bg-gray-100 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setYearFilterMode("all")}
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                yearFilterMode === "all"
+                  ? "bg-white text-[#16265E] shadow-2xs"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              ทั้งหมด (ทุกปี)
+            </button>
 
-          {availableYears.map((yr) => {
-            const countInYear = courses.filter((c) => getCourseFiscalYear(c) === yr).length;
-            const isCurrentYear = yr === "2570";
-            return (
-              <button
-                key={yr}
-                type="button"
-                onClick={() => setSelectedYear(yr)}
-                className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  selectedYear === yr
-                    ? "bg-[#16265E] text-white shadow-xs"
-                    : isCurrentYear
-                    ? "bg-blue-50 text-[#16265E] border border-blue-200 hover:bg-blue-100"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                {isCurrentYear && <span>⭐️</span>}
-                <span>ปี {yr}</span>
-                {isCurrentYear && <span className="text-[10px] font-normal opacity-90">(ปัจจุบัน)</span>}
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${selectedYear === yr ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"}`}>
-                  {countInYear}
-                </span>
-              </button>
-            );
-          })}
+            <button
+              type="button"
+              onClick={() => {
+                setYearFilterMode("single");
+                setSelectedSingleYear("2570");
+              }}
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                yearFilterMode === "single" && selectedSingleYear === "2570"
+                  ? "bg-white text-[#16265E] shadow-2xs"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              ⭐️ ปี 2570 (ล่าสุด)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setYearFilterMode("single");
+                setSelectedSingleYear("2569");
+              }}
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                yearFilterMode === "single" && selectedSingleYear === "2569"
+                  ? "bg-white text-[#16265E] shadow-2xs"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              ปี 2569
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setYearFilterMode("range");
+                setRangeStartYear("2568");
+                setRangeEndYear("2570");
+              }}
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                yearFilterMode === "range" && rangeStartYear === "2568" && rangeEndYear === "2570"
+                  ? "bg-white text-[#16265E] shadow-2xs"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              3 ปีย้อนหลัง (2568–2570)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setYearFilterMode("range");
+                setRangeStartYear("2567");
+                setRangeEndYear("2570");
+              }}
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                yearFilterMode === "range" && rangeStartYear === "2567" && rangeEndYear === "2570"
+                  ? "bg-white text-[#16265E] shadow-2xs"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              ย้อนหลังถึง 2567
+            </button>
+          </div>
         </div>
 
-        <div className="text-xs text-gray-500">
-          แสดงความถี่: <strong className="text-[#16265E]">{selectedYear === "all" ? "สะสมทุกปีงบประมาณ" : `ประจำปีงบประมาณ ${selectedYear}`}</strong>
+        {/* Interactive Year & Range Controls */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Single Year Pills */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-semibold text-gray-500">เลือกปีเดี่ยว:</span>
+              {availableYears.map((yr) => {
+                const countInYear = courses.filter((c) => getCourseFiscalYear(c) === yr).length;
+                const isSelected = yearFilterMode === "single" && selectedSingleYear === yr;
+                return (
+                  <button
+                    key={yr}
+                    type="button"
+                    onClick={() => {
+                      setYearFilterMode("single");
+                      setSelectedSingleYear(yr);
+                    }}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                      isSelected
+                        ? "bg-[#16265E] text-white shadow-xs"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    <span>ปี {yr}</span>
+                    <span className={`text-[10px] px-1 rounded-full ${isSelected ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"}`}>
+                      {countInYear}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Custom Range Dropdowns */}
+            <div className="flex items-center gap-2 rounded-xl bg-blue-50/70 border border-blue-200/80 px-3 py-1 text-xs">
+              <span className="font-bold text-[#16265E] flex items-center gap-1">
+                <span>🗓️</span>
+                <span>กำหนดช่วงปี:</span>
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-600 text-[11px]">ตั้งแต่ปี</span>
+                <select
+                  value={rangeStartYear}
+                  onChange={(e) => {
+                    setRangeStartYear(e.target.value);
+                    setYearFilterMode("range");
+                  }}
+                  className="rounded-md border border-gray-300 bg-white px-2 py-0.5 text-xs font-bold text-[#16265E] focus:outline-hidden focus:ring-1 focus:ring-[#16265E]"
+                >
+                  {availableYears.map((y) => (
+                    <option key={y} value={y}>พ.ศ. {y}</option>
+                  ))}
+                </select>
+                <span className="text-gray-400 font-bold">➔</span>
+                <span className="text-gray-600 text-[11px]">ถึงปี</span>
+                <select
+                  value={rangeEndYear}
+                  onChange={(e) => {
+                    setRangeEndYear(e.target.value);
+                    setYearFilterMode("range");
+                  }}
+                  className="rounded-md border border-gray-300 bg-white px-2 py-0.5 text-xs font-bold text-[#16265E] focus:outline-hidden focus:ring-1 focus:ring-[#16265E]"
+                >
+                  {availableYears.map((y) => (
+                    <option key={y} value={y}>พ.ศ. {y}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Current Active Filter Indicator */}
+          <div className="text-xs text-gray-500 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span>แสดงความถี่: <strong className="text-[#16265E]">{yearFilterLabel}</strong> ({provinceStats.totalCoveredProvinces} / 77 จังหวัด)</span>
+          </div>
         </div>
       </div>
 
@@ -490,7 +635,7 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
                 provinces={filteredProvinces}
                 freqMap={provinceStats.freqMap}
                 onSelectProvince={(p) => setSelectedProvince(p)}
-                selectedYear={selectedYear}
+                selectedYear={yearFilterLabel}
               />
             ) : (
               <div className="relative w-full min-h-[480px] flex items-center justify-center rounded-xl border border-gray-200 p-2 overflow-hidden bg-slate-50">
@@ -819,7 +964,7 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
           {/* Regional Summary Cards (5 Regions) */}
           <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-xs">
             <h3 className="text-sm font-bold text-[#16265E] mb-3">
-              🏛️ สรุปการกระจายตัว 5 ภูมิภาค {selectedYear !== "all" && `(ปี ${selectedYear})`}
+              🏛️ สรุปการกระจายตัว 5 ภูมิภาค ({yearFilterLabel})
             </h3>
 
             <div className="space-y-2">

@@ -122,8 +122,8 @@ interface CoursesState {
   revision: number;
 }
 
-const STORAGE_KEY = "sat-courses-v8";
-const LEGACY_COURSE_KEYS = ["sat-courses-v7", "sat-courses-v6", "sat-courses-v5", "sat-courses-v4"];
+const STORAGE_KEY = "sat-courses-v9";
+const LEGACY_COURSE_KEYS = ["sat-courses-v8", "sat-courses-v7", "sat-courses-v6", "sat-courses-v5", "sat-courses-v4"];
 let lastLocalCourseEditAt = 0;
 
 function cloneSeedCourses() {
@@ -187,8 +187,10 @@ export function getSeedCourse(id: number) {
 
 function mergeStoredCourses(stored: Course[]): Course[] {
   const globalSched = getGlobalCourseSchedule(stored);
+  const mergedIds = new Set<number>();
 
-  return stored.map((saved): Course => {
+  const list = stored.map((saved): Course => {
+    mergedIds.add(saved.id);
     const seed = getSeedCourse(saved.id);
     const isLegacySeedPath =
       saved.image === "/assets/course-national-coach.png" ||
@@ -212,21 +214,40 @@ function mergeStoredCourses(stored: Course[]): Course[] {
     const seedQuotas = seed?.targetQuotas ?? balanceQuotasToCapacity(cap);
     const finalStoredQuotas = saved.targetQuotas ?? seedQuotas;
 
+    // หากเป็นหลักสูตรประวัติศาสตร์ที่มีการปรับปรุงให้ตรงกับ Timeline
+    const isOldMockTitle =
+      saved.title.includes("การบริหารจัดการการกีฬาสำหรับผู้บริหารระดับต้น") ||
+      saved.title.includes("การพัฒนาศักยภาพผู้ฝึกสอนกีฬาคนพิการสู่สากล") ||
+      saved.title.includes("จิตวิทยาการกีฬาและการดูแลนักกีฬาเพื่อความเป็นเลิศ");
+    const finalTitle = isOldMockTitle && seed ? seed.title : saved.title;
+    const finalShortTitle = isOldMockTitle && seed ? seed.shortTitle : (
+      saved.shortTitle === "วิทยาศาสตร์การกีฬา" && saved.title.includes("งบประมาณ")
+        ? "งบประมาณและพัสดุ"
+        : saved.shortTitle !== undefined
+        ? saved.shortTitle
+        : seed?.shortTitle
+    );
+    const finalHistoricalCompleted = isOldMockTitle && seed ? seed.historicalCompleted : (saved.historicalCompleted ?? seed?.historicalCompleted);
+    const finalHistoricalApplicants = isOldMockTitle && seed ? seed.historicalApplicants : (saved.historicalApplicants ?? seed?.historicalApplicants);
+    const finalProvince = isOldMockTitle && seed ? seed.province : (saved.province ?? seed?.province);
+    const finalLocation = isOldMockTitle && seed ? seed.location : (saved.location ?? seed?.location);
+    const finalBudget = isOldMockTitle && seed ? seed.budget : (saved.budget ?? seed?.budget);
+
     return {
       ...(seed ?? {}),
       ...saved,
       id: saved.id,
-      date: finalDate,
+      title: finalTitle,
+      shortTitle: finalShortTitle,
+      location: finalLocation,
+      province: finalProvince,
+      budget: finalBudget,
+      historicalCompleted: finalHistoricalCompleted,
+      historicalApplicants: finalHistoricalApplicants,
+      date: isOldMockTitle && seed ? seed.date : finalDate,
       targetQuotas: finalStoredQuotas,
       image: customImage ?? seed?.image ?? "/assets/course-executive-management.jpg",
-      imageAlt: saved.imageAlt || seed?.imageAlt || `${saved.title} - รูปประกอบ`,
-      shortTitle:
-        saved.shortTitle === "วิทยาศาสตร์การกีฬา" &&
-        saved.title.includes("งบประมาณ")
-          ? "งบประมาณและพัสดุ"
-          : saved.shortTitle !== undefined
-          ? saved.shortTitle
-          : seed?.shortTitle,
+      imageAlt: saved.imageAlt || seed?.imageAlt || `${finalTitle} - รูปประกอบ`,
       useCustomSchedule: isCustom,
       registrationDate: isCustom
         ? saved.registrationDate || seed?.registrationDate || globalSched.registrationDate
@@ -310,6 +331,15 @@ function mergeStoredCourses(stored: Course[]): Course[] {
           : cap,
     };
   });
+
+  // แนบ seedCourses ที่ยังไม่มีใน stored ให้ครบถ้วน
+  seedCourses.forEach((sc) => {
+    if (!mergedIds.has(sc.id)) {
+      list.push({ ...sc });
+    }
+  });
+
+  return list;
 }
 
 function mapCloudCourse(

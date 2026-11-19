@@ -14,7 +14,12 @@ interface BudgetAnalyticsTabProps {
 }
 
 export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTabProps) {
-  const [selectedYear, setSelectedYear] = useState<string>("all");
+  // ตัวกรองช่วงปีงบประมาณ: "all" (ทุกปี) | "single" (ปีเดียว) | "range" (ช่วงปี เช่น 2568-2570)
+  const [yearFilterMode, setYearFilterMode] = useState<"all" | "single" | "range">("all");
+  const [selectedSingleYear, setSelectedSingleYear] = useState<string>("2570");
+  const [rangeStartYear, setRangeStartYear] = useState<string>("2568");
+  const [rangeEndYear, setRangeEndYear] = useState<string>("2570");
+
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [editingHistoricalCourse, setEditingHistoricalCourse] = useState<Course | null>(null);
   const [isHistoricalDialogOpen, setIsHistoricalDialogOpen] = useState(false);
@@ -34,12 +39,34 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
     courses.forEach((c) => {
       yearsSet.add(getCourseFiscalYear(c));
     });
-    // ให้มั่นใจว่ามี 2570, 2569, 2568 เป็นตัวเลือกพื้นฐาน
+    // ให้มั่นใจว่ามี 2570, 2569, 2568, 2567 เป็นตัวเลือกพื้นฐาน
     yearsSet.add("2570");
     yearsSet.add("2569");
     yearsSet.add("2568");
+    yearsSet.add("2567");
     return Array.from(yearsSet).sort((a, b) => b.localeCompare(a));
   }, [courses]);
+
+  const isYearIncluded = (yr: string) => {
+    if (yearFilterMode === "all") return true;
+    if (yearFilterMode === "single") return yr === selectedSingleYear;
+    if (yearFilterMode === "range") {
+      const num = Number(yr);
+      const min = Math.min(Number(rangeStartYear), Number(rangeEndYear));
+      const max = Math.max(Number(rangeStartYear), Number(rangeEndYear));
+      return num >= min && num <= max;
+    }
+    return true;
+  };
+
+  const yearFilterLabel = useMemo(() => {
+    if (yearFilterMode === "all") return "ทุกปีงบประมาณ";
+    if (yearFilterMode === "single") return `ปีงบประมาณ พ.ศ. ${selectedSingleYear}`;
+    const min = Math.min(Number(rangeStartYear), Number(rangeEndYear));
+    const max = Math.max(Number(rangeStartYear), Number(rangeEndYear));
+    if (min === max) return `ปีงบประมาณ พ.ศ. ${min}`;
+    return `ช่วงปีงบประมาณ พ.ศ. ${min} – ${max}`;
+  }, [yearFilterMode, selectedSingleYear, rangeStartYear, rangeEndYear]);
 
   // สรุปสถิติเปรียบเทียบเชิงแนวโน้มข้ามปีงบประมาณ (Year-over-Year Trend Analysis)
   const yoySummary = useMemo(() => {
@@ -80,11 +107,9 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
     });
   }, [availableYears, courses, applications, inlineBudgets]);
 
-  // คำนวณสถิติภาพรวมงบประมาณตามปีที่เลือก (หรือทั้งหมด)
+  // คำนวณสถิติภาพรวมงบประมาณตามปีที่เลือก (หรือช่วงปี)
   const stats = useMemo(() => {
-    const filtered = courses.filter(
-      (c) => selectedYear === "all" || getCourseFiscalYear(c) === selectedYear
-    );
+    const filtered = courses.filter((c) => isYearIncluded(getCourseFiscalYear(c)));
 
     let totalBudget = 0;
     let coursesWithBudgetCount = 0;
@@ -176,7 +201,7 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
       courseMetrics,
       targetGroupInvestments,
     };
-  }, [courses, applications, inlineBudgets, selectedYear]);
+  }, [courses, applications, inlineBudgets, yearFilterMode, selectedSingleYear, rangeStartYear, rangeEndYear]);
 
   // จัดการบันทึกงบประมาณแบบรวดเร็วผ่านตาราง (Quick Inline Edit)
   const handleInlineBudgetChange = (courseId: number, val: string) => {
@@ -227,7 +252,7 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
 
     // บรรทัดสรุปผลรวม
     rows.push([
-      `"รวม ${selectedYear === "all" ? "ทุกปีงบประมาณ" : `ปี ${selectedYear}`}"`,
+      `"รวม ${yearFilterLabel}"`,
       "-",
       "-",
       `"รวม ${stats.filteredCourses.length} หลักสูตร"`,
@@ -249,7 +274,8 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", `SAT_Budget_Analytics_${selectedYear}_${Date.now()}.csv`);
+    const cleanLabel = yearFilterLabel.replace(/[^0-9a-zA-Zก-๙]/g, "_");
+    link.setAttribute("download", `SAT_Budget_Analytics_${cleanLabel}_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -312,55 +338,172 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
         </div>
       </div>
 
-      {/* Year Filter Pills Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-xs">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-bold text-gray-500 flex items-center gap-1.5 mr-1">
-            <span>📅</span>
-            <span>ตัวกรองปีงบประมาณ:</span>
-          </span>
+      {/* Year Range Filter Bar */}
+      <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-[#16265E] font-bold text-sm">
+              📅
+            </span>
+            <div>
+              <span className="text-xs font-bold text-gray-800">ตัวกรองช่วงปีงบประมาณ</span>
+              <p className="text-[11px] text-gray-500">เลือกดูรายปีเดี่ยว หรือกำหนดช่วงปีย้อนหลังเพื่อวิเคราะห์เปรียบเทียบภาพรวม</p>
+            </div>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => setSelectedYear("all")}
-            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition cursor-pointer ${
-              selectedYear === "all"
-                ? "bg-[#16265E] text-white shadow-xs"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            ทุกปีงบประมาณ ({courses.length})
-          </button>
+          {/* Quick Presets */}
+          <div className="flex flex-wrap items-center gap-1.5 bg-gray-100 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setYearFilterMode("all")}
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                yearFilterMode === "all"
+                  ? "bg-white text-[#16265E] shadow-2xs"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              ทั้งหมด (ทุกปี)
+            </button>
 
-          {availableYears.map((yr) => {
-            const countInYear = courses.filter((c) => getCourseFiscalYear(c) === yr).length;
-            const isCurrentYear = yr === "2570";
-            return (
-              <button
-                key={yr}
-                type="button"
-                onClick={() => setSelectedYear(yr)}
-                className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  selectedYear === yr
-                    ? "bg-[#16265E] text-white shadow-xs"
-                    : isCurrentYear
-                    ? "bg-blue-50 text-[#16265E] border border-blue-200 hover:bg-blue-100"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                {isCurrentYear && <span>⭐️</span>}
-                <span>ปี {yr}</span>
-                {isCurrentYear && <span className="text-[10px] font-normal opacity-90">(ปัจจุบัน)</span>}
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${selectedYear === yr ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"}`}>
-                  {countInYear}
-                </span>
-              </button>
-            );
-          })}
+            <button
+              type="button"
+              onClick={() => {
+                setYearFilterMode("single");
+                setSelectedSingleYear("2570");
+              }}
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                yearFilterMode === "single" && selectedSingleYear === "2570"
+                  ? "bg-white text-[#16265E] shadow-2xs"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              ⭐️ ปี 2570 (ล่าสุด)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setYearFilterMode("single");
+                setSelectedSingleYear("2569");
+              }}
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                yearFilterMode === "single" && selectedSingleYear === "2569"
+                  ? "bg-white text-[#16265E] shadow-2xs"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              ปี 2569
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setYearFilterMode("range");
+                setRangeStartYear("2568");
+                setRangeEndYear("2570");
+              }}
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                yearFilterMode === "range" && rangeStartYear === "2568" && rangeEndYear === "2570"
+                  ? "bg-white text-[#16265E] shadow-2xs"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              3 ปีย้อนหลัง (2568–2570)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setYearFilterMode("range");
+                setRangeStartYear("2567");
+                setRangeEndYear("2570");
+              }}
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                yearFilterMode === "range" && rangeStartYear === "2567" && rangeEndYear === "2570"
+                  ? "bg-white text-[#16265E] shadow-2xs"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              ย้อนหลังถึง 2567
+            </button>
+          </div>
         </div>
 
-        <div className="text-xs text-gray-500">
-          แสดงผล: <strong className="text-[#16265E]">{selectedYear === "all" ? "ทุกปีงบประมาณ" : `ปีงบประมาณ ${selectedYear}`}</strong> ({stats.filteredCourses.length} หลักสูตร)
+        {/* Interactive Year & Range Controls */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Single Year Pills */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-semibold text-gray-500">เลือกปีเดี่ยว:</span>
+              {availableYears.map((yr) => {
+                const countInYear = courses.filter((c) => getCourseFiscalYear(c) === yr).length;
+                const isSelected = yearFilterMode === "single" && selectedSingleYear === yr;
+                return (
+                  <button
+                    key={yr}
+                    type="button"
+                    onClick={() => {
+                      setYearFilterMode("single");
+                      setSelectedSingleYear(yr);
+                    }}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                      isSelected
+                        ? "bg-[#16265E] text-white shadow-xs"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    <span>ปี {yr}</span>
+                    <span className={`text-[10px] px-1 rounded-full ${isSelected ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"}`}>
+                      {countInYear}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Custom Range Dropdowns */}
+            <div className="flex items-center gap-2 rounded-xl bg-blue-50/70 border border-blue-200/80 px-3 py-1 text-xs">
+              <span className="font-bold text-[#16265E] flex items-center gap-1">
+                <span>🗓️</span>
+                <span>กำหนดช่วงปี:</span>
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-600 text-[11px]">ตั้งแต่ปี</span>
+                <select
+                  value={rangeStartYear}
+                  onChange={(e) => {
+                    setRangeStartYear(e.target.value);
+                    setYearFilterMode("range");
+                  }}
+                  className="rounded-md border border-gray-300 bg-white px-2 py-0.5 text-xs font-bold text-[#16265E] focus:outline-hidden focus:ring-1 focus:ring-[#16265E]"
+                >
+                  {availableYears.map((y) => (
+                    <option key={y} value={y}>พ.ศ. {y}</option>
+                  ))}
+                </select>
+                <span className="text-gray-400 font-bold">➔</span>
+                <span className="text-gray-600 text-[11px]">ถึงปี</span>
+                <select
+                  value={rangeEndYear}
+                  onChange={(e) => {
+                    setRangeEndYear(e.target.value);
+                    setYearFilterMode("range");
+                  }}
+                  className="rounded-md border border-gray-300 bg-white px-2 py-0.5 text-xs font-bold text-[#16265E] focus:outline-hidden focus:ring-1 focus:ring-[#16265E]"
+                >
+                  {availableYears.map((y) => (
+                    <option key={y} value={y}>พ.ศ. {y}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Current Active Filter Indicator */}
+          <div className="text-xs text-gray-500 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span>แสดงผล: <strong className="text-[#16265E]">{yearFilterLabel}</strong> ({stats.filteredCourses.length} หลักสูตร)</span>
+          </div>
         </div>
       </div>
 
@@ -428,7 +571,7 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
       </div>
 
       {/* Multi-Year Trend YoY Comparison Table (แสดงเมื่อเลือก "ทุกปีงบประมาณ" หรือเพื่อเปรียบเทียบ) */}
-      {selectedYear === "all" && (
+      {(yearFilterMode === "all" || yearFilterMode === "range") && (
         <div className="rounded-2xl border border-blue-200 bg-gradient-to-b from-blue-50/40 to-white p-4 shadow-xs space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-100 pb-2.5">
             <h3 className="text-sm font-bold text-[#16265E] flex items-center gap-2">
@@ -436,7 +579,7 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
               <span>ตารางเปรียบเทียบเชิงแนวโน้มข้ามปีงบประมาณ (Multi-Year Fiscal Benchmarking)</span>
             </h3>
             <span className="text-xs text-blue-800 bg-blue-100 px-2.5 py-0.5 rounded-full font-medium">
-              สถิติย้อนหลัง 3 ปีงบประมาณ
+              สถิติย้อนหลัง {yoySummary.length} ปีงบประมาณ
             </span>
           </div>
 
@@ -479,8 +622,11 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
                       <td className="py-2.5 px-3 text-center">
                         <button
                           type="button"
-                          onClick={() => setSelectedYear(item.year)}
-                          className="text-[11px] font-bold text-[#16265E] hover:underline"
+                          onClick={() => {
+                            setYearFilterMode("single");
+                            setSelectedSingleYear(item.year);
+                          }}
+                          className="text-[11px] font-bold text-[#16265E] hover:underline cursor-pointer"
                         >
                           กรองดูปีนี้ →
                         </button>
@@ -499,7 +645,7 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
         <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3 flex items-center justify-between">
           <span className="flex items-center gap-1.5">
             <span>🏛️</span>
-            <span>การกระจายงบประมาณสู่ 5 กลุ่มเป้าหมาย กกท. {selectedYear !== "all" && `(ประจำปี ${selectedYear})`}</span>
+            <span>การกระจายงบประมาณสู่ 5 กลุ่มเป้าหมาย กกท. ({yearFilterLabel})</span>
           </span>
           <span className="text-[11px] font-normal text-gray-500">
             คำนวณตามสัดส่วนโควตาการพัฒนาบุคลากร
@@ -738,7 +884,7 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
             <tfoot className="border-t-2 border-gray-300 bg-gray-50 font-bold text-gray-900">
               <tr>
                 <td colSpan={4} className="py-3 px-3">
-                  รวมงบประมาณทั้งสิ้น ({stats.filteredCourses.length} หลักสูตร {selectedYear !== "all" ? `ปี ${selectedYear}` : "ทุกปีงบประมาณ"})
+                  รวมงบประมาณทั้งสิ้น ({stats.filteredCourses.length} หลักสูตร · {yearFilterLabel})
                 </td>
                 <td className="py-3 px-3 text-center text-gray-800">
                   {stats.totalApplicants} / {stats.totalApproved} / {stats.totalCapacity}
@@ -774,7 +920,7 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
       <HistoricalCourseDialog
         isOpen={isHistoricalDialogOpen || Boolean(editingHistoricalCourse)}
         courseToEdit={editingHistoricalCourse}
-        defaultFiscalYear={selectedYear !== "all" ? selectedYear : "2569"}
+        defaultFiscalYear={yearFilterMode === "single" ? selectedSingleYear : "2569"}
         onClose={() => {
           setIsHistoricalDialogOpen(false);
           setEditingHistoricalCourse(null);
@@ -792,7 +938,7 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
             {/* Modal Actions Bar */}
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-gray-50 px-6 py-3">
               <span className="text-xs font-bold text-gray-700">
-                ตัวอย่างรายงานผู้บริหาร (A4 แนวนอน) - ปีงบประมาณ {selectedYear === "all" ? "ทั้งหมด" : selectedYear}
+                ตัวอย่างรายงานผู้บริหาร (A4 แนวนอน) - {yearFilterLabel}
               </span>
               <div className="flex items-center gap-2">
                 <button
@@ -827,7 +973,7 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
                   </div>
                   <div>
                     <h1 className="text-base font-black text-[#16265E]">
-                      รายงานวิเคราะห์ความคุ้มค่าของงบประมาณและต้นทุนรายหลักสูตร {selectedYear !== "all" ? `ประจำปีงบประมาณ ${selectedYear}` : "(ภาพรวมทุกปีงบประมาณ)"}
+                      รายงานวิเคราะห์ความคุ้มค่าของงบประมาณและต้นทุนรายหลักสูตร ({yearFilterLabel})
                     </h1>
                     <p className="text-xs font-semibold text-gray-800">
                       กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ การกีฬาแห่งประเทศไทย
