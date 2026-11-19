@@ -24,7 +24,7 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
   const [selectedRegion, setSelectedRegion] = useState<ThaiRegionKey | "all">("all");
   const [selectedProvince, setSelectedProvince] = useState<ProvinceInfo | null>(null);
   const [hoveredProvince, setHoveredProvince] = useState<ProvinceInfo | null>(null);
-  const [viewMode, setViewMode] = useState<"strategic" | "real">("strategic");
+  const [viewMode, setViewMode] = useState<"strategic" | "real">("real");
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   // คำนวณรายชื่อปีงบประมาณที่มีทั้งหมดในระบบ (เรียงจากปีล่าสุดไปอดีต)
@@ -407,6 +407,18 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
             <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
               <button
                 type="button"
+                onClick={() => setViewMode("real")}
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                  viewMode === "real"
+                    ? "bg-white text-[#16265E] shadow-xs"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                <span>🛰️</span>
+                <span>แผนที่ระบายสี 77 จังหวัด (Esri)</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setViewMode("strategic")}
                 className={`px-2.5 py-1 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1 ${
                   viewMode === "strategic"
@@ -416,18 +428,6 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
               >
                 <span>🗺️</span>
                 <span>แผนที่ยุทธศาสตร์ขวานทอง</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("real")}
-                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1 ${
-                  viewMode === "real"
-                    ? "bg-white text-[#16265E] shadow-xs"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                <span>🛰️</span>
-                <span>แผนที่จริง OpenStreetMap</span>
               </button>
             </div>
           </div>
@@ -465,19 +465,19 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
             {/* Heatmap Legend */}
             <div className="flex items-center gap-2 text-[10px] text-gray-600">
               <span className="flex items-center gap-1">
-                <span className="h-2.5 w-2.5 rounded-full bg-[#94a3b8]" />
+                <span className={`h-2.5 w-2.5 rounded-full ${viewMode === "real" ? "bg-white border border-gray-400" : "bg-[#94a3b8]"}`} />
                 <span>0</span>
               </span>
               <span className="flex items-center gap-1">
-                <span className="h-2.5 w-2.5 rounded-full bg-[#0284c7]" />
+                <span className={`h-2.5 w-2.5 rounded-full ${viewMode === "real" ? "bg-[#fde047] border border-amber-500" : "bg-[#0284c7]"}`} />
                 <span>1 ครั้ง</span>
               </span>
               <span className="flex items-center gap-1">
-                <span className="h-2.5 w-2.5 rounded-full bg-[#2563eb]" />
+                <span className={`h-2.5 w-2.5 rounded-full ${viewMode === "real" ? "bg-[#f97316] border border-orange-500" : "bg-[#2563eb]"}`} />
                 <span>2 ครั้ง</span>
               </span>
               <span className="flex items-center gap-1">
-                <span className="h-2.5 w-2.5 rounded-full bg-[#16265E]" />
+                <span className={`h-2.5 w-2.5 rounded-full ${viewMode === "real" ? "bg-[#b91c1c] border border-red-800" : "bg-[#16265E]"}`} />
                 <span>3+ ครั้ง</span>
               </span>
             </div>
@@ -490,6 +490,7 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
                 provinces={filteredProvinces}
                 freqMap={provinceStats.freqMap}
                 onSelectProvince={(p) => setSelectedProvince(p)}
+                selectedYear={selectedYear}
               />
             ) : (
               <div className="relative w-full min-h-[480px] flex items-center justify-center rounded-xl border border-gray-200 p-2 overflow-hidden bg-slate-50">
