@@ -17,6 +17,7 @@ import {
 } from "@/lib/courses";
 import { isSupabaseConfigured, getSupabaseClient } from "@/lib/supabase/client";
 import { uploadDocumentToSupabaseStorage } from "@/lib/supabase/sync";
+import { detectProvinceFromLocation } from "@/lib/provinces";
 
 interface EmbeddedSchedule {
   registrationDate?: string;
@@ -62,6 +63,8 @@ export function buildQuotasPayload(
     documentConfig?: import("@/lib/courses").CourseDocumentConfig;
     seatsLeft?: number;
     announcementFile?: import("@/lib/courses").CourseAnnouncementFile | null;
+    budget?: number;
+    province?: string;
   },
   courseId?: number
 ): Record<string, unknown> {
@@ -98,6 +101,8 @@ export function buildQuotasPayload(
       ...(metadata.documentConfig !== undefined ? { documentConfig: metadata.documentConfig } : {}),
       ...(metadata.seatsLeft !== undefined ? { seatsLeft: metadata.seatsLeft } : {}),
       ...(metadata.announcementFile !== undefined ? { announcementFile: metadata.announcementFile } : {}),
+      ...(metadata.budget !== undefined ? { budget: metadata.budget } : {}),
+      ...(metadata.province !== undefined ? { province: metadata.province } : {}),
     };
   }
   return payload;
@@ -495,6 +500,14 @@ function mapCloudCourse(
       }
       return rawAnn;
     })(),
+    budget:
+      cloudMeta?.budget !== undefined
+        ? Number(cloudMeta.budget)
+        : existing?.budget ?? seed?.budget ?? undefined,
+    province:
+      cloudMeta?.province !== undefined
+        ? String(cloudMeta.province)
+        : existing?.province ?? seed?.province ?? detectProvinceFromLocation(finalLocation),
   };
 }
 
@@ -525,6 +538,8 @@ async function pushCourseToSupabase(course: Course): Promise<boolean> {
       documentConfig: course.documentConfig,
       seatsLeft: course.seatsLeft,
       announcementFile: course.announcementFile,
+      budget: course.budget,
+      province: course.province,
     },
     course.id
   );
@@ -818,6 +833,8 @@ export type CourseUpdate = Partial<
     | "expensesPolicy"
     | "documentConfig"
     | "announcementFile"
+    | "budget"
+    | "province"
   >
 >;
 

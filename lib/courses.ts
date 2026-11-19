@@ -220,6 +220,8 @@ export interface Course {
   expensesPolicy?: string;
   documentConfig?: CourseDocumentConfig;
   announcementFile?: CourseAnnouncementFile | null;
+  budget?: number; // งบประมาณที่จัดสรร (บาท)
+  province?: string; // จังหวัดหลักที่จัดอบรม
   updatedAt?: string;
 }
 

@@ -31,6 +31,7 @@ import { getSeedCourse, useCourses, uploadCourseAnnouncementPdf, type CourseUpda
 import { useSportsEvents } from "@/lib/sports-events-store";
 import { ThaiCalendarRangePicker } from "@/components/ui/thai-calendar-picker";
 import { PdfPreviewModal } from "@/components/ui/pdf-preview-modal";
+import { THAI_PROVINCES, THAI_REGIONS, detectProvinceFromLocation } from "@/lib/provinces";
 import {
   ACCEPTED_IMAGE_TYPES,
   MAX_SOURCE_IMAGE_BYTES,
@@ -115,6 +116,12 @@ export function CourseEditDialog({
     return formatCourseDateFields(parseCourseDateFields(initialStr), true);
   });
   const [location, setLocation] = useState(course.location);
+  const [province, setProvince] = useState<string>(() => {
+    return course.province || detectProvinceFromLocation(course.location) || "กรุงเทพมหานคร";
+  });
+  const [budget, setBudget] = useState<string>(() => {
+    return course.budget !== undefined ? String(course.budget) : "";
+  });
   const [seats, setSeats] = useState(course.seats);
   const [status, setStatus] = useState<Course["status"]>(course.status);
   const [seatsLeft, setSeatsLeft] = useState(() => {
@@ -438,6 +445,8 @@ export function CourseEditDialog({
       expensesPolicy: expensesPolicy.trim(),
       documentConfig: docConfig,
       announcementFile: finalAnnouncement,
+      budget: budget.trim() ? Number(budget.replace(/,/g, "")) : undefined,
+      province: province.trim() || undefined,
       ...(course.id === 0 || image !== course.image ? { image } : {}),
     });
     if (typeof result === "string") {
@@ -912,6 +921,70 @@ export function CourseEditDialog({
                 }}
                 className={fieldClass}
               />
+            </div>
+
+            {/* จังหวัดหลักที่จัดอบรม & งบประมาณที่จัดสรร */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <div className="flex items-center justify-between">
+                  <label htmlFor="course-province" className={labelClass}>
+                    จังหวัดหลักที่จัดอบรม
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const detected = detectProvinceFromLocation(location);
+                      if (detected) setProvince(detected);
+                    }}
+                    className="text-[10px] text-[#1e40af] hover:underline cursor-pointer"
+                    title="ตรวจจับชื่อจังหวัดจากข้อความสถานที่โดยอัตโนมัติ"
+                  >
+                    ↺ ตรวจจับจากสถานที่
+                  </button>
+                </div>
+                <select
+                  id="course-province"
+                  value={province}
+                  onChange={(e) => setProvince(e.target.value)}
+                  className={fieldClass}
+                >
+                  {Object.values(THAI_REGIONS).map((reg) => (
+                    <optgroup key={reg.key} label={`📍 ${reg.nameTh}`}>
+                      {THAI_PROVINCES.filter((p) => p.region === reg.key).map((p) => (
+                        <option key={p.id} value={p.nameTh}>
+                          {p.nameTh} ({p.nameEn})
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <label htmlFor="course-budget" className={labelClass}>
+                    งบประมาณที่จัดสรร (บาท)
+                  </label>
+                  <span className="text-[10px] text-gray-500">
+                    สำหรับคำนวณความคุ้มค่า
+                  </span>
+                </div>
+                <div className="relative mt-1">
+                  <input
+                    id="course-budget"
+                    type="number"
+                    min="0"
+                    step="1000"
+                    value={budget}
+                    onChange={(e) => setBudget(e.target.value)}
+                    placeholder="เช่น 450000"
+                    className="h-9 w-full rounded-[5px] border border-[#d1d5db] bg-white pl-3 pr-8 text-[12.5px] text-[#1f2937] outline-none transition focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/20"
+                  />
+                  <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-500">
+                    ฿
+                  </span>
+                </div>
+              </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
