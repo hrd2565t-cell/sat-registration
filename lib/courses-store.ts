@@ -12,6 +12,7 @@ import {
   getGlobalCourseSchedule,
   balanceQuotasToCapacity,
   isLegacy50Quota,
+  getCourseFiscalYear,
   type Course,
   type TargetGroupQuotas,
 } from "@/lib/courses";
@@ -65,6 +66,10 @@ export function buildQuotasPayload(
     announcementFile?: import("@/lib/courses").CourseAnnouncementFile | null;
     budget?: number;
     province?: string;
+    fiscalYear?: string;
+    isHistorical?: boolean;
+    historicalCompleted?: number;
+    historicalApplicants?: number;
   },
   courseId?: number
 ): Record<string, unknown> {
@@ -103,6 +108,10 @@ export function buildQuotasPayload(
       ...(metadata.announcementFile !== undefined ? { announcementFile: metadata.announcementFile } : {}),
       ...(metadata.budget !== undefined ? { budget: metadata.budget } : {}),
       ...(metadata.province !== undefined ? { province: metadata.province } : {}),
+      ...(metadata.fiscalYear !== undefined ? { fiscalYear: metadata.fiscalYear } : {}),
+      ...(metadata.isHistorical !== undefined ? { isHistorical: metadata.isHistorical } : {}),
+      ...(metadata.historicalCompleted !== undefined ? { historicalCompleted: metadata.historicalCompleted } : {}),
+      ...(metadata.historicalApplicants !== undefined ? { historicalApplicants: metadata.historicalApplicants } : {}),
     };
   }
   return payload;
@@ -282,7 +291,14 @@ function mergeStoredCourses(stored: Course[]): Course[] {
         saved.warningMessage !== undefined
           ? (saved.warningMessage.trim() || undefined)
           : undefined,
-      status: saved.status === "full" ? "full" : "open",
+      status:
+        saved.status === "full"
+          ? "full"
+          : saved.status === "completed"
+          ? "completed"
+          : saved.status === "closed"
+          ? "closed"
+          : "open",
       capacity: cap,
       seatsLeft:
         saved.status === "full"
@@ -508,6 +524,22 @@ function mapCloudCourse(
       cloudMeta?.province !== undefined
         ? String(cloudMeta.province)
         : existing?.province ?? seed?.province ?? detectProvinceFromLocation(finalLocation),
+    fiscalYear:
+      cloudMeta?.fiscalYear !== undefined
+        ? String(cloudMeta.fiscalYear)
+        : existing?.fiscalYear ?? seed?.fiscalYear ?? getCourseFiscalYear(existing ?? seed ?? ({ date: finalDate } as Course)),
+    isHistorical:
+      cloudMeta?.isHistorical !== undefined
+        ? Boolean(cloudMeta.isHistorical)
+        : existing?.isHistorical ?? seed?.isHistorical ?? false,
+    historicalCompleted:
+      cloudMeta?.historicalCompleted !== undefined
+        ? Number(cloudMeta.historicalCompleted)
+        : existing?.historicalCompleted ?? seed?.historicalCompleted ?? undefined,
+    historicalApplicants:
+      cloudMeta?.historicalApplicants !== undefined
+        ? Number(cloudMeta.historicalApplicants)
+        : existing?.historicalApplicants ?? seed?.historicalApplicants ?? undefined,
   };
 }
 
@@ -540,28 +572,35 @@ async function pushCourseToSupabase(course: Course): Promise<boolean> {
       announcementFile: course.announcementFile,
       budget: course.budget,
       province: course.province,
+      fiscalYear: course.fiscalYear,
+      isHistorical: course.isHistorical,
+      historicalCompleted: course.historicalCompleted,
+      historicalApplicants: course.historicalApplicants,
     },
     course.id
   );
   const { error } = await supabase
     .from("courses")
-    .update({
-      title: course.title,
-      short_title: course.shortTitle ?? null,
-      date: course.date,
-      location: course.location,
-      seats: course.seats,
-      seats_left: course.seatsLeft ?? 0,
-      status: course.status,
-      image: course.image,
-      warning_message:
-        course.warningMessage && course.warningMessage.trim()
-          ? course.warningMessage.trim()
-          : null,
-      target_quotas: quotasPayload as unknown as import("@/lib/supabase/types").Json,
-      updated_at: nowIso,
-    })
-    .eq("id", course.id);
+    .upsert(
+      {
+        id: course.id,
+        title: course.title,
+        short_title: course.shortTitle ?? null,
+        date: course.date,
+        location: course.location,
+        seats: course.seats,
+        seats_left: course.seatsLeft ?? 0,
+        status: course.status === "completed" ? "closed" : course.status,
+        image: course.image,
+        warning_message:
+          course.warningMessage && course.warningMessage.trim()
+            ? course.warningMessage.trim()
+            : null,
+        target_quotas: quotasPayload as unknown as import("@/lib/supabase/types").Json,
+        updated_at: nowIso,
+      },
+      { onConflict: "id" }
+    );
   return !error;
 }
 
@@ -835,6 +874,10 @@ export type CourseUpdate = Partial<
     | "announcementFile"
     | "budget"
     | "province"
+    | "fiscalYear"
+    | "isHistorical"
+    | "historicalCompleted"
+    | "historicalApplicants"
   >
 >;
 
@@ -1001,26 +1044,35 @@ export function updateCourse(
         documentConfig: updated.documentConfig,
         seatsLeft: updated.seatsLeft,
         announcementFile: updated.announcementFile,
+        budget: updated.budget,
+        province: updated.province,
+        fiscalYear: updated.fiscalYear,
+        isHistorical: updated.isHistorical,
+        historicalCompleted: updated.historicalCompleted,
+        historicalApplicants: updated.historicalApplicants,
       },
       id
     );
 
     supabase
       ?.from("courses")
-      .update({
-        title: updated.title,
-        short_title: updated.shortTitle ?? null,
-        date: updated.date,
-        location: updated.location,
-        seats: updated.seats,
-        seats_left: updated.seatsLeft ?? 0,
-        status: updated.status,
-        image: updated.image,
-        warning_message: updated.warningMessage && updated.warningMessage.trim() ? updated.warningMessage.trim() : null,
-        target_quotas: quotasPayload as unknown as import("@/lib/supabase/types").Json,
-        updated_at: updated.updatedAt,
-      })
-      .eq("id", id)
+      .upsert(
+        {
+          id: updated.id,
+          title: updated.title,
+          short_title: updated.shortTitle ?? null,
+          date: updated.date,
+          location: updated.location,
+          seats: updated.seats,
+          seats_left: updated.seatsLeft ?? 0,
+          status: updated.status === "completed" ? "closed" : updated.status,
+          image: updated.image,
+          warning_message: updated.warningMessage && updated.warningMessage.trim() ? updated.warningMessage.trim() : null,
+          target_quotas: quotasPayload as unknown as import("@/lib/supabase/types").Json,
+          updated_at: updated.updatedAt,
+        },
+        { onConflict: "id" }
+      )
       .select()
       .then(
         (res) => {
@@ -1106,13 +1158,26 @@ export function addCourse(
     seats: data.seats?.trim() || "จำนวนที่นั่ง 50 คน",
     capacity,
     seatsLeft,
-    status: data.status === "full" ? "full" : "open",
+    status:
+      data.status === "full"
+        ? "full"
+        : data.status === "completed"
+        ? "completed"
+        : data.status === "closed"
+        ? "closed"
+        : "open",
     image:
       data.image && isAllowedCourseImage(data.image)
         ? data.image
         : "/assets/course-executive-management.jpg",
     imageAlt: `${data.title.trim()} - รูปประกอบหลักสูตร`,
     warningMessage: data.warningMessage?.trim() || undefined,
+    budget: data.budget,
+    province: data.province || detectProvinceFromLocation(data.location || ""),
+    fiscalYear: data.fiscalYear || getCourseFiscalYear({ date: data.date, registrationDate: data.registrationDate }),
+    isHistorical: Boolean(data.isHistorical),
+    historicalCompleted: data.historicalCompleted,
+    historicalApplicants: data.historicalApplicants,
     targetQuotas: data.targetQuotas ?? { ...DEFAULT_TARGET_QUOTAS },
     courseObjective:
       data.courseObjective !== undefined
@@ -1180,6 +1245,12 @@ export function addCourse(
         expensesPolicy: newCourse.expensesPolicy,
         documentConfig: newCourse.documentConfig,
         seatsLeft: newCourse.seatsLeft,
+        budget: newCourse.budget,
+        province: newCourse.province,
+        fiscalYear: newCourse.fiscalYear,
+        isHistorical: newCourse.isHistorical,
+        historicalCompleted: newCourse.historicalCompleted,
+        historicalApplicants: newCourse.historicalApplicants,
       },
       newCourse.id
     );
@@ -1195,7 +1266,7 @@ export function addCourse(
           location: newCourse.location,
           seats: newCourse.seats,
           seats_left: newCourse.seatsLeft ?? newCourse.capacity,
-          status: newCourse.status,
+          status: newCourse.status === "completed" ? "closed" : newCourse.status,
           image: newCourse.image,
           warning_message: newCourse.warningMessage ?? null,
           target_quotas: quotasPayload as unknown as import("@/lib/supabase/types").Json,

@@ -14,6 +14,7 @@
     "location": "สถาบันพระปกเกล้าและต่างจังหวัด",
     "province": "กรุงเทพมหานคร",
     "budget": 450000,
+    "fiscalYear": "2570",
     "seats": "จำนวนที่นั่ง 40 คน",
     "targetQuotas": {
       "sat": 3,
@@ -87,6 +88,7 @@
     "location": "จังหวัดพระนครศรีอยุธยา",
     "province": "พระนครศรีอยุธยา",
     "budget": 380000,
+    "fiscalYear": "2570",
     "seats": "จำนวนที่นั่ง 40 คน",
     "targetQuotas": {
       "sat": 0,
@@ -159,6 +161,7 @@
     "location": "กรุงเทพมหานคร",
     "province": "กรุงเทพมหานคร",
     "budget": 420000,
+    "fiscalYear": "2570",
     "seats": "จำนวนที่นั่ง 40 คน",
     "targetQuotas": {
       "sat": 0,
@@ -225,6 +228,7 @@
     "location": "จังหวัดชลบุรี",
     "province": "ชลบุรี",
     "budget": 480000,
+    "fiscalYear": "2570",
     "seats": "จำนวนที่นั่ง 40 คน",
     "targetQuotas": {
       "sat": 6,
@@ -279,6 +283,136 @@
         "enabled": false,
         "required": false
       }
+    }
+  },
+  {
+    "id": 101,
+    "image": "/assets/course-executive-management.jpg",
+    "imageAlt": "การบริหารจัดการการกีฬาสำหรับผู้บริหารระดับต้น (2569)",
+    "status": "completed",
+    "capacity": 40,
+    "seatsLeft": 0,
+    "title": "หลักสูตร การบริหารจัดการการกีฬาสำหรับผู้บริหารระดับต้น (ปี 2569)",
+    "shortTitle": "ผู้บริหารระดับต้น (2569)",
+    "date": "15-18 มี.ค. 2569",
+    "location": "ศูนย์ฝึกกีฬาแห่งชาติ ภาค 5 จ.เชียงใหม่",
+    "province": "เชียงใหม่",
+    "budget": 390000,
+    "fiscalYear": "2569",
+    "isHistorical": true,
+    "historicalCompleted": 40,
+    "historicalApplicants": 58,
+    "seats": "จำนวนที่นั่ง 40 คน",
+    "targetQuotas": {
+      "sat": 5,
+      "nationalAssoc": 15,
+      "provincialAssoc": 15,
+      "nsdf": 0,
+      "external": 5
+    }
+  },
+  {
+    "id": 102,
+    "image": "/assets/course-national-coach.png",
+    "imageAlt": "การพัฒนาศักยภาพผู้ฝึกสอนกีฬาคนพิการสู่สากล (2569)",
+    "status": "completed",
+    "capacity": 40,
+    "seatsLeft": 0,
+    "title": "หลักสูตร การพัฒนาศักยภาพผู้ฝึกสอนกีฬาคนพิการสู่สากล (ปี 2569)",
+    "shortTitle": "ผู้ฝึกสอนกีฬาคนพิการ (2569)",
+    "date": "22-26 พ.ค. 2569",
+    "location": "สนามกีฬาเฉลิมพระเกียรติ 80 พรรษา จ.นครราชสีมา",
+    "province": "นครราชสีมา",
+    "budget": 360000,
+    "fiscalYear": "2569",
+    "isHistorical": true,
+    "historicalCompleted": 38,
+    "historicalApplicants": 46,
+    "seats": "จำนวนที่นั่ง 40 คน",
+    "targetQuotas": {
+      "sat": 4,
+      "nationalAssoc": 18,
+      "provincialAssoc": 14,
+      "nsdf": 1,
+      "external": 3
+    }
+  },
+  {
+    "id": 103,
+    "image": "/assets/course-sports-psychology.png",
+    "imageAlt": "จิตวิทยาการกีฬาและการดูแลนักกีฬาเพื่อความเป็นเลิศ (2569)",
+    "status": "completed",
+    "capacity": 40,
+    "seatsLeft": 0,
+    "title": "หลักสูตร จิตวิทยาการกีฬาและการดูแลนักกีฬาเพื่อความเป็นเลิศ (ปี 2569)",
+    "shortTitle": "จิตวิทยาการกีฬา (2569)",
+    "date": "10-13 ส.ค. 2569",
+    "location": "ศูนย์กีฬาแห่งชาติภาคใต้ จ.สงขลา",
+    "province": "สงขลา",
+    "budget": 410000,
+    "fiscalYear": "2569",
+    "isHistorical": true,
+    "historicalCompleted": 40,
+    "historicalApplicants": 62,
+    "seats": "จำนวนที่นั่ง 40 คน",
+    "targetQuotas": {
+      "sat": 5,
+      "nationalAssoc": 15,
+      "provincialAssoc": 15,
+      "nsdf": 0,
+      "external": 5
+    }
+  },
+  {
+    "id": 104,
+    "image": "/assets/course-sports-management.png",
+    "imageAlt": "การจัดการแข่งขันกีฬาระดับมาตรฐานสากล (2568)",
+    "status": "completed",
+    "capacity": 40,
+    "seatsLeft": 0,
+    "title": "หลักสูตร การจัดการแข่งขันกีฬาระดับมาตรฐานสากล (ปี 2568)",
+    "shortTitle": "การจัดการแข่งขัน (2568)",
+    "date": "18-21 ก.พ. 2568",
+    "location": "ศูนย์กีฬาสะพานหิน จ.ภูเก็ต",
+    "province": "ภูเก็ต",
+    "budget": 440000,
+    "fiscalYear": "2568",
+    "isHistorical": true,
+    "historicalCompleted": 40,
+    "historicalApplicants": 70,
+    "seats": "จำนวนที่นั่ง 40 คน",
+    "targetQuotas": {
+      "sat": 6,
+      "nationalAssoc": 16,
+      "provincialAssoc": 14,
+      "nsdf": 1,
+      "external": 3
+    }
+  },
+  {
+    "id": 105,
+    "image": "/assets/course-basic-sports-science.png",
+    "imageAlt": "วิทยาศาสตร์การกีฬาและการเสริมสร้างสมรรถภาพทางกาย (2568)",
+    "status": "completed",
+    "capacity": 40,
+    "seatsLeft": 0,
+    "title": "หลักสูตร วิทยาศาสตร์การกีฬาและการเสริมสร้างสมรรถภาพทางกาย (ปี 2568)",
+    "shortTitle": "สมรรถภาพทางกาย (2568)",
+    "date": "1-4 มิ.ย. 2568",
+    "location": "สนามกีฬากลางจังหวัดขอนแก่น",
+    "province": "ขอนแก่น",
+    "budget": 370000,
+    "fiscalYear": "2568",
+    "isHistorical": true,
+    "historicalCompleted": 40,
+    "historicalApplicants": 52,
+    "seats": "จำนวนที่นั่ง 40 คน",
+    "targetQuotas": {
+      "sat": 5,
+      "nationalAssoc": 15,
+      "provincialAssoc": 15,
+      "nsdf": 0,
+      "external": 5
     }
   }
 ]

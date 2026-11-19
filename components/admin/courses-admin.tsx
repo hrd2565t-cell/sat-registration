@@ -138,6 +138,7 @@ const NEW_COURSE_TEMPLATE: Course = {
 export function CoursesAdmin() {
   const { applications } = useApplications();
   const { courses } = useCourses();
+  const [catalogFilter, setCatalogFilter] = useState<"all" | "active" | "historical">("active");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
@@ -349,8 +350,52 @@ export function CoursesAdmin() {
         <GlobalScheduleCard onSaved={(msg) => showNotice(msg)} />
       </div>
 
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 pb-2.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setCatalogFilter("active")}
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+              catalogFilter === "active"
+                ? "bg-[#16265E] text-white shadow-2xs"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            หลักสูตรเปิดรับสมัครปัจจุบัน ({courses.filter((c) => !c.isHistorical).length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setCatalogFilter("historical")}
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+              catalogFilter === "historical"
+                ? "bg-[#16265E] text-white shadow-2xs"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            ประวัติหลักสูตรย้อนหลัง ({courses.filter((c) => c.isHistorical).length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setCatalogFilter("all")}
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+              catalogFilter === "all"
+                ? "bg-[#16265E] text-white shadow-2xs"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            ทั้งหมด ({courses.length})
+          </button>
+        </div>
+      </div>
+
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {courses.map((course) => {
+        {courses
+          .filter((c) => {
+            if (catalogFilter === "active") return !c.isHistorical;
+            if (catalogFilter === "historical") return Boolean(c.isHistorical);
+            return true;
+          })
+          .map((course) => {
           const courseApplications = applications.filter(
             (item) => item.courseId === course.id
           );

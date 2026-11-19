@@ -119,9 +119,10 @@ function RegistrationContent() {
   const { courses } = useCourses();
   const { applications } = useApplications();
   const { trainees } = useAlumniStore();
+  const activeCourses = useMemo(() => courses.filter((c) => !c.isHistorical), [courses]);
   const course =
-    getCourseById(searchParams.get("course"), courses) ??
-    getDefaultCourse(courses);
+    getCourseById(searchParams.get("course"), activeCourses) ??
+    getDefaultCourse(activeCourses);
 
   const steps = [
     { label: "1. เลือกหลักสูตร", href: `/courses?course=${course.id}` },

@@ -37,7 +37,7 @@ function AnnouncementsContent() {
   } | null>(null);
 
   const sortedCourses = useMemo(() => {
-    return sortCoursesChronologically(courses);
+    return sortCoursesChronologically(courses.filter((c) => !c.isHistorical));
   }, [courses]);
 
   const filteredCourses = useMemo(() => {

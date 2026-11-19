@@ -35,7 +35,7 @@ function HomeContent() {
 
   // Active courses count
   const openCoursesCount = useMemo(() => {
-    return courses.filter((c) => c.status === "open").length;
+    return courses.filter((c) => c.status === "open" && !c.isHistorical).length;
   }, [courses]);
 
   // Distinct certified personnel count

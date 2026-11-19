@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AdminShell } from "@/components/layout/admin-shell";
 import { ApplicantsChart } from "@/components/admin/applicants-chart";
 import { ApplicantsTable } from "@/components/admin/applicants-table";
@@ -16,6 +16,8 @@ export default function AdminDashboardPage() {
   const { applications } = useApplications();
   const { courses } = useCourses();
   const [activeTab, setActiveTab] = useState<"overview" | "budget" | "map">("overview");
+
+  const activeCourses = useMemo(() => courses.filter((c) => !c.isHistorical), [courses]);
 
   const pending = applications.filter((item) => item.status === "pending").length;
   const actionRequired = applications.filter(
@@ -143,7 +145,7 @@ export default function AdminDashboardPage() {
           <div className="space-y-4 animate-in fade-in duration-200">
             <TargetGroupAnalytics
               applications={applications}
-              courses={courses}
+              courses={activeCourses}
             />
 
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-[230px_minmax(0,1fr)] print:grid-cols-1">

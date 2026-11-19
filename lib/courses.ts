@@ -199,7 +199,7 @@ export interface Course {
   id: number;
   image: string;
   imageAlt: string;
-  status: "open" | "full";
+  status: "open" | "full" | "completed" | "closed";
   capacity: number;
   seatsLeft?: number;
   title: string;
@@ -222,7 +222,24 @@ export interface Course {
   announcementFile?: CourseAnnouncementFile | null;
   budget?: number; // งบประมาณที่จัดสรร (บาท)
   province?: string; // จังหวัดหลักที่จัดอบรม
+  fiscalYear?: string; // ปีงบประมาณ เช่น "2570", "2569", "2568"
+  isHistorical?: boolean; // จริง = บันทึกประวัติย้อนหลัง ไม่แสดงในหน้าเปิดรับสมัครปกติ
+  historicalCompleted?: number; // จำนวนผู้ผ่านการอบรมจริง (สำหรับหลักสูตรประวัติ)
+  historicalApplicants?: number; // จำนวนผู้สมัครจริง (สำหรับหลักสูตรประวัติ)
   updatedAt?: string;
+}
+
+export function getCourseFiscalYear(course: Partial<Course> | null | undefined): string {
+  if (!course) return "2570";
+  if (course.fiscalYear && course.fiscalYear.trim()) {
+    return course.fiscalYear.trim();
+  }
+  const text = [course.date, course.registrationDate, course.resultDate, course.title]
+    .filter(Boolean)
+    .join(" ");
+  const match = text.match(/25\d{2}/);
+  if (match) return match[0];
+  return "2570";
 }
 
 export const DEFAULT_GLOBAL_REGISTRATION_DATE = "9 พ.ย. - 31 ม.ค. 2570";

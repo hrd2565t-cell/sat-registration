@@ -36,11 +36,11 @@ function CourseCatalogContent() {
   const searchParams = useSearchParams();
   const { courses } = useCourses();
   const sortedCourses = useMemo(() => {
-    return sortCoursesChronologically(courses);
+    return sortCoursesChronologically(courses.filter((c) => !c.isHistorical));
   }, [courses]);
   const initialCourse =
     getCourseById(searchParams.get("course"), sortedCourses) ??
-    (sortedCourses.find((c) => c.status === "open") ?? getDefaultCourse(courses));
+    (sortedCourses.find((c) => c.status === "open") ?? getDefaultCourse(courses.filter((c) => !c.isHistorical)));
   const [selectedId, setSelectedId] = useState<number | null>(
     initialCourse.status === "open" ? initialCourse.id : null
   );

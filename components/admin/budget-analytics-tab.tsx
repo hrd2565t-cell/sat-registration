@@ -2,10 +2,11 @@
 
 import { useState, useMemo } from "react";
 import Image from "next/image";
-import type { Course } from "@/lib/courses";
+import { type Course, getCourseFiscalYear } from "@/lib/courses";
 import type { ApplicantRecord } from "@/lib/applications-store";
 import { updateCourse } from "@/lib/courses-store";
 import { CourseEditDialog } from "@/components/admin/course-edit-dialog";
+import { HistoricalCourseDialog } from "@/components/admin/historical-course-dialog";
 
 interface BudgetAnalyticsTabProps {
   courses: Course[];
@@ -13,7 +14,10 @@ interface BudgetAnalyticsTabProps {
 }
 
 export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTabProps) {
+  const [selectedYear, setSelectedYear] = useState<string>("all");
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [editingHistoricalCourse, setEditingHistoricalCourse] = useState<Course | null>(null);
+  const [isHistoricalDialogOpen, setIsHistoricalDialogOpen] = useState(false);
   const [inlineBudgets, setInlineBudgets] = useState<Record<number, string>>(() => {
     const map: Record<number, string> = {};
     courses.forEach((c) => {
@@ -24,8 +28,64 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
   const [savedNotices, setSavedNotices] = useState<Record<number, boolean>>({});
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
-  // คำนวณสถิติภาพรวมงบประมาณ
+  // คำนวณรายชื่อปีงบประมาณที่มีทั้งหมดในระบบ (เรียงจากปีล่าสุดไปอดีต)
+  const availableYears = useMemo(() => {
+    const yearsSet = new Set<string>();
+    courses.forEach((c) => {
+      yearsSet.add(getCourseFiscalYear(c));
+    });
+    // ให้มั่นใจว่ามี 2570, 2569, 2568 เป็นตัวเลือกพื้นฐาน
+    yearsSet.add("2570");
+    yearsSet.add("2569");
+    yearsSet.add("2568");
+    return Array.from(yearsSet).sort((a, b) => b.localeCompare(a));
+  }, [courses]);
+
+  // สรุปสถิติเปรียบเทียบเชิงแนวโน้มข้ามปีงบประมาณ (Year-over-Year Trend Analysis)
+  const yoySummary = useMemo(() => {
+    return availableYears.map((yr) => {
+      const yrCourses = courses.filter((c) => getCourseFiscalYear(c) === yr);
+      let yrBudget = 0;
+      let yrCapacity = 0;
+      let yrTrainees = 0;
+      let yrApplicants = 0;
+
+      yrCourses.forEach((c) => {
+        const bVal = c.budget !== undefined ? c.budget : (Number(inlineBudgets[c.id]) || 0);
+        yrBudget += bVal;
+        yrCapacity += c.capacity || 40;
+
+        if (c.isHistorical) {
+          yrTrainees += c.historicalCompleted ?? c.capacity ?? 40;
+          yrApplicants += c.historicalApplicants ?? c.capacity ?? 40;
+        } else {
+          const courseApps = applications.filter((a) => a.courseId === c.id && a.status !== "rejected");
+          const approved = courseApps.filter((a) => a.status === "approved").length;
+          yrTrainees += approved > 0 ? approved : c.capacity;
+          yrApplicants += courseApps.length;
+        }
+      });
+
+      const avgCostPerTrainee = yrTrainees > 0 && yrBudget > 0 ? Math.round(yrBudget / yrTrainees) : 0;
+
+      return {
+        year: yr,
+        courseCount: yrCourses.length,
+        budget: yrBudget,
+        capacity: yrCapacity,
+        trainees: yrTrainees,
+        applicants: yrApplicants,
+        avgCostPerTrainee,
+      };
+    });
+  }, [availableYears, courses, applications, inlineBudgets]);
+
+  // คำนวณสถิติภาพรวมงบประมาณตามปีที่เลือก (หรือทั้งหมด)
   const stats = useMemo(() => {
+    const filtered = courses.filter(
+      (c) => selectedYear === "all" || getCourseFiscalYear(c) === selectedYear
+    );
+
     let totalBudget = 0;
     let coursesWithBudgetCount = 0;
     let totalCapacity = 0;
@@ -41,24 +101,35 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
       external: 0,
     };
 
-    const courseMetrics = courses.map((course) => {
-      const courseApps = applications.filter((a) => a.courseId === course.id && a.status !== "rejected");
-      const approvedApps = courseApps.filter((a) => a.status === "approved");
+    const courseMetrics = filtered.map((course) => {
       const cap = course.capacity || 40;
       const budgetVal = course.budget !== undefined ? course.budget : (Number(inlineBudgets[course.id]) || 0);
+
+      let approvedCount = 0;
+      let applicantCount = 0;
+
+      if (course.isHistorical) {
+        approvedCount = course.historicalCompleted ?? cap;
+        applicantCount = course.historicalApplicants ?? cap;
+      } else {
+        const courseApps = applications.filter((a) => a.courseId === course.id && a.status !== "rejected");
+        const approvedApps = courseApps.filter((a) => a.status === "approved");
+        approvedCount = approvedApps.length;
+        applicantCount = courseApps.length;
+      }
 
       if (budgetVal > 0) {
         totalBudget += budgetVal;
         coursesWithBudgetCount++;
       }
       totalCapacity += cap;
-      totalApproved += approvedApps.length;
-      totalApplicants += courseApps.length;
+      totalApproved += approvedCount;
+      totalApplicants += applicantCount;
 
       // ต้นทุนต่อหัว: หากมีผู้อนุมัติตัวจริงแล้วคิดจากตัวจริง หากยังไม่มีคิดจากความจุเป้าหมาย
-      const effectiveHeads = approvedApps.length > 0 ? approvedApps.length : cap;
+      const effectiveHeads = approvedCount > 0 ? approvedCount : cap;
       const costPerHead = budgetVal > 0 && effectiveHeads > 0 ? Math.round(budgetVal / effectiveHeads) : 0;
-      const costPerApplicant = budgetVal > 0 && courseApps.length > 0 ? Math.round(budgetVal / courseApps.length) : 0;
+      const costPerApplicant = budgetVal > 0 && applicantCount > 0 ? Math.round(budgetVal / applicantCount) : 0;
 
       // จัดสรรงบสู่ 5 กลุ่มเป้าหมายตามสัดส่วนโควตาของหลักสูตรนี้
       const quotas = course.targetQuotas || { sat: 5, nationalAssoc: 15, provincialAssoc: 15, nsdf: 0, external: 5 };
@@ -74,8 +145,9 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
 
       return {
         ...course,
-        applicantCount: courseApps.length,
-        approvedCount: approvedApps.length,
+        fiscalYear: getCourseFiscalYear(course),
+        applicantCount,
+        approvedCount,
         budgetVal,
         costPerHead,
         costPerApplicant,
@@ -93,6 +165,7 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
       : 0;
 
     return {
+      filteredCourses: filtered,
       totalBudget,
       coursesWithBudgetCount,
       totalCapacity,
@@ -103,7 +176,7 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
       courseMetrics,
       targetGroupInvestments,
     };
-  }, [courses, applications, inlineBudgets]);
+  }, [courses, applications, inlineBudgets, selectedYear]);
 
   // จัดการบันทึกงบประมาณแบบรวดเร็วผ่านตาราง (Quick Inline Edit)
   const handleInlineBudgetChange = (courseId: number, val: string) => {
@@ -123,19 +196,23 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
   // ส่งออกข้อมูลเป็นไฟล์ Excel (CSV)
   const handleExportCsv = () => {
     const headers = [
+      "ปีงบประมาณ",
+      "สถานะข้อมูล",
       "รหัสหลักสูตร",
       "ชื่อหลักสูตร",
       "จังหวัดที่จัด",
       "กำหนดการจัดอบรม",
       "ความจุเป้าหมาย (คน)",
-      "สมัครจริง (คน)",
-      "อนุมัติตัวจริง (คน)",
+      "ผู้สมัคร (คน)",
+      "ผู้ผ่านการอบรม/ตัวจริง (คน)",
       "งบประมาณจัดสรร (บาท)",
       "ต้นทุนเฉลี่ยต่อผู้ผ่านการอบรม (บาท/คน)",
       "ต้นทุนเฉลี่ยต่อผู้สมัคร (บาท/คน)",
     ];
 
     const rows = stats.courseMetrics.map((m) => [
+      `"${m.fiscalYear}"`,
+      `"${m.isHistorical ? "ข้อมูลประวัติย้อนหลัง" : "หลักสูตรปัจจุบัน"}"`,
       `#${m.id}`,
       `"${m.title.replace(/"/g, '""')}"`,
       `"${(m.province || "-").replace(/"/g, '""')}"`,
@@ -150,8 +227,10 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
 
     // บรรทัดสรุปผลรวม
     rows.push([
-      "รวมทั้งหมด",
-      `"รวม ${courses.length} หลักสูตร"`,
+      `"รวม ${selectedYear === "all" ? "ทุกปีงบประมาณ" : `ปี ${selectedYear}`}"`,
+      "-",
+      "-",
+      `"รวม ${stats.filteredCourses.length} หลักสูตร"`,
       "-",
       "-",
       stats.totalCapacity,
@@ -170,7 +249,7 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", `SAT_Budget_Analytics_${Date.now()}.csv`);
+    link.setAttribute("download", `SAT_Budget_Analytics_${selectedYear}_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -193,14 +272,26 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
         <div>
           <h2 className="text-base font-bold text-[#16265E] sm:text-lg flex items-center gap-2">
             <span>💰</span>
-            <span>วิเคราะห์ความคุ้มค่าของงบประมาณ (Budget Value & ROI Analytics)</span>
+            <span>วิเคราะห์ความคุ้มค่าของงบประมาณ (Budget Value & Multi-Year ROI Analytics)</span>
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            ติดตามต้นทุนต่อหัว (Cost per Trainee) ประสิทธิภาพการใช้งบประมาณ และสัดส่วนการลงทุนพัฒนาบุคลากรกีฬา กกท.
+            เปรียบเทียบแนวโน้มต้นทุนต่อหัว (Cost per Trainee) ประสิทธิภาพการใช้งบประมาณรายปี และสัดส่วนการลงทุนบุคลากรกีฬา กกท.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setEditingHistoricalCourse(null);
+              setIsHistoricalDialogOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-blue-300 bg-blue-50 px-3.5 py-2 text-xs font-bold text-[#16265E] shadow-2xs hover:bg-blue-100 transition active:scale-95 cursor-pointer"
+          >
+            <span>➕</span>
+            <span>บันทึกหลักสูตรย้อนหลัง</span>
+          </button>
+
           <button
             type="button"
             onClick={handleExportCsv}
@@ -216,8 +307,60 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
             className="inline-flex items-center gap-2 rounded-xl bg-[#16265E] px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#111e4a] transition active:scale-95 cursor-pointer"
           >
             <span>🖨️</span>
-            <span>พิมพ์รายงานสรุปเสนอผู้บริหาร (PDF)</span>
+            <span>พิมพ์รายงานเสนอผู้บริหาร (PDF)</span>
           </button>
+        </div>
+      </div>
+
+      {/* Year Filter Pills Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-gray-500 flex items-center gap-1.5 mr-1">
+            <span>📅</span>
+            <span>ตัวกรองปีงบประมาณ:</span>
+          </span>
+
+          <button
+            type="button"
+            onClick={() => setSelectedYear("all")}
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition cursor-pointer ${
+              selectedYear === "all"
+                ? "bg-[#16265E] text-white shadow-xs"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            ทุกปีงบประมาณ ({courses.length})
+          </button>
+
+          {availableYears.map((yr) => {
+            const countInYear = courses.filter((c) => getCourseFiscalYear(c) === yr).length;
+            const isCurrentYear = yr === "2570";
+            return (
+              <button
+                key={yr}
+                type="button"
+                onClick={() => setSelectedYear(yr)}
+                className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  selectedYear === yr
+                    ? "bg-[#16265E] text-white shadow-xs"
+                    : isCurrentYear
+                    ? "bg-blue-50 text-[#16265E] border border-blue-200 hover:bg-blue-100"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                {isCurrentYear && <span>⭐️</span>}
+                <span>ปี {yr}</span>
+                {isCurrentYear && <span className="text-[10px] font-normal opacity-90">(ปัจจุบัน)</span>}
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${selectedYear === yr ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"}`}>
+                  {countInYear}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="text-xs text-gray-500">
+          แสดงผล: <strong className="text-[#16265E]">{selectedYear === "all" ? "ทุกปีงบประมาณ" : `ปีงบประมาณ ${selectedYear}`}</strong> ({stats.filteredCourses.length} หลักสูตร)
         </div>
       </div>
 
@@ -228,21 +371,21 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-blue-900 uppercase">งบประมาณจัดสรรรวม</span>
             <span className="rounded-md bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800">
-              {stats.coursesWithBudgetCount}/{courses.length} หลักสูตร
+              {stats.coursesWithBudgetCount}/{stats.filteredCourses.length} หลักสูตร
             </span>
           </div>
           <p className="mt-2 text-2xl font-black text-[#16265E]">
             ฿{stats.totalBudget.toLocaleString("th-TH")}
           </p>
           <p className="mt-1 text-[11px] text-gray-600">
-            เฉลี่ย <strong>฿{courses.length > 0 ? Math.round(stats.totalBudget / courses.length).toLocaleString("th-TH") : 0}</strong> ต่อหลักสูตร
+            เฉลี่ย <strong>฿{stats.filteredCourses.length > 0 ? Math.round(stats.totalBudget / stats.filteredCourses.length).toLocaleString("th-TH") : 0}</strong> ต่อหลักสูตร
           </p>
         </div>
 
         {/* Card 2: Cost per Approved Trainee */}
         <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 to-white p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-900 uppercase">ต้นทุนต่อผู้ผ่านการอบรม (ตัวจริง)</span>
+            <span className="text-xs font-bold text-emerald-900 uppercase">ต้นทุนต่อผู้ผ่านการอบรม</span>
             <span className="text-lg">🎯</span>
           </div>
           <p className="mt-2 text-2xl font-black text-emerald-900">
@@ -250,182 +393,363 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
             <span className="text-xs font-normal text-emerald-700"> /คน</span>
           </p>
           <p className="mt-1 text-[11px] text-gray-600">
-            คำนวณจากผู้ผ่านการคัดเลือกตัวจริง <strong>{stats.totalApproved}</strong> คน (เป้าหมาย {stats.totalCapacity} คน)
+            คำนวณจากผู้ผ่านการอบรมจริง <strong>{stats.totalApproved.toLocaleString()}</strong> คน (เป้าหมาย {stats.totalCapacity.toLocaleString()} ที่นั่ง)
           </p>
         </div>
 
         {/* Card 3: Cost per Applicant */}
-        <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50/80 to-white p-4 shadow-xs">
+        <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50/80 to-white p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-purple-900 uppercase">ต้นทุนต่อผู้สมัครจริง</span>
+            <span className="text-xs font-bold text-amber-900 uppercase">ต้นทุนต่อผู้สมัครรับการอบรม</span>
             <span className="text-lg">👥</span>
           </div>
-          <p className="mt-2 text-2xl font-black text-purple-900">
+          <p className="mt-2 text-2xl font-black text-amber-900">
             ฿{stats.averageCostPerApplicant.toLocaleString("th-TH")}
-            <span className="text-xs font-normal text-purple-700"> /คน</span>
+            <span className="text-xs font-normal text-amber-700"> /คน</span>
           </p>
           <p className="mt-1 text-[11px] text-gray-600">
-            จากจำนวนผู้ยื่นใบสมัครทั้งหมด <strong>{stats.totalApplicants}</strong> คน
+            คำนวณจากผู้ยื่นสมัครทั้งหมด <strong>{stats.totalApplicants.toLocaleString()}</strong> คน
           </p>
         </div>
 
-        {/* Card 4: Target Groups Investment Summary */}
-        <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50/80 to-white p-4 shadow-xs">
+        {/* Card 4: Top Target Group Investment */}
+        <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50/80 to-white p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-900 uppercase">สัดส่วนลงทุน 5 กลุ่มเป้าหมาย</span>
-            <span className="text-[10px] text-amber-700 font-semibold">(จำแนกตามโควตา)</span>
+            <span className="text-xs font-bold text-purple-900 uppercase">สมาคมกีฬา (เป้าหมายหลัก)</span>
+            <span className="text-lg">🏅</span>
           </div>
-          <div className="mt-2 space-y-1 text-[11px] text-gray-700">
-            <div className="flex justify-between">
-              <span>🏛️ กกท.:</span>
-              <strong>฿{Math.round(stats.targetGroupInvestments.sat).toLocaleString("th-TH")}</strong>
-            </div>
-            <div className="flex justify-between">
-              <span>🏅 สมาคมแห่งประเทศไทย:</span>
-              <strong>฿{Math.round(stats.targetGroupInvestments.nationalAssoc).toLocaleString("th-TH")}</strong>
-            </div>
-            <div className="flex justify-between">
-              <span>🗺️ สมาคมจังหวัด:</span>
-              <strong>฿{Math.round(stats.targetGroupInvestments.provincialAssoc).toLocaleString("th-TH")}</strong>
-            </div>
+          <p className="mt-2 text-2xl font-black text-purple-900">
+            ฿{Math.round(stats.targetGroupInvestments.nationalAssoc + stats.targetGroupInvestments.provincialAssoc).toLocaleString("th-TH")}
+          </p>
+          <p className="mt-1 text-[11px] text-gray-600">
+            สัดส่วน <strong>{stats.totalBudget > 0 ? Math.round(((stats.targetGroupInvestments.nationalAssoc + stats.targetGroupInvestments.provincialAssoc) / stats.totalBudget) * 100) : 0}%</strong> ของงบรวมทั้งหมด
+          </p>
+        </div>
+      </div>
+
+      {/* Multi-Year Trend YoY Comparison Table (แสดงเมื่อเลือก "ทุกปีงบประมาณ" หรือเพื่อเปรียบเทียบ) */}
+      {selectedYear === "all" && (
+        <div className="rounded-2xl border border-blue-200 bg-gradient-to-b from-blue-50/40 to-white p-4 shadow-xs space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-100 pb-2.5">
+            <h3 className="text-sm font-bold text-[#16265E] flex items-center gap-2">
+              <span>📈</span>
+              <span>ตารางเปรียบเทียบเชิงแนวโน้มข้ามปีงบประมาณ (Multi-Year Fiscal Benchmarking)</span>
+            </h3>
+            <span className="text-xs text-blue-800 bg-blue-100 px-2.5 py-0.5 rounded-full font-medium">
+              สถิติย้อนหลัง 3 ปีงบประมาณ
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-blue-50/70 text-gray-700">
+                <tr>
+                  <th className="py-2.5 px-3 font-bold">ปีงบประมาณ</th>
+                  <th className="py-2.5 px-3 font-bold text-center">จำนวนหลักสูตร</th>
+                  <th className="py-2.5 px-3 font-bold text-right">งบประมาณจัดสรรรวม (บาท)</th>
+                  <th className="py-2.5 px-3 font-bold text-center">ผู้ผ่านการอบรมจริง (คน)</th>
+                  <th className="py-2.5 px-3 font-bold text-right">ต้นทุนเฉลี่ยต่อหัว (บาท/คน)</th>
+                  <th className="py-2.5 px-3 font-bold text-center">สัดส่วนงบทั้งหมด</th>
+                  <th className="py-2.5 px-3 font-bold text-center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {yoySummary.map((item) => {
+                  const pct = stats.totalBudget > 0 ? ((item.budget / stats.totalBudget) * 100).toFixed(1) : "0.0";
+                  const isCur = item.year === "2570";
+                  return (
+                    <tr key={item.year} className="hover:bg-blue-50/30 transition">
+                      <td className="py-2.5 px-3 font-bold text-[#16265E] flex items-center gap-1.5">
+                        {isCur ? "⭐️ " : "📅 "}
+                        <span>ปี {item.year}</span>
+                        {isCur && <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.2 rounded font-normal">ปัจจุบัน</span>}
+                      </td>
+                      <td className="py-2.5 px-3 text-center font-semibold text-gray-800">{item.courseCount} หลักสูตร</td>
+                      <td className="py-2.5 px-3 text-right font-bold text-[#16265E]">฿{item.budget.toLocaleString("th-TH")}</td>
+                      <td className="py-2.5 px-3 text-center font-semibold text-green-700">{item.trainees} คน</td>
+                      <td className="py-2.5 px-3 text-right font-bold text-emerald-800">฿{item.avgCostPerTrainee.toLocaleString("th-TH")}</td>
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <div className="w-16 bg-gray-200 h-2 rounded-full overflow-hidden">
+                            <div className="bg-[#16265E] h-full rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="font-semibold text-gray-700 text-[11px]">{pct}%</span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedYear(item.year)}
+                          className="text-[11px] font-bold text-[#16265E] hover:underline"
+                        >
+                          กรองดูปีนี้ →
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Target Group Investment Allocation Card (5 Groups) */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-xs">
+        <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3 flex items-center justify-between">
+          <span className="flex items-center gap-1.5">
+            <span>🏛️</span>
+            <span>การกระจายงบประมาณสู่ 5 กลุ่มเป้าหมาย กกท. {selectedYear !== "all" && `(ประจำปี ${selectedYear})`}</span>
+          </span>
+          <span className="text-[11px] font-normal text-gray-500">
+            คำนวณตามสัดส่วนโควตาการพัฒนาบุคลากร
+          </span>
+        </h3>
+
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-5">
+          {/* 1. SAT */}
+          <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3">
+            <span className="text-[11px] font-semibold text-blue-900 block truncate">การกีฬาแห่งประเทศไทย</span>
+            <p className="mt-1 text-base font-bold text-[#16265E]">
+              ฿{Math.round(stats.targetGroupInvestments.sat).toLocaleString("th-TH")}
+            </p>
+            <span className="text-[10px] text-gray-500">
+              {stats.totalBudget > 0 ? Math.round((stats.targetGroupInvestments.sat / stats.totalBudget) * 100) : 0}% ของงบรวม
+            </span>
+          </div>
+
+          {/* 2. NSDF */}
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
+            <span className="text-[11px] font-semibold text-indigo-900 block truncate">กองทุนพัฒนาการกีฬาฯ</span>
+            <p className="mt-1 text-base font-bold text-[#16265E]">
+              ฿{Math.round(stats.targetGroupInvestments.nsdf).toLocaleString("th-TH")}
+            </p>
+            <span className="text-[10px] text-gray-500">
+              {stats.totalBudget > 0 ? Math.round((stats.targetGroupInvestments.nsdf / stats.totalBudget) * 100) : 0}% ของงบรวม
+            </span>
+          </div>
+
+          {/* 3. National Assoc */}
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
+            <span className="text-[11px] font-semibold text-emerald-900 block truncate">สมาคมกีฬาแห่งประเทศไทย</span>
+            <p className="mt-1 text-base font-bold text-emerald-950">
+              ฿{Math.round(stats.targetGroupInvestments.nationalAssoc).toLocaleString("th-TH")}
+            </p>
+            <span className="text-[10px] text-gray-500">
+              {stats.totalBudget > 0 ? Math.round((stats.targetGroupInvestments.nationalAssoc / stats.totalBudget) * 100) : 0}% ของงบรวม
+            </span>
+          </div>
+
+          {/* 4. Provincial Assoc */}
+          <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-3">
+            <span className="text-[11px] font-semibold text-teal-900 block truncate">สมาคมกีฬาแห่งจังหวัด</span>
+            <p className="mt-1 text-base font-bold text-teal-950">
+              ฿{Math.round(stats.targetGroupInvestments.provincialAssoc).toLocaleString("th-TH")}
+            </p>
+            <span className="text-[10px] text-gray-500">
+              {stats.totalBudget > 0 ? Math.round((stats.targetGroupInvestments.provincialAssoc / stats.totalBudget) * 100) : 0}% ของงบรวม
+            </span>
+          </div>
+
+          {/* 5. External */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-3">
+            <span className="text-[11px] font-semibold text-gray-700 block truncate">หน่วยงานภายนอก</span>
+            <p className="mt-1 text-base font-bold text-gray-900">
+              ฿{Math.round(stats.targetGroupInvestments.external).toLocaleString("th-TH")}
+            </p>
+            <span className="text-[10px] text-gray-500">
+              {stats.totalBudget > 0 ? Math.round((stats.targetGroupInvestments.external / stats.totalBudget) * 100) : 0}% ของงบรวม
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Main Budget Data Table */}
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-xs overflow-hidden">
-        <div className="border-b border-gray-200 bg-gray-50/80 px-5 py-3 flex flex-wrap items-center justify-between gap-2">
+      {/* Main Budget & Course Analytics Table */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3 mb-3">
           <div>
-            <h3 className="text-sm font-bold text-[#16265E]">
-              ตารางบันทึกและวิเคราะห์งบประมาณรายหลักสูตร
+            <h3 className="text-sm font-bold text-[#16265E] flex items-center gap-1.5">
+              <span>📋</span>
+              <span>ตารางบันทึกและวิเคราะห์งบประมาณรายหลักสูตร</span>
             </h3>
             <p className="text-[11px] text-gray-500">
-              💡 สามารถพิมพ์ตัวเลขงบประมาณในช่อง <strong>"งบประมาณจัดสรร (บาท)"</strong> เพื่อแก้ไขและบันทึกขึ้น Cloud ได้ทันที
+              💡 สามารถพิมพ์ตัวเลขงบประมาณในช่อง <strong>&quot;งบประมาณจัดสรร (บาท)&quot;</strong> เพื่อแก้ไขและบันทึกขึ้น Cloud ได้ทันที
             </p>
           </div>
-          <span className="text-xs text-gray-500">
-            ทั้งหมด {courses.length} หลักสูตร
-          </span>
+          <div className="text-xs font-semibold text-gray-500">
+            ทั้งหมด {stats.filteredCourses.length} หลักสูตร
+          </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-gray-200 bg-gray-100/70 text-[11px] font-bold text-gray-800">
-                <th className="py-2.5 px-3 text-center w-12">#</th>
-                <th className="py-2.5 px-3">ชื่อหลักสูตรการฝึกอบรม</th>
-                <th className="py-2.5 px-3 text-center">จังหวัดที่จัด</th>
-                <th className="py-2.5 px-3 text-center">ผู้สมัคร / ตัวจริง / ที่นั่ง</th>
-                <th className="py-2.5 px-3 text-right w-48">งบประมาณจัดสรร (บาท)</th>
-                <th className="py-2.5 px-3 text-right">ต้นทุนต่อหัว (บาท/คน)</th>
-                <th className="py-2.5 px-3 text-center">ความคุ้มค่า</th>
-                <th className="py-2.5 px-3 text-center w-24">จัดการ</th>
+          <table className="w-full text-left text-xs">
+            <thead className="bg-gray-50 text-gray-600 uppercase tracking-wider">
+              <tr>
+                <th className="py-3 px-3 font-bold text-center w-12">#</th>
+                <th className="py-3 px-3 font-bold text-center w-24">ปีงบประมาณ</th>
+                <th className="py-3 px-3 font-bold min-w-[240px]">ชื่อหลักสูตรการฝึกอบรม</th>
+                <th className="py-3 px-3 font-bold text-center min-w-[110px]">จังหวัดที่จัด</th>
+                <th className="py-3 px-3 font-bold text-center min-w-[130px]">ผู้สมัคร / ตัวจริง / ที่นั่ง</th>
+                <th className="py-3 px-3 font-bold text-center min-w-[160px]">งบประมาณจัดสรร (บาท)</th>
+                <th className="py-3 px-3 font-bold text-right min-w-[120px]">ต้นทุนต่อหัว (บาท/คน)</th>
+                <th className="py-3 px-3 font-bold text-center min-w-[110px]">ความคุ้มค่า</th>
+                <th className="py-3 px-3 font-bold text-center min-w-[80px]">จัดการ</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
-              {stats.courseMetrics.map((m, idx) => {
-                const isNotice = savedNotices[m.id];
-                const costBadge =
-                  m.costPerHead === 0
-                    ? { label: "ยังไม่ระบุงบ", cls: "bg-gray-100 text-gray-600" }
-                    : m.costPerHead <= 12000
-                    ? { label: "✓ ประหยัด/คุ้มค่าสูง", cls: "bg-emerald-100 text-emerald-800 border-emerald-300" }
-                    : m.costPerHead <= 25000
-                    ? { label: "มาตรฐาน", cls: "bg-blue-100 text-blue-800 border-blue-300" }
-                    : { label: "เข้มข้น/ต้นทุนสูง", cls: "bg-amber-100 text-amber-900 border-amber-300" };
+            <tbody className="divide-y divide-gray-100">
+              {stats.courseMetrics.map((course, idx) => {
+                const isOverBudget = course.costPerHead > stats.averageCostPerTrainee * 1.3 && stats.averageCostPerTrainee > 0;
+                const isCostEfficient = course.costPerHead > 0 && course.costPerHead <= stats.averageCostPerTrainee;
+                const isNotice = savedNotices[course.id];
 
                 return (
-                  <tr key={m.id} className="hover:bg-blue-50/30 transition-colors">
-                    <td className="py-3 px-3 text-center font-bold text-gray-500">
-                      {idx + 1}
-                    </td>
-                    <td className="py-3 px-3">
-                      <p className="font-bold text-gray-900 line-clamp-1">{m.title}</p>
-                      <p className="text-[10.5px] text-gray-500 mt-0.5">
-                        🗓️ {m.date} · 📍 {m.location}
-                      </p>
-                    </td>
+                  <tr key={course.id} className="hover:bg-gray-50/80 transition">
+                    {/* Index */}
+                    <td className="py-3 px-3 text-center text-gray-500 font-semibold">{idx + 1}</td>
+
+                    {/* Fiscal Year Badge */}
                     <td className="py-3 px-3 text-center">
-                      <span className="inline-block rounded-md bg-gray-100 border border-gray-300 px-2 py-0.5 text-[10.5px] font-semibold text-gray-800">
-                        {m.province || "กรุงเทพมหานคร"}
+                      <span className={`inline-block rounded-md px-2 py-0.5 text-[11px] font-bold ${
+                        course.fiscalYear === "2570"
+                          ? "bg-blue-100 text-[#16265E]"
+                          : course.fiscalYear === "2569"
+                          ? "bg-purple-100 text-purple-900"
+                          : "bg-amber-100 text-amber-900"
+                      }`}>
+                        ปี {course.fiscalYear}
                       </span>
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      <span className="font-bold text-[#16265E]">{m.applicantCount}</span>
-                      <span className="text-gray-400"> / </span>
-                      <span className="font-bold text-emerald-700">{m.approvedCount}</span>
-                      <span className="text-gray-400"> / </span>
-                      <span className="text-gray-600">{m.capacity}</span>
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <div className="relative">
-                          <input
-                            type="number"
-                            min="0"
-                            step="1000"
-                            value={inlineBudgets[m.id] !== undefined ? inlineBudgets[m.id] : ""}
-                            onChange={(e) => handleInlineBudgetChange(m.id, e.target.value)}
-                            onBlur={() => handleSaveInlineBudget(m.id)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") handleSaveInlineBudget(m.id);
-                            }}
-                            placeholder="0"
-                            className="h-8 w-32 rounded-lg border border-gray-300 bg-white px-2.5 text-right font-mono text-xs font-bold text-gray-900 shadow-2xs focus:border-[#16265E] focus:outline-none focus:ring-2 focus:ring-[#16265E]/20"
-                            title="พิมพ์ตัวเลขแล้วกด Enter หรือคลิกออกเพื่อบันทึกอัตโนมัติ"
-                          />
+                      {course.isHistorical && (
+                        <div className="mt-0.5 text-[9px] text-gray-500 font-medium">
+                          (ประวัติย้อนหลัง)
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleSaveInlineBudget(m.id)}
-                          className="h-8 w-8 shrink-0 rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-[#16265E] flex items-center justify-center text-xs shadow-2xs cursor-pointer"
-                          title="บันทึกงบประมาณ"
-                        >
-                          💾
-                        </button>
-                      </div>
-                      {isNotice && (
-                        <p className="mt-0.5 text-[9.5px] font-semibold text-emerald-700">
-                          ✓ บันทึกสำเร็จ
-                        </p>
                       )}
                     </td>
-                    <td className="py-3 px-3 text-right font-mono font-bold text-gray-900">
-                      {m.costPerHead > 0 ? `฿${m.costPerHead.toLocaleString("th-TH")}` : "-"}
+
+                    {/* Course Title & Date */}
+                    <td className="py-3 px-3">
+                      <div className="font-bold text-gray-900 leading-snug">{course.title}</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+                        <span>🗓️ {course.date || "ไม่ระบุ"}</span>
+                        <span>•</span>
+                        <span>📍 {course.location || "ต่างจังหวัด"}</span>
+                      </div>
                     </td>
+
+                    {/* Host Province */}
                     <td className="py-3 px-3 text-center">
-                      <span className={`inline-block rounded-md border px-2 py-0.5 text-[9.5px] font-bold ${costBadge.cls}`}>
-                        {costBadge.label}
+                      <span className="inline-flex items-center rounded-lg bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-700">
+                        {course.province || "กรุงเทพมหานคร"}
                       </span>
                     </td>
+
+                    {/* Applicants / Approved / Capacity */}
+                    <td className="py-3 px-3 text-center font-semibold text-gray-700">
+                      <span className="text-gray-900">{course.applicantCount}</span>
+                      <span className="text-gray-400"> / </span>
+                      <span className="text-green-700 font-bold">{course.approvedCount}</span>
+                      <span className="text-gray-400"> / </span>
+                      <span className="text-gray-500">{course.capacity}</span>
+                    </td>
+
+                    {/* Budget Quick Inline Edit */}
                     <td className="py-3 px-3 text-center">
-                      <button
-                        type="button"
-                        onClick={() => setEditingCourse(m)}
-                        className="rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 transition cursor-pointer shadow-2xs"
-                      >
-                        แก้ไข
-                      </button>
+                      <div className="inline-flex items-center gap-1">
+                        <input
+                          type="number"
+                          value={inlineBudgets[course.id] ?? (course.budget !== undefined ? String(course.budget) : "")}
+                          onChange={(e) => handleInlineBudgetChange(course.id, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveInlineBudget(course.id);
+                          }}
+                          placeholder="ใส่งบ..."
+                          className="w-28 rounded-lg border border-gray-300 px-2.5 py-1 text-center font-bold text-gray-900 shadow-2xs focus:border-[#16265E] focus:outline-none focus:ring-1 focus:ring-[#16265E]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleSaveInlineBudget(course.id)}
+                          title="บันทึกงบประมาณขึ้น Cloud"
+                          className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-[#16265E] transition cursor-pointer"
+                        >
+                          {isNotice ? (
+                            <span className="text-green-600 font-bold">✓</span>
+                          ) : (
+                            <span>💾</span>
+                          )}
+                        </button>
+                      </div>
+                    </td>
+
+                    {/* Cost per Head */}
+                    <td className="py-3 px-3 text-right font-bold text-[#16265E]">
+                      {course.costPerHead > 0 ? (
+                        <span>฿{course.costPerHead.toLocaleString("th-TH")}</span>
+                      ) : (
+                        <span className="text-gray-400 font-normal">-</span>
+                      )}
+                    </td>
+
+                    {/* Cost Efficiency Evaluation */}
+                    <td className="py-3 px-3 text-center">
+                      {course.budgetVal === 0 ? (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
+                          ยังไม่ระบุงบ
+                        </span>
+                      ) : isCostEfficient ? (
+                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-800">
+                          ✓ ประหยัด/คุ้มค่าสูง
+                        </span>
+                      ) : isOverBudget ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-900">
+                          ⚠️ สูงกว่าเฉลี่ย
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800">
+                          ปานกลาง/ตามเกณฑ์
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Action */}
+                    <td className="py-3 px-3 text-center">
+                      {course.isHistorical ? (
+                        <button
+                          type="button"
+                          onClick={() => setEditingHistoricalCourse(course)}
+                          className="rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-[11px] font-bold text-purple-800 hover:bg-purple-100 transition cursor-pointer"
+                        >
+                          แก้ไขประวัติ
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setEditingCourse(course)}
+                          className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 transition cursor-pointer"
+                        >
+                          แก้ไข
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
               })}
             </tbody>
-            <tfoot>
-              <tr className="border-t-2 border-gray-300 bg-gray-50 text-xs font-bold text-gray-900">
-                <td colSpan={3} className="py-3 px-4">
-                  รวมงบประมาณทั้งสิ้น ({courses.length} หลักสูตร)
+
+            {/* Total Summary Footer Row */}
+            <tfoot className="border-t-2 border-gray-300 bg-gray-50 font-bold text-gray-900">
+              <tr>
+                <td colSpan={4} className="py-3 px-3">
+                  รวมงบประมาณทั้งสิ้น ({stats.filteredCourses.length} หลักสูตร {selectedYear !== "all" ? `ปี ${selectedYear}` : "ทุกปีงบประมาณ"})
                 </td>
-                <td className="py-3 px-3 text-center font-mono">
+                <td className="py-3 px-3 text-center text-gray-800">
                   {stats.totalApplicants} / {stats.totalApproved} / {stats.totalCapacity}
                 </td>
-                <td className="py-3 px-3 text-right font-mono text-sm text-[#16265E]">
+                <td className="py-3 px-3 text-center text-[#16265E] font-black text-sm">
                   ฿{stats.totalBudget.toLocaleString("th-TH")}
                 </td>
-                <td className="py-3 px-3 text-right font-mono text-emerald-800">
+                <td className="py-3 px-3 text-right text-emerald-900 font-black">
                   ฿{stats.averageCostPerTrainee.toLocaleString("th-TH")}
                 </td>
-                <td colSpan={2} className="py-3 px-3 text-center text-gray-500 text-[10px]">
+                <td colSpan={2} className="py-3 px-3 text-center text-[11px] text-gray-500 font-normal">
                   เฉลี่ยทั้งโครงการ
                 </td>
               </tr>
@@ -434,214 +758,187 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
         </div>
       </div>
 
-      {/* Edit Course Dialog if clicked */}
+      {/* Edit Course Dialog (สำหรับหลักสูตรปกติ) */}
       {editingCourse && (
         <CourseEditDialog
           course={editingCourse}
           onClose={() => setEditingCourse(null)}
           onSave={(patch) => {
             const res = updateCourse(editingCourse.id, patch);
-            setEditingCourse(null);
             return Boolean(res);
           }}
         />
       )}
 
-      {/* Printable Executive Modal Dialog */}
-      {isPrintModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-2 sm:p-4 backdrop-blur-xs print:static print:inset-auto print:block print:bg-white print:p-0">
-          <style
-            dangerouslySetInnerHTML={{
-              __html: `
-                @media print {
-                  @page {
-                    size: A4 landscape;
-                    margin: 8mm 8mm 8mm 8mm;
-                  }
-                  body * {
-                    visibility: hidden;
-                  }
-                  .budget-print-container, .budget-print-container * {
-                    visibility: visible;
-                  }
-                  .budget-print-container {
-                    position: absolute;
-                    left: 0;
-                    top: 0;
-                    width: 100% !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    background: white !important;
-                  }
-                }
-              `,
-            }}
-          />
+      {/* Historical Course Dialog (สำหรับบันทึกหรือแก้ไขประวัติย้อนหลัง) */}
+      <HistoricalCourseDialog
+        isOpen={isHistoricalDialogOpen || Boolean(editingHistoricalCourse)}
+        courseToEdit={editingHistoricalCourse}
+        defaultFiscalYear={selectedYear !== "all" ? selectedYear : "2569"}
+        onClose={() => {
+          setIsHistoricalDialogOpen(false);
+          setEditingHistoricalCourse(null);
+        }}
+        onSuccess={() => {
+          setIsHistoricalDialogOpen(false);
+          setEditingHistoricalCourse(null);
+        }}
+      />
 
-          <div className="relative my-auto flex max-h-[96vh] w-full max-w-[1240px] flex-col rounded-2xl bg-white shadow-2xl print:my-0 print:max-h-none print:w-full print:rounded-none print:shadow-none">
-            {/* Top Toolbar */}
-            <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-6 py-3.5 print:hidden">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">🖨️</span>
-                <span className="font-bold text-[#16265E] text-sm">
-                  รายงานสรุปการวิเคราะห์ความคุ้มค่าของงบประมาณ (เสนอผู้บริหาร)
-                </span>
-              </div>
+      {/* Executive Print Report Modal (PDF A4 Landscape Format) */}
+      {isPrintModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="max-h-[95vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            {/* Modal Actions Bar */}
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-gray-50 px-6 py-3">
+              <span className="text-xs font-bold text-gray-700">
+                ตัวอย่างรายงานผู้บริหาร (A4 แนวนอน) - ปีงบประมาณ {selectedYear === "all" ? "ทั้งหมด" : selectedYear}
+              </span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-emerald-800 transition cursor-pointer"
+                  className="rounded-xl bg-[#16265E] px-4 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-[#111e4a] transition cursor-pointer"
                 >
-                  พิมพ์เอกสาร / บันทึก PDF
+                  🖨️ พิมพ์ออกเครื่องพิมพ์ / บันทึก PDF
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsPrintModalOpen(false)}
-                  className="rounded-xl border border-gray-300 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 transition cursor-pointer"
+                  className="rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-100 transition cursor-pointer"
                 >
-                  ✕ ปิด
+                  ปิด
                 </button>
               </div>
             </div>
 
-            {/* Document Body */}
-            <div className="overflow-y-auto p-6 print:p-0 print:overflow-visible">
-              <div
-                className="budget-print-container mx-auto w-full max-w-[1140px] bg-white p-6 text-gray-900 border border-gray-200 shadow-xs print:border-0 print:shadow-none print:p-0"
-                style={{ fontFamily: "'Sarabun', 'Noto Sans Thai', sans-serif" }}
-              >
-                {/* Header: SAT Emblem & Official Title */}
-                <div className="flex items-start justify-between border-b-2 border-[#16265E] pb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="relative h-14 w-14 shrink-0">
-                      <Image
-                        src="/assets/logo-sat-header.png"
-                        alt="ตราสัญลักษณ์ กกท."
-                        width={56}
-                        height={56}
-                        className="h-full w-full object-contain"
-                      />
-                    </div>
-                    <div>
-                      <h1 className="text-base font-black text-[#16265E] sm:text-lg">
-                        การกีฬาแห่งประเทศไทย (กกท.)
-                      </h1>
-                      <p className="text-xs font-bold text-gray-800 sm:text-sm">
-                        กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ
-                      </p>
-                      <p className="text-[11px] font-semibold text-[#1e3a8a]">
-                        รายงานสรุปการวิเคราะห์ความคุ้มค่าของงบประมาณโครงการพัฒนาบุคลากรกีฬา
-                      </p>
-                    </div>
+            {/* Printable Paper Canvas */}
+            <div className="p-8 text-black print:p-0 print:m-0" id="executive-budget-report">
+              {/* Official Header with SAT Branding */}
+              <div className="flex items-center justify-between border-b-2 border-[#16265E] pb-4">
+                <div className="flex items-center gap-4">
+                  <div className="relative h-14 w-14 shrink-0">
+                    <Image
+                      src="/assets/sat-logo.png"
+                      alt="กกท. การกีฬาแห่งประเทศไทย"
+                      fill
+                      className="object-contain"
+                    />
                   </div>
-                  <div className="text-right text-[11px]">
-                    <span className="inline-block rounded bg-blue-50 px-2 py-0.5 font-bold text-[#16265E] border border-blue-200">
-                      เอกสารเสนอผู้บริหาร
-                    </span>
-                    <p className="mt-1 text-gray-600">
-                      วันที่พิมพ์รายงาน: <strong>{printedDateThai}</strong>
+                  <div>
+                    <h1 className="text-base font-black text-[#16265E]">
+                      รายงานวิเคราะห์ความคุ้มค่าของงบประมาณและต้นทุนรายหลักสูตร {selectedYear !== "all" ? `ประจำปีงบประมาณ ${selectedYear}` : "(ภาพรวมทุกปีงบประมาณ)"}
+                    </h1>
+                    <p className="text-xs font-semibold text-gray-800">
+                      กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ การกีฬาแห่งประเทศไทย
                     </p>
                   </div>
                 </div>
+                <div className="text-right text-[11px] text-gray-600">
+                  <p>วันที่พิมพ์รายงาน: <strong>{printedDateThai}</strong></p>
+                  <p>ระบบรับสมัครและสารสนเทศบุคลากรกีฬา กกท.</p>
+                </div>
+              </div>
 
-                {/* KPI Summary Strip */}
-                <div className="mt-3 grid grid-cols-4 gap-3 text-xs">
-                  <div className="rounded-lg border border-gray-200 bg-gray-50/70 p-2.5 text-center">
-                    <p className="text-[10px] text-gray-500 font-semibold uppercase">งบประมาณรวมทั้งสิ้น</p>
-                    <p className="mt-0.5 text-lg font-black text-[#16265E]">
+              {/* Executive Summary Cards in Print */}
+              <div className="my-5 grid grid-cols-4 gap-3 text-xs">
+                <div className="border border-gray-300 rounded-lg p-2.5 bg-gray-50/50">
+                  <span className="text-gray-600 block">งบประมาณจัดสรรรวม</span>
+                  <span className="text-sm font-bold text-[#16265E]">฿{stats.totalBudget.toLocaleString("th-TH")}</span>
+                </div>
+                <div className="border border-gray-300 rounded-lg p-2.5 bg-gray-50/50">
+                  <span className="text-gray-600 block">ผู้ผ่านการอบรมรวม</span>
+                  <span className="text-sm font-bold text-green-800">{stats.totalApproved.toLocaleString()} คน</span>
+                </div>
+                <div className="border border-gray-300 rounded-lg p-2.5 bg-gray-50/50">
+                  <span className="text-gray-600 block">ต้นทุนเฉลี่ยต่อผู้ผ่านการอบรม</span>
+                  <span className="text-sm font-bold text-emerald-900">฿{stats.averageCostPerTrainee.toLocaleString("th-TH")}/คน</span>
+                </div>
+                <div className="border border-gray-300 rounded-lg p-2.5 bg-gray-50/50">
+                  <span className="text-gray-600 block">สัดส่วนสมาคมกีฬา</span>
+                  <span className="text-sm font-bold text-purple-900">
+                    ฿{Math.round(stats.targetGroupInvestments.nationalAssoc + stats.targetGroupInvestments.provincialAssoc).toLocaleString("th-TH")}
+                  </span>
+                </div>
+              </div>
+
+              {/* Print Table */}
+              <table className="w-full border-collapse border border-gray-300 text-[11px]">
+                <thead>
+                  <tr className="bg-gray-100 text-gray-900">
+                    <th className="border border-gray-300 py-2 px-2 text-center w-8">#</th>
+                    <th className="border border-gray-300 py-2 px-2 text-center w-16">ปีงบฯ</th>
+                    <th className="border border-gray-300 py-2 px-2 text-left">ชื่อหลักสูตรการฝึกอบรม</th>
+                    <th className="border border-gray-300 py-2 px-2 text-center w-24">จังหวัดที่จัด</th>
+                    <th className="border border-gray-300 py-2 px-2 text-center w-24">สมัคร/ตัวจริง/เป้า</th>
+                    <th className="border border-gray-300 py-2 px-2 text-right w-28">งบประมาณ (บาท)</th>
+                    <th className="border border-gray-300 py-2 px-2 text-right w-24">ต้นทุน/คน</th>
+                    <th className="border border-gray-300 py-2 px-2 text-center w-24">ประเมินความคุ้มค่า</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.courseMetrics.map((c, i) => (
+                    <tr key={c.id}>
+                      <td className="border border-gray-300 py-1.5 px-2 text-center">{i + 1}</td>
+                      <td className="border border-gray-300 py-1.5 px-2 text-center font-semibold">
+                        {c.fiscalYear}
+                      </td>
+                      <td className="border border-gray-300 py-1.5 px-2 font-medium">
+                        {c.title}
+                        {c.isHistorical && <span className="ml-1 text-[9px] text-gray-500 font-normal">(ประวัติ)</span>}
+                      </td>
+                      <td className="border border-gray-300 py-1.5 px-2 text-center">{c.province || "-"}</td>
+                      <td className="border border-gray-300 py-1.5 px-2 text-center">
+                        {c.applicantCount} / {c.approvedCount} / {c.capacity}
+                      </td>
+                      <td className="border border-gray-300 py-1.5 px-2 text-right font-bold">
+                        {c.budgetVal > 0 ? `฿${c.budgetVal.toLocaleString("th-TH")}` : "-"}
+                      </td>
+                      <td className="border border-gray-300 py-1.5 px-2 text-right font-semibold">
+                        {c.costPerHead > 0 ? `฿${c.costPerHead.toLocaleString("th-TH")}` : "-"}
+                      </td>
+                      <td className="border border-gray-300 py-1.5 px-2 text-center">
+                        {c.costPerHead > 0 && c.costPerHead <= stats.averageCostPerTrainee
+                          ? "คุ้มค่าสูง"
+                          : c.costPerHead > stats.averageCostPerTrainee * 1.3
+                          ? "สูงกว่าเฉลี่ย"
+                          : "ตามเกณฑ์"}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="bg-gray-100 font-bold">
+                    <td colSpan={4} className="border border-gray-300 py-2 px-2 text-left">
+                      รวมทั้งสิ้น ({stats.filteredCourses.length} หลักสูตร)
+                    </td>
+                    <td className="border border-gray-300 py-2 px-2 text-center">
+                      {stats.totalApplicants} / {stats.totalApproved} / {stats.totalCapacity}
+                    </td>
+                    <td className="border border-gray-300 py-2 px-2 text-right text-[#16265E]">
                       ฿{stats.totalBudget.toLocaleString("th-TH")}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 bg-gray-50/70 p-2.5 text-center">
-                    <p className="text-[10px] text-gray-500 font-semibold uppercase">เป้าหมายผู้เข้ารับการอบรม</p>
-                    <p className="mt-0.5 text-lg font-black text-gray-900">
-                      {stats.totalCapacity} คน
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-2.5 text-center">
-                    <p className="text-[10px] text-emerald-800 font-semibold uppercase">อนุมัติตัวจริงแล้ว</p>
-                    <p className="mt-0.5 text-lg font-black text-emerald-900">
-                      {stats.totalApproved} คน
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-purple-200 bg-purple-50/70 p-2.5 text-center">
-                    <p className="text-[10px] text-purple-800 font-semibold uppercase">ต้นทุนเฉลี่ยต่อคน</p>
-                    <p className="mt-0.5 text-lg font-black text-purple-900">
+                    </td>
+                    <td className="border border-gray-300 py-2 px-2 text-right text-emerald-900">
                       ฿{stats.averageCostPerTrainee.toLocaleString("th-TH")}
-                    </p>
-                  </div>
-                </div>
+                    </td>
+                    <td className="border border-gray-300 py-2 px-2 text-center">
+                      เฉลี่ยทั้งโครงการ
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
 
-                {/* Print Table */}
-                <div className="mt-4 overflow-hidden rounded-lg border border-gray-300">
-                  <table className="w-full text-left text-[11px] border-collapse">
-                    <thead>
-                      <tr className="border-b border-gray-300 bg-gray-100 text-[10.5px] font-bold text-gray-900">
-                        <th className="py-2 px-2 text-center w-10">ลำดับ</th>
-                        <th className="py-2 px-2">ชื่อหลักสูตรการฝึกอบรม</th>
-                        <th className="py-2 px-2 text-center">จังหวัด</th>
-                        <th className="py-2 px-2 text-center">กำหนดการ</th>
-                        <th className="py-2 px-2 text-center">เป้าหมาย (คน)</th>
-                        <th className="py-2 px-2 text-center">ตัวจริง (คน)</th>
-                        <th className="py-2 px-2 text-right">งบประมาณ (บาท)</th>
-                        <th className="py-2 px-2 text-right">ต้นทุน/คน (บาท)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {stats.courseMetrics.map((m, idx) => (
-                        <tr key={m.id} className="text-[10px]">
-                          <td className="py-2 px-2 text-center font-bold text-gray-500">{idx + 1}</td>
-                          <td className="py-2 px-2 font-semibold text-gray-900">{m.title}</td>
-                          <td className="py-2 px-2 text-center">{m.province || "กรุงเทพมหานคร"}</td>
-                          <td className="py-2 px-2 text-center text-gray-600">{m.date}</td>
-                          <td className="py-2 px-2 text-center">{m.capacity}</td>
-                          <td className="py-2 px-2 text-center font-bold text-emerald-800">{m.approvedCount}</td>
-                          <td className="py-2 px-2 text-right font-mono font-bold">
-                            {m.budgetVal > 0 ? `฿${m.budgetVal.toLocaleString("th-TH")}` : "-"}
-                          </td>
-                          <td className="py-2 px-2 text-right font-mono font-bold text-[#16265E]">
-                            {m.costPerHead > 0 ? `฿${m.costPerHead.toLocaleString("th-TH")}` : "-"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold text-[11px]">
-                        <td colSpan={4} className="py-2.5 px-3">รวมทั้งสิ้น ({courses.length} หลักสูตร)</td>
-                        <td className="py-2.5 px-2 text-center">{stats.totalCapacity}</td>
-                        <td className="py-2.5 px-2 text-center text-emerald-900">{stats.totalApproved}</td>
-                        <td className="py-2.5 px-2 text-right font-mono text-[#16265E]">
-                          ฿{stats.totalBudget.toLocaleString("th-TH")}
-                        </td>
-                        <td className="py-2.5 px-2 text-right font-mono text-[#16265E]">
-                          ฿{stats.averageCostPerTrainee.toLocaleString("th-TH")}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
+              {/* Executive Sign-off Block */}
+              <div className="mt-10 grid grid-cols-2 gap-8 text-xs">
+                <div className="text-center space-y-8">
+                  <p>ผู้จัดทำรายงาน / เจ้าหน้าที่วิเคราะห์งบประมาณ</p>
+                  <p className="border-b border-dotted border-gray-400 w-48 mx-auto" />
+                  <p>(......................................................................)</p>
+                  <p>ตำแหน่ง ..............................................................</p>
                 </div>
-
-                {/* Sign-off Section */}
-                <div className="mt-8 grid grid-cols-2 gap-8 text-xs">
-                  <div className="rounded-lg border border-gray-200 p-4 text-center">
-                    <p className="font-bold text-gray-800">ผู้รายงาน / เจ้าหน้าที่ประสานงานหลักสูตร</p>
-                    <div className="mx-auto mt-12 w-48 border-b border-gray-400 border-dashed" />
-                    <p className="mt-2 text-gray-700">( ............................................................ )</p>
-                    <p className="text-[10px] text-gray-500 mt-1">วันที่ ........ / ........ / ................</p>
-                  </div>
-                  <div className="rounded-lg border border-blue-200 bg-blue-50/30 p-4 text-center">
-                    <p className="font-bold text-[#16265E]">ผู้อำนวยการกองพัฒนาบุคลากรกีฬา</p>
-                    <div className="mx-auto mt-12 w-48 border-b border-gray-400 border-dashed" />
-                    <p className="mt-2 text-gray-700">( ............................................................ )</p>
-                    <p className="text-[10px] text-gray-500 mt-1">วันที่ ........ / ........ / ................</p>
-                  </div>
-                </div>
-
-                {/* Footer Note */}
-                <div className="mt-4 flex items-center justify-between border-t border-gray-200 pt-2 text-[9.5px] text-gray-500">
-                  <span>กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ การกีฬาแห่งประเทศไทย</span>
-                  <span>ระบบรับสมัครและฐานข้อมูลบุคลากรกีฬาออนไลน์</span>
+                <div className="text-center space-y-8">
+                  <p>ผู้อนุมัติ / ผู้อำนวยการกองพัฒนาบุคลากรกีฬา</p>
+                  <p className="border-b border-dotted border-gray-400 w-48 mx-auto" />
+                  <p>(......................................................................)</p>
+                  <p>วันที่ .......... / .......... / ................</p>
                 </div>
               </div>
             </div>

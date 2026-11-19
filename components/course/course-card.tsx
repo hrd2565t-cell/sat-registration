@@ -11,7 +11,7 @@ export interface CourseCardProps {
   id: number;
   image: string;
   imageAlt: string;
-  status: "open" | "full";
+  status: "open" | "full" | "completed" | "closed";
   seatsLeft?: number;
   title: string;
   useCustomSchedule?: boolean;
@@ -146,7 +146,7 @@ export function CourseCard({
   const { applications } = useApplications();
   const currentCourse = courses.find((c) => c.id === id);
   const activeAnnouncement = announcementFile || currentCourse?.announcementFile;
-  const isClosed = status === "full";
+  const isClosed = status === "full" || status === "completed" || status === "closed";
   const matchCap = seats.match(/(\d+)/);
   const cap = matchCap ? parseInt(matchCap[1], 10) : 40;
   const applicantCount = applications.filter(

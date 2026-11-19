@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Image from "next/image";
 import type { Course } from "@/lib/courses";
+import { getCourseFiscalYear } from "@/lib/courses";
 import type { ApplicantRecord } from "@/lib/applications-store";
 import {
   THAI_PROVINCES,
@@ -17,10 +18,23 @@ interface TrainingMapTabProps {
 }
 
 export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
+  const [selectedYear, setSelectedYear] = useState<string>("all");
   const [selectedRegion, setSelectedRegion] = useState<ThaiRegionKey | "all">("all");
   const [selectedProvince, setSelectedProvince] = useState<ProvinceInfo | null>(null);
   const [hoveredProvince, setHoveredProvince] = useState<ProvinceInfo | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
+  // คำนวณรายชื่อปีงบประมาณที่มีทั้งหมดในระบบ (เรียงจากปีล่าสุดไปอดีต)
+  const availableYears = useMemo(() => {
+    const yearsSet = new Set<string>();
+    courses.forEach((c) => {
+      yearsSet.add(getCourseFiscalYear(c));
+    });
+    yearsSet.add("2570");
+    yearsSet.add("2569");
+    yearsSet.add("2568");
+    return Array.from(yearsSet).sort((a, b) => b.localeCompare(a));
+  }, [courses]);
 
   // คำนวณความถี่และสถิติรายจังหวัด
   const provinceStats = useMemo(() => {
@@ -44,7 +58,11 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
       };
     });
 
-    courses.forEach((course) => {
+    const filteredCourses = courses.filter(
+      (c) => selectedYear === "all" || getCourseFiscalYear(c) === selectedYear
+    );
+
+    filteredCourses.forEach((course) => {
       const provName = course.province || "กรุงเทพมหานคร";
       const target = freqMap[provName] || {
         courses: [],
@@ -53,13 +71,23 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
         totalBudget: 0,
       };
 
-      const courseApps = applications.filter((a) => a.courseId === course.id && a.status !== "rejected");
-      const approvedApps = courseApps.filter((a) => a.status === "approved");
       const bVal = course.budget || 0;
+      let appCount = 0;
+      let appApproved = 0;
+
+      if (course.isHistorical) {
+        appApproved = course.historicalCompleted ?? course.capacity ?? 40;
+        appCount = course.historicalApplicants ?? course.capacity ?? 40;
+      } else {
+        const courseApps = applications.filter((a) => a.courseId === course.id && a.status !== "rejected");
+        const approvedApps = courseApps.filter((a) => a.status === "approved");
+        appCount = courseApps.length;
+        appApproved = approvedApps.length;
+      }
 
       target.courses.push(course);
-      target.applicantCount += courseApps.length;
-      target.approvedCount += approvedApps.length;
+      target.applicantCount += appCount;
+      target.approvedCount += appApproved;
       target.totalBudget += bVal;
       freqMap[provName] = target;
     });
@@ -116,7 +144,7 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
       topHosts,
       blindSpots,
     };
-  }, [courses, applications]);
+  }, [courses, applications, selectedYear]);
 
   // จังหวัดที่ผ่านการกรองตามภูมิภาค
   const filteredProvinces = useMemo(() => {
@@ -215,6 +243,58 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
             <span>🖨️</span>
             <span>พิมพ์รายงานแผนที่เสนอผู้บริหาร (PDF)</span>
           </button>
+        </div>
+      </div>
+
+      {/* Year Filter Pills Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-gray-500 flex items-center gap-1.5 mr-1">
+            <span>📅</span>
+            <span>ตัวกรองปีงบประมาณ:</span>
+          </span>
+
+          <button
+            type="button"
+            onClick={() => setSelectedYear("all")}
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition cursor-pointer ${
+              selectedYear === "all"
+                ? "bg-[#16265E] text-white shadow-xs"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            ทุกปีงบประมาณ ({courses.length})
+          </button>
+
+          {availableYears.map((yr) => {
+            const countInYear = courses.filter((c) => getCourseFiscalYear(c) === yr).length;
+            const isCurrentYear = yr === "2570";
+            return (
+              <button
+                key={yr}
+                type="button"
+                onClick={() => setSelectedYear(yr)}
+                className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  selectedYear === yr
+                    ? "bg-[#16265E] text-white shadow-xs"
+                    : isCurrentYear
+                    ? "bg-blue-50 text-[#16265E] border border-blue-200 hover:bg-blue-100"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                {isCurrentYear && <span>⭐️</span>}
+                <span>ปี {yr}</span>
+                {isCurrentYear && <span className="text-[10px] font-normal opacity-90">(ปัจจุบัน)</span>}
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${selectedYear === yr ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700"}`}>
+                  {countInYear}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="text-xs text-gray-500">
+          แสดงความถี่: <strong className="text-[#16265E]">{selectedYear === "all" ? "สะสมทุกปีงบประมาณ" : `ประจำปีงบประมาณ ${selectedYear}`}</strong>
         </div>
       </div>
 
@@ -594,6 +674,20 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
                         key={c.id}
                         className="rounded-xl border border-gray-200 bg-gray-50/70 p-3 text-xs"
                       >
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${
+                            getCourseFiscalYear(c) === "2570"
+                              ? "bg-blue-100 text-[#16265E]"
+                              : "bg-purple-100 text-purple-900"
+                          }`}>
+                            ปี {getCourseFiscalYear(c)}
+                          </span>
+                          {c.isHistorical && (
+                            <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[9px] text-gray-600 font-medium">
+                              ประวัติย้อนหลัง
+                            </span>
+                          )}
+                        </div>
                         <p className="font-bold text-[#16265E]">{c.title}</p>
                         <p className="text-[11px] text-gray-600 mt-1">
                           🗓️ วันที่: <strong>{c.date}</strong> · 📍 สถานที่: {c.location}
