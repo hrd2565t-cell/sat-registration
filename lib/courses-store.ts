@@ -122,8 +122,8 @@ interface CoursesState {
   revision: number;
 }
 
-const STORAGE_KEY = "sat-courses-v9";
-const LEGACY_COURSE_KEYS = ["sat-courses-v8", "sat-courses-v7", "sat-courses-v6", "sat-courses-v5", "sat-courses-v4"];
+const STORAGE_KEY = "sat-courses-v10";
+const LEGACY_COURSE_KEYS = ["sat-courses-v9", "sat-courses-v8", "sat-courses-v7", "sat-courses-v6", "sat-courses-v5", "sat-courses-v4"];
 let lastLocalCourseEditAt = 0;
 
 function cloneSeedCourses() {
@@ -214,40 +214,37 @@ function mergeStoredCourses(stored: Course[]): Course[] {
     const seedQuotas = seed?.targetQuotas ?? balanceQuotasToCapacity(cap);
     const finalStoredQuotas = saved.targetQuotas ?? seedQuotas;
 
-    // หากเป็นหลักสูตรประวัติศาสตร์ที่มีการปรับปรุงให้ตรงกับ Timeline
-    const isOldMockTitle =
-      saved.title.includes("การบริหารจัดการการกีฬาสำหรับผู้บริหารระดับต้น") ||
-      saved.title.includes("การพัฒนาศักยภาพผู้ฝึกสอนกีฬาคนพิการสู่สากล") ||
-      saved.title.includes("จิตวิทยาการกีฬาและการดูแลนักกีฬาเพื่อความเป็นเลิศ");
-    const finalTitle = isOldMockTitle && seed ? seed.title : saved.title;
-    const finalShortTitle = isOldMockTitle && seed ? seed.shortTitle : (
-      saved.shortTitle === "วิทยาศาสตร์การกีฬา" && saved.title.includes("งบประมาณ")
-        ? "งบประมาณและพัสดุ"
-        : saved.shortTitle !== undefined
-        ? saved.shortTitle
-        : seed?.shortTitle
-    );
-    const finalHistoricalCompleted = isOldMockTitle && seed ? seed.historicalCompleted : (saved.historicalCompleted ?? seed?.historicalCompleted);
-    const finalHistoricalApplicants = isOldMockTitle && seed ? seed.historicalApplicants : (saved.historicalApplicants ?? seed?.historicalApplicants);
-    const finalProvince = isOldMockTitle && seed ? seed.province : (saved.province ?? seed?.province);
-    const finalLocation = isOldMockTitle && seed ? seed.location : (saved.location ?? seed?.location);
-    const finalBudget = isOldMockTitle && seed ? seed.budget : (saved.budget ?? seed?.budget);
+    // หากเป็นหลักสูตรประวัติศาสตร์ย้อนหลัง (id >= 100) ให้ใช้ข้อมูลทางการจาก Timeline (seed) เสมอ
+    // โดยเปิดให้แอดมินแก้ไขงบประมาณเฉพาะรายหลักสูตรได้ตามจริง
+    if (saved.id >= 100 && seed) {
+      return {
+        ...seed,
+        budget: saved.budget !== undefined ? saved.budget : seed.budget,
+        targetQuotas: saved.targetQuotas ?? seed.targetQuotas,
+        isHistorical: true,
+      };
+    }
 
     return {
       ...(seed ?? {}),
       ...saved,
       id: saved.id,
-      title: finalTitle,
-      shortTitle: finalShortTitle,
-      location: finalLocation,
-      province: finalProvince,
-      budget: finalBudget,
-      historicalCompleted: finalHistoricalCompleted,
-      historicalApplicants: finalHistoricalApplicants,
-      date: isOldMockTitle && seed ? seed.date : finalDate,
+      title: saved.title,
+      shortTitle:
+        saved.shortTitle === "วิทยาศาสตร์การกีฬา" && saved.title.includes("งบประมาณ")
+          ? "งบประมาณและพัสดุ"
+          : saved.shortTitle !== undefined
+          ? saved.shortTitle
+          : seed?.shortTitle,
+      location: saved.location ?? seed?.location,
+      province: saved.province ?? seed?.province,
+      budget: saved.budget ?? seed?.budget,
+      historicalCompleted: saved.historicalCompleted ?? seed?.historicalCompleted,
+      historicalApplicants: saved.historicalApplicants ?? seed?.historicalApplicants,
+      date: finalDate,
       targetQuotas: finalStoredQuotas,
       image: customImage ?? seed?.image ?? "/assets/course-executive-management.jpg",
-      imageAlt: saved.imageAlt || seed?.imageAlt || `${finalTitle} - รูปประกอบ`,
+      imageAlt: saved.imageAlt || seed?.imageAlt || `${saved.title} - รูปประกอบ`,
       useCustomSchedule: isCustom,
       registrationDate: isCustom
         ? saved.registrationDate || seed?.registrationDate || globalSched.registrationDate
@@ -358,10 +355,10 @@ function mapCloudCourse(
   }
 
   const isOldCloudMock = c.id === 3 && c.date === "1-3 ธ.ค. 2569";
-  const finalDate = isOldCloudMock ? (seed?.date || "20-22 ม.ค. 2570") : c.date;
-  const finalTitle = c.title;
-  const finalLocation = c.location;
-  const finalSeats = c.seats;
+  const finalDate = isOldCloudMock ? (seed?.date || "20-22 ม.ค. 2570") : (c.id >= 100 && seed ? seed.date : c.date);
+  const finalTitle = c.id >= 100 && seed ? seed.title : c.title;
+  const finalLocation = c.id >= 100 && seed ? seed.location : c.location;
+  const finalSeats = c.id >= 100 && seed ? seed.seats : c.seats;
 
   const rawCloudQuotas = (c as { target_quotas?: any }).target_quotas;
   if (rawCloudQuotas?._globalTimeline && typeof rawCloudQuotas._globalTimeline === "object") {
@@ -477,7 +474,9 @@ function mapCloudCourse(
     id: c.id,
     title: finalTitle,
     shortTitle:
-      (c as { short_title?: string }).short_title || seed?.shortTitle || existing?.shortTitle,
+      c.id >= 100 && seed
+        ? seed.shortTitle
+        : (c as { short_title?: string }).short_title || seed?.shortTitle || existing?.shortTitle,
     date: finalDate,
     location: finalLocation,
     seats: finalSeats,
@@ -485,8 +484,8 @@ function mapCloudCourse(
     seatsLeft: finalSeatsLeft,
     status: c.status === "full" ? "full" : "open",
     updatedAt: cloudUpdatedAt || existing?.updatedAt,
-    image: c.image || seed?.image || "/assets/course-executive-management.jpg",
-    imageAlt: c.image_alt || seed?.imageAlt || `${c.title} - รูปประกอบ`,
+    image: (c.id >= 100 && seed ? seed.image : c.image) || seed?.image || "/assets/course-executive-management.jpg",
+    imageAlt: c.image_alt || seed?.imageAlt || `${finalTitle} - รูปประกอบ`,
     warningMessage:
       c.id === 1 && c.warning_message?.includes("ต้องมีใบประกอบวิชาชีพ")
         ? undefined
@@ -551,25 +550,31 @@ function mapCloudCourse(
         ? Number(cloudMeta.budget)
         : existing?.budget ?? seed?.budget ?? undefined,
     province:
-      cloudMeta?.province !== undefined
+      c.id >= 100 && seed?.province
+        ? seed.province
+        : cloudMeta?.province !== undefined
         ? String(cloudMeta.province)
         : existing?.province ?? seed?.province ?? detectProvinceFromLocation(finalLocation),
     fiscalYear:
-      cloudMeta?.fiscalYear !== undefined
+      c.id >= 100 && seed?.fiscalYear
+        ? seed.fiscalYear
+        : cloudMeta?.fiscalYear !== undefined
         ? String(cloudMeta.fiscalYear)
         : existing?.fiscalYear ?? seed?.fiscalYear ?? getCourseFiscalYear(existing ?? seed ?? ({ date: finalDate } as Course)),
     isHistorical:
-      cloudMeta?.isHistorical !== undefined
+      c.id >= 100
+        ? true
+        : cloudMeta?.isHistorical !== undefined
         ? Boolean(cloudMeta.isHistorical)
         : existing?.isHistorical ?? seed?.isHistorical ?? false,
     historicalCompleted:
       cloudMeta?.historicalCompleted !== undefined
         ? Number(cloudMeta.historicalCompleted)
-        : existing?.historicalCompleted ?? seed?.historicalCompleted ?? undefined,
+        : seed?.historicalCompleted ?? existing?.historicalCompleted ?? undefined,
     historicalApplicants:
       cloudMeta?.historicalApplicants !== undefined
         ? Number(cloudMeta.historicalApplicants)
-        : existing?.historicalApplicants ?? seed?.historicalApplicants ?? undefined,
+        : seed?.historicalApplicants ?? existing?.historicalApplicants ?? undefined,
   };
 }
 
@@ -671,7 +676,8 @@ export async function refreshCoursesFromCloud(): Promise<void> {
         typeof window !== "undefined" &&
         window.sessionStorage.getItem("sat-admin-authenticated") === "true";
 
-      const cloudCourses = data.map((c) => {
+      const cloudCourseMap = new Map<number, Course>();
+      data.forEach((c) => {
         const mapped = mapCloudCourse(c, state.courses);
         if (isAdminSession) {
           const seed = getSeedCourse(c.id);
@@ -686,7 +692,20 @@ export async function refreshCoursesFromCloud(): Promise<void> {
             void pushCourseToSupabase(mapped);
           }
         }
-        return mapped;
+        cloudCourseMap.set(mapped.id, mapped);
+      });
+
+      // มั่นใจว่าหลักสูตรใน seedCourses (รวมถึงประวัติศาสตร์ย้อนหลัง 2569, 2568, 2567) มีอยู่ในรายการครบถ้วนเสมอ
+      seedCourses.forEach((sc) => {
+        if (!cloudCourseMap.has(sc.id)) {
+          cloudCourseMap.set(sc.id, { ...sc });
+        }
+      });
+
+      const cloudCourses = Array.from(cloudCourseMap.values()).sort((a, b) => {
+        if (a.id < 100 && b.id >= 100) return -1;
+        if (a.id >= 100 && b.id < 100) return 1;
+        return a.id - b.id;
       });
       state = {
         courses: cloudCourses,
@@ -793,6 +812,8 @@ function hydrate() {
           if (!Array.isArray(legacyParsed)) continue;
           for (const item of legacyParsed as Course[]) {
             if (!item || typeof item.id !== "number") continue;
+            // ไม่กู้คืนหลักสูตรประวัติศาสตร์ (id >= 100) จากแคชเก่า เพื่อให้ซิงก์ตรงกับ Timeline (seed) เสมอ
+            if (item.id >= 100) continue;
             const seed = getSeedCourse(item.id);
             const hasCustomMeta =
               item.courseObjective &&
