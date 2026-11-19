@@ -8,9 +8,11 @@ import type { ApplicantRecord } from "@/lib/applications-store";
 import {
   THAI_PROVINCES,
   THAI_REGIONS,
+  THAILAND_MAP_PATHS,
   type ThaiRegionKey,
   type ProvinceInfo,
 } from "@/lib/provinces";
+import { RealLeafletMap } from "@/components/admin/real-leaflet-map";
 
 interface TrainingMapTabProps {
   courses: Course[];
@@ -22,6 +24,7 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
   const [selectedRegion, setSelectedRegion] = useState<ThaiRegionKey | "all">("all");
   const [selectedProvince, setSelectedProvince] = useState<ProvinceInfo | null>(null);
   const [hoveredProvince, setHoveredProvince] = useState<ProvinceInfo | null>(null);
+  const [viewMode, setViewMode] = useState<"strategic" | "real">("strategic");
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   // คำนวณรายชื่อปีงบประมาณที่มีทั้งหมดในระบบ (เรียงจากปีล่าสุดไปอดีต)
@@ -154,38 +157,62 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
 
   // ฟังก์ชันสีกราฟตามความถี่ (Heatmap Scale)
   const getProvinceColor = (count: number) => {
-    if (count === 0) return "#e2e8f0"; // สีเทาอ่อน
-    if (count === 1) return "#38bdf8"; // สีฟ้าสดใส
+    if (count === 0) return "#94a3b8"; // สีเทาหมอกคมชัด
+    if (count === 1) return "#0284c7"; // สีฟ้าสดใส
     if (count === 2) return "#2563eb"; // สีน้ำเงินมาตรฐาน
     return "#16265E"; // สีกรมท่า กกท. เข้มข้น
+  };
+
+  // ตำแหน่งป้ายชื่อแบบชาญฉลาดไม่ให้ซ้อนทับกัน (Anti-Collision Label Positioning)
+  const getLabelPosition = (p: ProvinceInfo) => {
+    if (p.id === "AYA") {
+      // พระนครศรีอยุธยา: ลอยขึ้นด้านบน
+      return { x: p.x, y: p.y - 12, anchor: "middle" as const };
+    }
+    if (p.id === "BKK") {
+      // กรุงเทพฯ: เยื้องไปทางซ้าย
+      return { x: p.x - 12, y: p.y + 4, anchor: "end" as const };
+    }
+    if (p.id === "NON" || p.id === "PTE") {
+      // นนทบุรี / ปทุมธานี: เยื้องตะวันตกเฉียงเหนือ
+      return { x: p.x - 10, y: p.y - 8, anchor: "end" as const };
+    }
+    if (p.id === "CBI") {
+      // ชลบุรี: เยื้องตะวันออกเฉียงใต้
+      return { x: p.x + 12, y: p.y + 10, anchor: "start" as const };
+    }
+    if (p.id === "SPK") {
+      // สมุทรปราการ: เยื้องตะวันออกเฉียงใต้
+      return { x: p.x + 10, y: p.y + 8, anchor: "start" as const };
+    }
+    return { x: p.x + 10, y: p.y + 3.5, anchor: "start" as const };
   };
 
   // ส่งออกข้อมูลเป็นไฟล์ Excel (CSV)
   const handleExportCsv = () => {
     const headers = [
       "รหัสจังหวัด",
-      "ชื่อจังหวัด",
-      "ชื่อภาษาอังกฤษ",
+      "ชื่อจังหวัด (ไทย)",
+      "ชื่อจังหวัด (อังกฤษ)",
       "ภูมิภาค",
-      "จำนวนหลักสูตรที่จัด (ครั้ง)",
-      "งบประมาณรวมในจังหวัด (บาท)",
-      "ผู้สมัครจริง (คน)",
-      "อนุมัติตัวจริง (คน)",
+      "จำนวนครั้งที่จัดอบรม",
+      "รายชื่อหลักสูตรที่จัด",
+      "จำนวนผู้สมัคร (คน)",
+      "ผู้ผ่านการอบรมจริง (คน)",
+      "งบประมาณรวม (บาท)",
     ];
 
-    const rows = THAI_PROVINCES.map((p) => {
-      const data = provinceStats.freqMap[p.nameTh];
-      return [
-        p.id,
-        `"${p.nameTh}"`,
-        `"${p.nameEn}"`,
-        `"${p.regionNameTh}"`,
-        data.courses.length,
-        data.totalBudget,
-        data.applicantCount,
-        data.approvedCount,
-      ];
-    });
+    const rows = provinceStats.rankedProvinces.map((p) => [
+      p.id,
+      `"${p.nameTh}"`,
+      `"${p.nameEn}"`,
+      `"${p.regionNameTh}"`,
+      p.metrics.courses.length,
+      `"${p.metrics.courses.map((c) => c.title).join("; ")}"`,
+      p.metrics.applicantCount,
+      p.metrics.approvedCount,
+      p.metrics.totalBudget,
+    ]);
 
     const csvContent =
       "\uFEFF" +
@@ -195,7 +222,7 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", `SAT_Training_Frequency_Map_${Date.now()}.csv`);
+    link.setAttribute("download", `SAT_Training_Frequency_Provinces_${selectedYear}_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -221,7 +248,7 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
             <span>แผนที่ความถี่ของการจัดอบรม (Training Geographic Map & Regional Distribution)</span>
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            ติดตามการกระจายตัวของหลักสูตรพัฒนาบุคลากรกีฬาทั่วประเทศไทย เพื่อเป็นข้อมูลเชิงยุทธศาสตร์เสนอผู้บริหาร
+            ติดตามการกระจายตัวของหลักสูตรพัฒนาบุคลากรกีฬาทั่วประเทศไทยตามภูมิศาสตร์จริง เพื่อเป็นข้อมูลเชิงยุทธศาสตร์เสนอผู้บริหาร
           </p>
         </div>
 
@@ -305,7 +332,7 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-blue-900 uppercase">จังหวัดที่จัดอบรม</span>
             <span className="rounded-md bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800">
-              ครอบคลุมพื้นที่
+              ครอบคลุม
             </span>
           </div>
           <div className="mt-2 flex items-baseline gap-1.5">
@@ -363,7 +390,7 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
 
       {/* Main Interactive Map & Regional Distribution Section */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Left: Interactive Thailand Heatmap SVG (7 Cols) */}
+        {/* Left: Interactive Thailand Heatmap (7 Cols) */}
         <div className="lg:col-span-7 rounded-2xl border border-gray-200 bg-white p-5 shadow-xs flex flex-col">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 pb-3">
             <div>
@@ -376,160 +403,367 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
               </p>
             </div>
 
+            {/* View Mode Switcher (2-in-1 Dual View) */}
+            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setViewMode("strategic")}
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                  viewMode === "strategic"
+                    ? "bg-white text-[#16265E] shadow-xs"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                <span>🗺️</span>
+                <span>แผนที่ยุทธศาสตร์ขวานทอง</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("real")}
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                  viewMode === "real"
+                    ? "bg-white text-[#16265E] shadow-xs"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                <span>🛰️</span>
+                <span>แผนที่จริง OpenStreetMap</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Region Filter Buttons */}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSelectedRegion("all")}
+                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                  selectedRegion === "all"
+                    ? "bg-[#16265E] text-white shadow-2xs"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                ทั้งหมด (77 จังหวัด)
+              </button>
+              {Object.values(THAI_REGIONS).map((reg) => (
+                <button
+                  key={reg.key}
+                  type="button"
+                  onClick={() => setSelectedRegion(reg.key)}
+                  className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                    selectedRegion === reg.key
+                      ? "bg-[#16265E] text-white shadow-2xs"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  {reg.nameTh} ({provinceStats.regionMetrics[reg.key].courseCount} ครั้ง)
+                </button>
+              ))}
+            </div>
+
             {/* Heatmap Legend */}
             <div className="flex items-center gap-2 text-[10px] text-gray-600">
               <span className="flex items-center gap-1">
-                <span className="h-3 w-3 rounded-full bg-[#e2e8f0] border border-gray-300" />
-                <span>0 ครั้ง</span>
+                <span className="h-2.5 w-2.5 rounded-full bg-[#94a3b8]" />
+                <span>0</span>
               </span>
               <span className="flex items-center gap-1">
-                <span className="h-3 w-3 rounded-full bg-[#38bdf8]" />
+                <span className="h-2.5 w-2.5 rounded-full bg-[#0284c7]" />
                 <span>1 ครั้ง</span>
               </span>
               <span className="flex items-center gap-1">
-                <span className="h-3 w-3 rounded-full bg-[#2563eb]" />
+                <span className="h-2.5 w-2.5 rounded-full bg-[#2563eb]" />
                 <span>2 ครั้ง</span>
               </span>
               <span className="flex items-center gap-1">
-                <span className="h-3 w-3 rounded-full bg-[#16265E]" />
+                <span className="h-2.5 w-2.5 rounded-full bg-[#16265E]" />
                 <span>3+ ครั้ง</span>
               </span>
             </div>
           </div>
 
-          {/* Region Filter Buttons */}
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setSelectedRegion("all")}
-              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
-                selectedRegion === "all"
-                  ? "bg-[#16265E] text-white shadow-2xs"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              ทั้งหมด (77 จังหวัด)
-            </button>
-            {Object.values(THAI_REGIONS).map((reg) => (
-              <button
-                key={reg.key}
-                type="button"
-                onClick={() => setSelectedRegion(reg.key)}
-                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
-                  selectedRegion === reg.key
-                    ? "bg-[#16265E] text-white shadow-2xs"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                {reg.nameTh} ({provinceStats.regionMetrics[reg.key].courseCount} ครั้ง)
-              </button>
-            ))}
-          </div>
+          {/* Map Display: Mode 1 (Strategic Vector) vs Mode 2 (Real Map) */}
+          <div className="mt-3 flex-1 flex flex-col justify-center">
+            {viewMode === "real" ? (
+              <RealLeafletMap
+                provinces={filteredProvinces}
+                freqMap={provinceStats.freqMap}
+                onSelectProvince={(p) => setSelectedProvince(p)}
+              />
+            ) : (
+              <div className="relative w-full min-h-[480px] flex items-center justify-center rounded-xl border border-gray-200 p-2 overflow-hidden bg-slate-50">
+                <svg
+                  viewBox="90 30 420 780"
+                  className="w-full h-full max-h-[560px] drop-shadow-sm select-none"
+                >
+                  <defs>
+                    {/* Ocean subtle gradient */}
+                    <linearGradient id="oceanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#f8fafc" />
+                      <stop offset="100%" stopColor="#eff6ff" />
+                    </linearGradient>
 
-          {/* SVG Map Container */}
-          <div className="relative mt-4 flex-1 min-h-[460px] flex items-center justify-center bg-gradient-to-b from-blue-50/20 to-gray-50/50 rounded-xl border border-gray-200 p-2 overflow-hidden">
-            <svg
-              viewBox="100 40 400 780"
-              className="w-full h-full max-h-[520px] drop-shadow-xs"
-            >
-              {/* Regional Geographic Background Boundaries */}
-              <g opacity="0.15">
-                {/* North */}
-                <path d="M 130 90 L 220 50 L 270 90 L 250 240 L 150 220 Z" fill="#10b981" />
-                {/* Northeast */}
-                <path d="M 270 160 L 410 140 L 485 320 L 310 350 Z" fill="#f59e0b" />
-                {/* Central */}
-                <path d="M 180 280 L 300 270 L 300 420 L 200 450 Z" fill="#3b82f6" />
-                {/* East */}
-                <path d="M 290 380 L 380 370 L 380 480 L 290 440 Z" fill="#a855f7" />
-                {/* South */}
-                <path d="M 210 500 L 230 460 L 260 670 L 305 780 L 210 740 L 170 630 Z" fill="#f43f5e" />
-              </g>
+                    {/* Regional soft glow filter */}
+                    <filter id="mapGlow" x="-10%" y="-10%" width="120%" height="120%">
+                      <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#0f172a" floodOpacity="0.08" />
+                    </filter>
 
-              {/* Province Nodes & Interactive Markers */}
-              {THAI_PROVINCES.map((p) => {
-                const count = provinceStats.freqMap[p.nameTh]?.courses.length || 0;
-                const color = getProvinceColor(count);
-                const isSelected = selectedProvince?.id === p.id;
-                const isHovered = hoveredProvince?.id === p.id;
-                const isDimmed = selectedRegion !== "all" && p.region !== selectedRegion;
-                const radius = count > 0 ? 8 : 4.5;
+                    <filter id="activePinGlow" x="-50%" y="-50%" width="200%" height="200%">
+                      <feDropShadow dx="0" dy="1" stdDeviation="2" floodColor="#16265E" floodOpacity="0.35" />
+                    </filter>
+                  </defs>
 
-                return (
-                  <g
-                    key={p.id}
-                    className="cursor-pointer transition-transform duration-200"
-                    opacity={isDimmed ? 0.25 : 1}
-                    onClick={() => setSelectedProvince(p)}
-                    onMouseEnter={() => setHoveredProvince(p)}
-                    onMouseLeave={() => setHoveredProvince(null)}
-                  >
-                    {/* Pulsing ring for provinces with courses */}
-                    {count > 0 && (
-                      <circle
-                        cx={p.x}
-                        cy={p.y}
-                        r={radius + 4}
-                        fill={color}
-                        opacity={0.25}
-                        className="animate-ping"
-                      />
-                    )}
+                  {/* Ocean Plate with subtle border */}
+                  <rect x="90" y="30" width="420" height="780" rx="14" fill="url(#oceanGrad)" />
 
-                    {/* Main Node Circle */}
-                    <circle
-                      cx={p.x}
-                      cy={p.y}
-                      r={radius}
-                      fill={color}
-                      stroke={isSelected || isHovered ? "#ffffff" : "#64748b"}
-                      strokeWidth={isSelected || isHovered ? 2.5 : 0.8}
-                      className="transition-all"
+                  {/* Subtle Cartographic Grid Lines (Lat/Long) */}
+                  <g stroke="#cbd5e1" strokeWidth="0.5" strokeDasharray="3 4" opacity="0.45">
+                    <line x1="90" y1="100" x2="510" y2="100" />
+                    <line x1="90" y1="250" x2="510" y2="250" />
+                    <line x1="90" y1="400" x2="510" y2="400" />
+                    <line x1="90" y1="550" x2="510" y2="550" />
+                    <line x1="90" y1="700" x2="510" y2="700" />
+                    <line x1="170" y1="30" x2="170" y2="810" />
+                    <line x1="260" y1="30" x2="260" y2="810" />
+                    <line x1="360" y1="30" x2="360" y2="810" />
+                    <line x1="450" y1="30" x2="450" y2="810" />
+                  </g>
+
+                  {/* Latitude & Longitude Micro Labels */}
+                  <g fontSize="7.5" fill="#94a3b8" fontFamily="sans-serif">
+                    <text x="96" y="96">20°N</text>
+                    <text x="96" y="246">16°N</text>
+                    <text x="96" y="396">13°N</text>
+                    <text x="96" y="546">10°N</text>
+                    <text x="96" y="696">7°N</text>
+                    <text x="174" y="42">98°E</text>
+                    <text x="264" y="42">100°E</text>
+                    <text x="364" y="42">102°E</text>
+                    <text x="454" y="42">104°E</text>
+                  </g>
+
+                  {/* Seas & International Boundaries Text (Watermarks) */}
+                  <g fill="#1e3a8a" opacity="0.22" fontWeight="bold" fontFamily="sans-serif">
+                    <text x="265" y="480" fontSize="11" letterSpacing="2">อ่าวไทย</text>
+                    <text x="265" y="494" fontSize="7.5" letterSpacing="1">GULF OF THAILAND</text>
+                    <text x="100" y="660" fontSize="10" letterSpacing="1.5">ทะเลอันดามัน</text>
+                    <text x="100" y="673" fontSize="7" letterSpacing="0.8">ANDAMAN SEA</text>
+                  </g>
+
+                  <g fill="#64748b" opacity="0.25" fontSize="8.5" fontWeight="bold" fontFamily="sans-serif">
+                    <text x="355" y="115">สปป. ลาว (LAOS)</text>
+                    <text x="105" y="180">เมียนมา (MYANMAR)</text>
+                    <text x="400" y="420">กัมพูชา (CAMBODIA)</text>
+                    <text x="225" y="800">มาเลเซีย (MALAYSIA)</text>
+                  </g>
+
+                  {/* Compass Rose / North Indicator */}
+                  <g transform="translate(115, 65)">
+                    <circle cx="0" cy="0" r="13" fill="white" stroke="#94a3b8" strokeWidth="0.8" opacity="0.9" />
+                    <path d="M 0 -10 L 3.5 0 L 0 2 L -3.5 0 Z" fill="#16265E" />
+                    <path d="M 0 10 L 3.5 0 L 0 -2 L -3.5 0 Z" fill="#94a3b8" />
+                    <text x="-3" y="-12" fontSize="7.5" fontWeight="bold" fill="#16265E">N</text>
+                  </g>
+
+                  {/* 5 Real Regional Geographic Territorials (Realistic Golden Axe Contours) */}
+                  <g filter="url(#mapGlow)">
+                    {/* 1. North */}
+                    <path
+                      d={THAILAND_MAP_PATHS.north}
+                      fill={selectedRegion === "north" || selectedRegion === "all" ? "#10b981" : "#94a3b8"}
+                      fillOpacity={selectedRegion === "north" ? 0.45 : selectedRegion === "all" ? 0.22 : 0.08}
+                      stroke="#059669"
+                      strokeWidth={selectedRegion === "north" ? 2 : 1}
+                      strokeLinejoin="round"
+                      className="transition-all duration-300"
                     />
 
-                    {/* Province Name Label for Active/Selected Provinces */}
-                    {(count > 0 || isHovered || isSelected) && (
-                      <text
-                        x={p.x + 9}
-                        y={p.y + 3.5}
-                        fontSize="9.5"
-                        fontWeight={count > 0 ? "bold" : "normal"}
-                        fill={count > 0 ? "#16265E" : "#475569"}
-                        className="pointer-events-none select-none"
-                      >
-                        {p.nameTh} {count > 0 ? `(${count})` : ""}
-                      </text>
-                    )}
-                  </g>
-                );
-              })}
-            </svg>
+                    {/* 2. Northeast */}
+                    <path
+                      d={THAILAND_MAP_PATHS.northeast}
+                      fill={selectedRegion === "northeast" || selectedRegion === "all" ? "#f59e0b" : "#94a3b8"}
+                      fillOpacity={selectedRegion === "northeast" ? 0.45 : selectedRegion === "all" ? 0.22 : 0.08}
+                      stroke="#d97706"
+                      strokeWidth={selectedRegion === "northeast" ? 2 : 1}
+                      strokeLinejoin="round"
+                      className="transition-all duration-300"
+                    />
 
-            {/* Hover Tooltip Overlay */}
-            {hoveredProvince && (
-              <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur-xs border border-gray-300 rounded-xl p-3 shadow-lg text-xs max-w-xs pointer-events-none animate-in fade-in">
-                <div className="flex items-center justify-between gap-3 border-b border-gray-200 pb-1.5">
-                  <span className="font-bold text-[#16265E] text-sm">{hoveredProvince.nameTh}</span>
-                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[9.5px] font-semibold text-gray-600">
-                    {hoveredProvince.regionNameTh}
-                  </span>
-                </div>
-                <div className="mt-1.5 space-y-1 text-[11px] text-gray-700">
-                  <div className="flex justify-between">
-                    <span>จัดอบรม:</span>
-                    <strong>{provinceStats.freqMap[hoveredProvince.nameTh]?.courses.length || 0} หลักสูตร</strong>
+                    {/* 3. Central */}
+                    <path
+                      d={THAILAND_MAP_PATHS.central}
+                      fill={selectedRegion === "central" || selectedRegion === "all" ? "#3b82f6" : "#94a3b8"}
+                      fillOpacity={selectedRegion === "central" ? 0.45 : selectedRegion === "all" ? 0.22 : 0.08}
+                      stroke="#2563eb"
+                      strokeWidth={selectedRegion === "central" ? 2 : 1}
+                      strokeLinejoin="round"
+                      className="transition-all duration-300"
+                    />
+
+                    {/* 4. East */}
+                    <path
+                      d={THAILAND_MAP_PATHS.east}
+                      fill={selectedRegion === "east" || selectedRegion === "all" ? "#8b5cf6" : "#94a3b8"}
+                      fillOpacity={selectedRegion === "east" ? 0.45 : selectedRegion === "all" ? 0.22 : 0.08}
+                      stroke="#7c3aed"
+                      strokeWidth={selectedRegion === "east" ? 2 : 1}
+                      strokeLinejoin="round"
+                      className="transition-all duration-300"
+                    />
+
+                    {/* 5. South */}
+                    <path
+                      d={THAILAND_MAP_PATHS.south}
+                      fill={selectedRegion === "south" || selectedRegion === "all" ? "#f43f5e" : "#94a3b8"}
+                      fillOpacity={selectedRegion === "south" ? 0.45 : selectedRegion === "all" ? 0.22 : 0.08}
+                      stroke="#e11d48"
+                      strokeWidth={selectedRegion === "south" ? 2 : 1}
+                      strokeLinejoin="round"
+                      className="transition-all duration-300"
+                    />
+
+                    {/* Strategic Islands (Phuket, Samui, Koh Chang...) */}
+                    {THAILAND_MAP_PATHS.islands.map((isl) => (
+                      <path
+                        key={isl.nameTh}
+                        d={isl.path}
+                        fill="#16265E"
+                        fillOpacity={0.4}
+                        stroke="#16265E"
+                        strokeWidth="1"
+                        className="transition-all duration-200"
+                      />
+                    ))}
+                  </g>
+
+                  {/* Province Nodes & Interactive Markers */}
+                  {THAI_PROVINCES.map((p) => {
+                    const count = provinceStats.freqMap[p.nameTh]?.courses.length || 0;
+                    const color = getProvinceColor(count);
+                    const isSelected = selectedProvince?.id === p.id;
+                    const isHovered = hoveredProvince?.id === p.id;
+                    const isDimmed = selectedRegion !== "all" && p.region !== selectedRegion;
+                    const hasCourses = count > 0;
+                    const labelPos = getLabelPosition(p);
+
+                    return (
+                      <g
+                        key={p.id}
+                        className="cursor-pointer transition-transform duration-200"
+                        opacity={isDimmed ? 0.2 : 1}
+                        onClick={() => setSelectedProvince(p)}
+                        onMouseEnter={() => setHoveredProvince(p)}
+                        onMouseLeave={() => setHoveredProvince(null)}
+                      >
+                        {/* Pulsing Radar Ring for provinces with courses */}
+                        {hasCourses && (
+                          <circle
+                            cx={p.x}
+                            cy={p.y}
+                            r={count >= 3 ? 16 : count === 2 ? 13 : 11}
+                            fill={color}
+                            opacity={0.3}
+                            className="animate-ping"
+                          />
+                        )}
+
+                        {/* Outer Halo for active or selected provinces */}
+                        {(hasCourses || isSelected || isHovered) && (
+                          <circle
+                            cx={p.x}
+                            cy={p.y}
+                            r={hasCourses ? 9 : 6}
+                            fill={color}
+                            opacity={0.25}
+                          />
+                        )}
+
+                        {/* Core Node Circle */}
+                        <circle
+                          cx={p.x}
+                          cy={p.y}
+                          r={hasCourses ? 6 : 3.5}
+                          fill={hasCourses ? color : "#94a3b8"}
+                          stroke="#ffffff"
+                          strokeWidth={hasCourses ? 2 : 1}
+                          filter={hasCourses ? "url(#activePinGlow)" : undefined}
+                          className="transition-all duration-200"
+                        />
+
+                        {/* Province Name Label with Smart Anti-Collision Pill */}
+                        {(hasCourses || isHovered || isSelected) && (
+                          <g className="pointer-events-none select-none">
+                            {/* Pill Background Badge */}
+                            <rect
+                              x={
+                                labelPos.anchor === "end"
+                                  ? labelPos.x - (p.nameTh.length * 5.8 + (hasCourses ? 16 : 8))
+                                  : labelPos.anchor === "middle"
+                                  ? labelPos.x - (p.nameTh.length * 5.8 + (hasCourses ? 16 : 8)) / 2
+                                  : labelPos.x - 2
+                              }
+                              y={labelPos.y - 8.5}
+                              width={p.nameTh.length * 5.8 + (hasCourses ? 18 : 8)}
+                              height={14}
+                              rx={4}
+                              fill={hasCourses ? "#16265E" : "white"}
+                              stroke={hasCourses ? "#ffffff" : "#cbd5e1"}
+                              strokeWidth={0.8}
+                              opacity={0.95}
+                              filter="drop-shadow(0 1px 2px rgba(0,0,0,0.1))"
+                            />
+                            <text
+                              x={
+                                labelPos.anchor === "middle"
+                                  ? labelPos.x
+                                  : labelPos.anchor === "end"
+                                  ? labelPos.x - 4
+                                  : labelPos.x + 2
+                              }
+                              y={labelPos.y + 2}
+                              textAnchor={labelPos.anchor}
+                              fontSize="8.5"
+                              fontWeight={hasCourses ? "bold" : "semibold"}
+                              fill={hasCourses ? "#ffffff" : "#1e293b"}
+                              className="tracking-tight"
+                            >
+                              {p.nameTh} {hasCourses ? `(${count})` : ""}
+                            </text>
+                          </g>
+                        )}
+                      </g>
+                    );
+                  })}
+                </svg>
+
+                {/* Hover Tooltip Overlay */}
+                {hoveredProvince && (
+                  <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur-xs border border-gray-300 rounded-xl p-3 shadow-lg text-xs max-w-xs pointer-events-none animate-in fade-in">
+                    <div className="flex items-center justify-between gap-3 border-b border-gray-200 pb-1.5">
+                      <span className="font-bold text-[#16265E] text-sm">{hoveredProvince.nameTh}</span>
+                      <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[9.5px] font-semibold text-gray-600">
+                        {hoveredProvince.regionNameTh}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 space-y-1 text-[11px] text-gray-700">
+                      <div className="flex justify-between">
+                        <span>จัดอบรม:</span>
+                        <strong>{provinceStats.freqMap[hoveredProvince.nameTh]?.courses.length || 0} หลักสูตร</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>ผู้สมัครจริง:</span>
+                        <strong>{provinceStats.freqMap[hoveredProvince.nameTh]?.applicantCount || 0} คน</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>งบประมาณรวม:</span>
+                        <strong className="text-emerald-800">
+                          ฿{(provinceStats.freqMap[hoveredProvince.nameTh]?.totalBudget || 0).toLocaleString("th-TH")}
+                        </strong>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span>ผู้สมัครจริง:</span>
-                    <strong>{provinceStats.freqMap[hoveredProvince.nameTh]?.applicantCount || 0} คน</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>งบประมาณรวม:</span>
-                    <strong className="text-emerald-800">
-                      ฿{(provinceStats.freqMap[hoveredProvince.nameTh]?.totalBudget || 0).toLocaleString("th-TH")}
-                    </strong>
-                  </div>
-                </div>
+                )}
               </div>
             )}
           </div>
@@ -551,62 +785,80 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
                 <div
                   key={p.id}
                   onClick={() => setSelectedProvince(p)}
-                  className="py-2.5 flex items-center justify-between text-xs hover:bg-blue-50/40 px-2 rounded-lg cursor-pointer transition"
+                  className="py-2.5 flex items-center justify-between hover:bg-gray-50 rounded-lg px-2 cursor-pointer transition"
                 >
                   <div className="flex items-center gap-2.5">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 font-bold text-[#16265E] text-[10px]">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-[#16265E]">
                       {idx + 1}
                     </span>
                     <div>
-                      <p className="font-bold text-gray-900">{p.nameTh}</p>
-                      <p className="text-[10.5px] text-gray-500">{p.regionNameTh}</p>
+                      <p className="font-bold text-gray-900 text-xs">{p.nameTh}</p>
+                      <p className="text-[10px] text-gray-500">{p.regionNameTh}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="inline-block rounded-md bg-[#16265E] text-white px-2 py-0.5 text-[10px] font-bold">
+                    <p className="font-bold text-[#16265E] text-xs">
                       {p.metrics.courses.length} หลักสูตร
-                    </span>
-                    <p className="text-[10px] text-gray-500 mt-0.5">
-                      {p.metrics.approvedCount} คน · ฿{p.metrics.totalBudget.toLocaleString("th-TH")}
+                    </p>
+                    <p className="text-[10px] text-emerald-800 font-semibold">
+                      ฿{p.metrics.totalBudget.toLocaleString("th-TH")}
                     </p>
                   </div>
                 </div>
               ))}
+
+              {provinceStats.topHosts.length === 0 && (
+                <div className="py-6 text-center text-xs text-gray-400">
+                  ยังไม่มีข้อมูลการจัดอบรมในปีงบประมาณที่เลือก
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Regional Summary Distribution (5 Regions) */}
+          {/* Regional Summary Cards (5 Regions) */}
           <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-xs">
-            <h3 className="text-sm font-bold text-[#16265E]">
-              📊 การกระจายตัวตาม 5 ภูมิภาค กกท.
+            <h3 className="text-sm font-bold text-[#16265E] mb-3">
+              🏛️ สรุปการกระจายตัว 5 ภูมิภาค {selectedYear !== "all" && `(ปี ${selectedYear})`}
             </h3>
-            <div className="mt-3 space-y-2.5">
+
+            <div className="space-y-2">
               {Object.values(THAI_REGIONS).map((reg) => {
-                const metric = provinceStats.regionMetrics[reg.key];
-                const pct = courses.length > 0 ? Math.round((metric.courseCount / courses.length) * 100) : 0;
+                const metrics = provinceStats.regionMetrics[reg.key];
+                const pct = metrics.totalProvinces > 0
+                  ? Math.round((metrics.provincesCovered / metrics.totalProvinces) * 100)
+                  : 0;
 
                 return (
                   <div
                     key={reg.key}
                     onClick={() => setSelectedRegion(selectedRegion === reg.key ? "all" : reg.key)}
-                    className="p-2.5 rounded-xl border border-gray-200 hover:border-blue-300 transition cursor-pointer"
+                    className={`p-3 rounded-xl border transition cursor-pointer ${
+                      selectedRegion === reg.key
+                        ? "border-[#16265E] bg-blue-50/50 shadow-2xs"
+                        : "border-gray-200 hover:border-gray-300 bg-white"
+                    }`}
                   >
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-gray-900">{reg.nameTh}</span>
-                      <span className="font-bold text-[#16265E]">
-                        {metric.courseCount} หลักสูตร ({pct}%)
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-gray-900">{reg.nameTh}</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-md border font-semibold ${reg.badgeClass}`}>
+                          {metrics.courseCount} ครั้ง
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-gray-500">
+                        {metrics.provincesCovered}/{metrics.totalProvinces} จ. ({pct}%)
                       </span>
                     </div>
+
                     {/* Progress Bar */}
-                    <div className="mt-1.5 h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+                    <div className="mt-2 w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all duration-300"
-                        style={{ width: `${pct}%`, backgroundColor: reg.barColor }}
+                        style={{
+                          width: `${pct}%`,
+                          backgroundColor: reg.barColor,
+                        }}
                       />
-                    </div>
-                    <div className="mt-1 flex items-center justify-between text-[10.5px] text-gray-500">
-                      <span>ครอบคลุม {metric.provincesCovered}/{metric.totalProvinces} จังหวัด</span>
-                      <span>งบรวม ฿{metric.totalBudget.toLocaleString("th-TH")}</span>
                     </div>
                   </div>
                 );
@@ -616,17 +868,17 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
         </div>
       </div>
 
-      {/* Selected Province Details Modal / Drawer */}
+      {/* Province Drilldown Dialog */}
       {selectedProvince && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-xs">
-          <div className="relative w-full max-w-xl rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-gray-200 bg-[#16265E] px-6 py-4 text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl overflow-hidden">
+            <div className="bg-[#16265E] px-6 py-4 text-white flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold flex items-center gap-2">
                   <span>📍</span>
                   <span>จังหวัด{selectedProvince.nameTh} ({selectedProvince.nameEn})</span>
                 </h3>
-                <p className="text-xs text-blue-200">
+                <p className="text-xs text-white/70">
                   {selectedProvince.regionNameTh} · ข้อมูลการจัดอบรมและงบประมาณ
                 </p>
               </div>
@@ -710,43 +962,25 @@ export function TrainingMapTab({ courses, applications }: TrainingMapTabProps) {
                 )}
               </div>
             </div>
+
+            <div className="bg-gray-50 px-6 py-3 border-t border-gray-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedProvince(null)}
+                className="rounded-xl bg-gray-200 px-4 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-300 transition cursor-pointer"
+              >
+                ปิด
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Printable Executive Modal Dialog */}
+      {/* Executive Print Report Modal (PDF A4 Landscape Format) */}
       {isPrintModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-2 sm:p-4 backdrop-blur-xs print:static print:inset-auto print:block print:bg-white print:p-0">
-          <style
-            dangerouslySetInnerHTML={{
-              __html: `
-                @media print {
-                  @page {
-                    size: A4 landscape;
-                    margin: 8mm 8mm 8mm 8mm;
-                  }
-                  body * {
-                    visibility: hidden;
-                  }
-                  .map-print-container, .map-print-container * {
-                    visibility: visible;
-                  }
-                  .map-print-container {
-                    position: absolute;
-                    left: 0;
-                    top: 0;
-                    width: 100% !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    background: white !important;
-                  }
-                }
-              `,
-            }}
-          />
-
-          <div className="relative my-auto flex max-h-[96vh] w-full max-w-[1240px] flex-col rounded-2xl bg-white shadow-2xl print:my-0 print:max-h-none print:w-full print:rounded-none print:shadow-none">
-            {/* Top Toolbar */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in print:p-0 print:bg-white print:static">
+          <div className="max-h-[90vh] w-full max-w-4xl rounded-2xl bg-white shadow-2xl overflow-hidden flex flex-col print:max-h-none print:shadow-none print:rounded-none">
+            {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-6 py-3.5 print:hidden">
               <div className="flex items-center gap-2">
                 <span className="text-xl">🖨️</span>
