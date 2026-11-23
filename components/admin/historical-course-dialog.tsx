@@ -45,6 +45,8 @@ export function HistoricalCourseDialog({
   const isSavingRef = useRef(false);
 
   useEffect(() => {
+    isSavingRef.current = false;
+    setIsSaving(false);
     if (!isOpen) return;
     if (courseToEdit) {
       setFiscalYear(courseToEdit.fiscalYear || "2569");
@@ -157,6 +159,7 @@ export function HistoricalCourseDialog({
       });
     }
 
+    resetSaving();
     onSuccess?.();
     onClose();
   };

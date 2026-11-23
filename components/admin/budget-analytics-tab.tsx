@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
 import { type Course, getCourseFiscalYear } from "@/lib/courses";
 import type { ApplicantRecord } from "@/lib/applications-store";
@@ -32,6 +32,23 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
   });
   const [savedNotices, setSavedNotices] = useState<Record<number, boolean>>({});
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
+  // ซิงก์ค่าในช่อง input ของตาราง (inlineBudgets) ให้ตรงกับ courses เสมอ
+  // เพื่อไม่ให้ค่าเก่าที่ค้างใน state บดบังงบประมาณใหม่ที่เพิ่งบันทึกจาก Dialog หรือจาก Cloud
+  useEffect(() => {
+    setInlineBudgets((prev) => {
+      const next: Record<number, string> = { ...prev };
+      let changed = false;
+      for (const c of courses) {
+        const expected = c.budget !== undefined ? String(c.budget) : "";
+        if (prev[c.id] !== expected) {
+          next[c.id] = expected;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [courses]);
 
   // คำนวณรายชื่อปีงบประมาณที่มีทั้งหมดในระบบ (เรียงจากปีล่าสุดไปอดีต)
   const availableYears = useMemo(() => {
@@ -209,7 +226,7 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
   };
 
   const handleSaveInlineBudget = (courseId: number) => {
-    const raw = inlineBudgets[courseId];
+    const raw = inlineBudgets[courseId] ?? "";
     const num = raw.trim() ? Number(raw.replace(/,/g, "")) : undefined;
     updateCourse(courseId, { budget: num });
     setSavedNotices((prev) => ({ ...prev, [courseId]: true }));
