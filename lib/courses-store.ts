@@ -126,7 +126,16 @@ interface CoursesState {
 
 const STORAGE_KEY = "sat-courses-v10";
 const LEGACY_COURSE_KEYS = ["sat-courses-v9", "sat-courses-v8", "sat-courses-v7", "sat-courses-v6", "sat-courses-v5", "sat-courses-v4"];
-let lastLocalCourseEditAt = 0;
+const lastLocalEditByCourseId = new Map<number, number>();
+
+function markCourseEditedLocally(courseId: number) {
+  lastLocalEditByCourseId.set(courseId, Date.now());
+}
+
+function isCourseRecentlyEditedLocally(courseId: number, windowMs = 8000): boolean {
+  const ts = lastLocalEditByCourseId.get(courseId);
+  return typeof ts === "number" && Date.now() - ts < windowMs;
+}
 
 function cloneSeedCourses() {
   return seedCourses.map((course) => ({ ...course }));
@@ -156,15 +165,36 @@ function saveToLocalStorage(): boolean {
   }
 }
 
-function persist(syncToServer = true): boolean {
+function syncCoursesSubsetToServer(subset: Course[], deleteIds?: number[]) {
+  if (typeof window === "undefined") return;
+  if (
+    (hasLoadedFromCloud || !isSupabaseConfigured()) &&
+    window.sessionStorage.getItem("sat-admin-authenticated") === "true"
+  ) {
+    fetch("/api/admin/save-defaults", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-authorized": "true",
+      },
+      body: JSON.stringify({
+        courses: subset,
+        partialUpdate: true,
+        ...(deleteIds && deleteIds.length > 0 ? { deleteCourseIds: deleteIds } : {}),
+      }),
+    }).catch(() => {
+      // Ignore background sync errors in static/read-only environments
+    });
+  }
+}
+
+function persist(syncToServer = false): boolean {
   if (typeof window === "undefined") return true;
   const savedLocal = saveToLocalStorage();
   if (!savedLocal) {
     // Storage may be unavailable in private mode or full; the in-memory store still works.
     return false;
   }
-  // ซิงก์ขึ้น server เฉพาะเมื่อโหลดข้อมูลล่าสุดจาก Supabase Cloud สำเร็จแล้ว (หรือไม่ได้ต่อ Supabase)
-  // เพื่อป้องกันข้อมูลเริ่มต้นจาก data/courses.json เขียนทับฐานข้อมูลจริงระหว่างกำลังโหลด
   if (
     syncToServer &&
     (hasLoadedFromCloud || !isSupabaseConfigured()) &&
@@ -364,9 +394,9 @@ function mapCloudCourse(
   const seed = getSeedCourse(c.id);
   const existing = existingCourses.find((item) => item.id === c.id);
 
-  // ป้องกันการเขียนทับเฉพาะกรณีที่แอดมินเพิ่งกดบันทึกในแท็บนี้ไม่เกิน 8 วินาที (ระหว่างรอคำสั่งอัปเดต Cloud เสร็จสิ้น)
+  // ป้องกันการเขียนทับเฉพาะกรณีที่แอดมินเพิ่งกดบันทึกหลักสูตรนี้ในแท็บนี้ไม่เกิน 8 วินาที (ระหว่างรอคำสั่งอัปเดต Cloud เสร็จสิ้น)
   const cloudUpdatedAt = (c as { updated_at?: string }).updated_at;
-  if (existing && Date.now() - lastLocalCourseEditAt < 8000) {
+  if (existing && isCourseRecentlyEditedLocally(c.id, 8000)) {
     return existing;
   }
 
@@ -636,9 +666,9 @@ async function pushCourseToSupabase(course: Course): Promise<boolean> {
 }
 
 export async function syncAllCoursesToCloud(): Promise<boolean> {
-  lastLocalCourseEditAt = Date.now();
   let allOk = true;
   for (const course of state.courses) {
+    markCourseEditedLocally(course.id);
     const ok = await pushCourseToSupabase(course);
     if (!ok) allOk = false;
   }
@@ -655,10 +685,10 @@ export async function syncAllCoursesToCloud(): Promise<boolean> {
   return allOk;
 }
 
-export async function refreshCoursesFromCloud(): Promise<void> {
+export async function refreshCoursesFromCloud(force = false): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const now = Date.now();
-  if (now - lastCoursesFetchAt < 1500) return;
+  if (!force && now - lastCoursesFetchAt < 1500) return;
   lastCoursesFetchAt = now;
 
   try {
@@ -1032,20 +1062,32 @@ export function updateCourse(
 
   if (!updated) return undefined;
 
-  lastLocalCourseEditAt = Date.now();
+  markCourseEditedLocally(id);
+  if (syncGlobalSchedule) {
+    nextCourses.forEach((c) => {
+      if (c.id !== id && !c.isHistorical && !c.useCustomSchedule) {
+        markCourseEditedLocally(c.id);
+      }
+    });
+  }
   const previousState = state;
-  lastLocalCourseEditAt = Date.now();
   state = {
     courses: nextCourses,
     revision: state.revision + 1,
   };
-  const persisted = persist();
+  const persisted = saveToLocalStorage();
 
   if (!persisted && patch.image?.startsWith("data:image/")) {
     // Roll back so the UI never shows an image that will disappear on reload.
     state = previousState;
     return { course: updated, persisted: false };
   }
+
+  syncCoursesSubsetToServer(
+    syncGlobalSchedule
+      ? nextCourses.filter((c) => c.id === id || (!c.isHistorical && !c.useCustomSchedule))
+      : [updated]
+  );
 
   emit();
 
@@ -1252,12 +1294,13 @@ export function addCourse(
     documentConfig: data.documentConfig,
   };
 
-  lastLocalCourseEditAt = Date.now();
+  markCourseEditedLocally(newCourse.id);
   state = {
     courses: [...state.courses, newCourse],
     revision: state.revision + 1,
   };
-  const persisted = persist();
+  const persisted = saveToLocalStorage();
+  syncCoursesSubsetToServer([newCourse]);
   emit();
 
   if (isSupabaseConfigured()) {
@@ -1344,12 +1387,19 @@ export function updateGlobalCourseSchedule(
     };
   });
 
-  lastLocalCourseEditAt = Date.now();
+  nextCourses.forEach((c) => {
+    if (!c.isHistorical && (!c.useCustomSchedule || resetCustomOverrides)) {
+      markCourseEditedLocally(c.id);
+    }
+  });
   state = {
     courses: nextCourses,
     revision: state.revision + 1,
   };
-  const persisted = persist();
+  const persisted = saveToLocalStorage();
+  syncCoursesSubsetToServer(
+    nextCourses.filter((c) => !c.isHistorical && (!c.useCustomSchedule || resetCustomOverrides))
+  );
   emit();
 
   // Sync each affected course immediately to Supabase (พร้อมรักษาข้อมูล _metadata ทั้งหมดไว้ครบถ้วน)
@@ -1409,7 +1459,8 @@ export function deleteCourse(id: number): boolean {
     courses: state.courses.filter((course) => course.id !== id),
     revision: state.revision + 1,
   };
-  persist();
+  saveToLocalStorage();
+  syncCoursesSubsetToServer([], [id]);
   emit();
 
   if (isSupabaseConfigured()) {

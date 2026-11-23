@@ -14,11 +14,20 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { courses, sportsEvents, timelineSettings, alumni } = body as {
+    const {
+      courses,
+      sportsEvents,
+      timelineSettings,
+      alumni,
+      partialUpdate,
+      deleteCourseIds,
+    } = body as {
       courses?: unknown[];
       sportsEvents?: unknown[];
       timelineSettings?: Record<string, unknown>;
       alumni?: unknown[];
+      partialUpdate?: boolean;
+      deleteCourseIds?: number[];
     };
 
     const isServerlessReadOnly = Boolean(process.env.VERCEL);
@@ -35,16 +44,90 @@ export async function POST(request: Request) {
     let sportsEventsCount = 0;
     let alumniCount = 0;
 
-    if (Array.isArray(courses)) {
-      coursesCount = courses.length;
+    if (Array.isArray(deleteCourseIds) && deleteCourseIds.length > 0) {
       if (!isServerlessReadOnly) {
         try {
           const coursesPath = path.join(dataDir, "courses.json");
-          await fs.writeFile(
-            coursesPath,
-            JSON.stringify(courses, null, 2) + "\n",
-            "utf-8"
-          );
+          const rawExisting = await fs.readFile(coursesPath, "utf-8");
+          const existingList = JSON.parse(rawExisting) as Record<string, unknown>[];
+          if (Array.isArray(existingList)) {
+            const filtered = existingList.filter(
+              (item) => typeof item.id !== "number" || !deleteCourseIds.includes(item.id)
+            );
+            await fs.writeFile(
+              coursesPath,
+              JSON.stringify(filtered, null, 2) + "\n",
+              "utf-8"
+            );
+          }
+        } catch {
+          // Ignore file read/write issues
+        }
+      }
+
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey =
+        process.env.SUPABASE_SERVICE_ROLE_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (supabaseUrl && supabaseKey) {
+        try {
+          const { createClient } = await import("@supabase/supabase-js");
+          const supabase = createClient(supabaseUrl, supabaseKey);
+          await supabase.from("courses").delete().in("id", deleteCourseIds);
+        } catch (delErr) {
+          console.warn("Server Supabase course delete warning:", delErr);
+        }
+      }
+    }
+
+    if (Array.isArray(courses)) {
+      coursesCount = courses.length;
+      const courseList = courses as Record<string, unknown>[];
+      if (!isServerlessReadOnly && courseList.length > 0) {
+        try {
+          const coursesPath = path.join(dataDir, "courses.json");
+          if (partialUpdate) {
+            let existingList: Record<string, unknown>[] = [];
+            try {
+              const rawExisting = await fs.readFile(coursesPath, "utf-8");
+              const parsed = JSON.parse(rawExisting);
+              if (Array.isArray(parsed)) {
+                existingList = parsed as Record<string, unknown>[];
+              }
+            } catch {
+              existingList = [];
+            }
+            const patchById = new Map<number, Record<string, unknown>>();
+            for (const c of courseList) {
+              if (typeof c.id === "number") {
+                patchById.set(c.id, c);
+              }
+            }
+            const mergedIds = new Set<number>();
+            const mergedList = existingList.map((item) => {
+              if (typeof item.id === "number" && patchById.has(item.id)) {
+                mergedIds.add(item.id);
+                return patchById.get(item.id)!;
+              }
+              return item;
+            });
+            for (const c of courseList) {
+              if (typeof c.id === "number" && !mergedIds.has(c.id)) {
+                mergedList.push(c);
+              }
+            }
+            await fs.writeFile(
+              coursesPath,
+              JSON.stringify(mergedList, null, 2) + "\n",
+              "utf-8"
+            );
+          } else {
+            await fs.writeFile(
+              coursesPath,
+              JSON.stringify(courses, null, 2) + "\n",
+              "utf-8"
+            );
+          }
         } catch {
           // Ignore on read-only filesystem
         }
@@ -55,20 +138,20 @@ export async function POST(request: Request) {
       const supabaseKey =
         process.env.SUPABASE_SERVICE_ROLE_KEY ||
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      if (supabaseUrl && supabaseKey) {
+      if (supabaseUrl && supabaseKey && courseList.length > 0) {
         try {
           const { createClient } = await import("@supabase/supabase-js");
           const supabase = createClient(supabaseUrl, supabaseKey);
 
-          const courseList = courses as Record<string, unknown>[];
           const activeCourseIds = courseList
             .map((c) => c.id)
             .filter((id): id is number => typeof id === "number");
 
-          // 1. Delete courses in Supabase that have been deleted by the admin
-          const { data: existingRows } = await supabase
-            .from("courses")
-            .select("id, target_quotas");
+          // 1. Fetch existing target_quotas metadata; only delete missing rows on full sync (!partialUpdate)
+          const existingQuery = partialUpdate && activeCourseIds.length > 0
+            ? supabase.from("courses").select("id, target_quotas").in("id", activeCourseIds)
+            : supabase.from("courses").select("id, target_quotas");
+          const { data: existingRows } = await existingQuery;
           const existingMap = new Map<number, Record<string, unknown>>();
           if (existingRows && existingRows.length > 0) {
             for (const row of existingRows) {
@@ -76,11 +159,13 @@ export async function POST(request: Request) {
                 existingMap.set(row.id, row.target_quotas as Record<string, unknown>);
               }
             }
-            const idsToDelete = existingRows
-              .map((r) => r.id)
-              .filter((id) => !activeCourseIds.includes(id));
-            if (idsToDelete.length > 0) {
-              await supabase.from("courses").delete().in("id", idsToDelete);
+            if (!partialUpdate) {
+              const idsToDelete = existingRows
+                .map((r) => r.id)
+                .filter((id) => !activeCourseIds.includes(id));
+              if (idsToDelete.length > 0) {
+                await supabase.from("courses").delete().in("id", idsToDelete);
+              }
             }
           }
 

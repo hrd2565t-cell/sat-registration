@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import Image from "next/image";
 import { type Course, getCourseFiscalYear } from "@/lib/courses";
 import type { ApplicantRecord } from "@/lib/applications-store";
-import { updateCourse } from "@/lib/courses-store";
+import { updateCourse, refreshCoursesFromCloud } from "@/lib/courses-store";
 import { CourseEditDialog } from "@/components/admin/course-edit-dialog";
 import { HistoricalCourseDialog } from "@/components/admin/historical-course-dialog";
 
@@ -225,9 +225,13 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
     setInlineBudgets((prev) => ({ ...prev, [courseId]: val }));
   };
 
-  const handleSaveInlineBudget = (courseId: number) => {
+  const handleSaveInlineBudget = (courseId: number, onlyIfChanged = false) => {
     const raw = inlineBudgets[courseId] ?? "";
     const num = raw.trim() ? Number(raw.replace(/,/g, "")) : undefined;
+    const targetCourse = courses.find((c) => c.id === courseId);
+    if (onlyIfChanged && targetCourse && targetCourse.budget === num) {
+      return;
+    }
     updateCourse(courseId, { budget: num });
     setSavedNotices((prev) => ({ ...prev, [courseId]: true }));
     setTimeout(() => {
@@ -821,6 +825,7 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
                           type="number"
                           value={inlineBudgets[course.id] ?? (course.budget !== undefined ? String(course.budget) : "")}
                           onChange={(e) => handleInlineBudgetChange(course.id, e.target.value)}
+                          onBlur={() => handleSaveInlineBudget(course.id, true)}
                           onKeyDown={(e) => {
                             if (e.key === "Enter") handleSaveInlineBudget(course.id);
                           }}
@@ -877,7 +882,10 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
                       {course.isHistorical ? (
                         <button
                           type="button"
-                          onClick={() => setEditingHistoricalCourse(course)}
+                          onClick={() => {
+                            setEditingHistoricalCourse(course);
+                            void refreshCoursesFromCloud(true);
+                          }}
                           className="rounded-lg border border-purple-200 bg-purple-50 px-2.5 py-1 text-[11px] font-bold text-purple-800 hover:bg-purple-100 transition cursor-pointer"
                         >
                           แก้ไขประวัติ
@@ -885,7 +893,10 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
                       ) : (
                         <button
                           type="button"
-                          onClick={() => setEditingCourse(course)}
+                          onClick={() => {
+                            setEditingCourse(course);
+                            void refreshCoursesFromCloud(true);
+                          }}
                           className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 transition cursor-pointer"
                         >
                           แก้ไข
@@ -924,7 +935,7 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
       {/* Edit Course Dialog (สำหรับหลักสูตรปกติ) */}
       {editingCourse && (
         <CourseEditDialog
-          course={editingCourse}
+          course={courses.find((c) => c.id === editingCourse.id) ?? editingCourse}
           onClose={() => setEditingCourse(null)}
           onSave={(patch) => {
             const res = updateCourse(editingCourse.id, patch);
@@ -936,7 +947,11 @@ export function BudgetAnalyticsTab({ courses, applications }: BudgetAnalyticsTab
       {/* Historical Course Dialog (สำหรับบันทึกหรือแก้ไขประวัติย้อนหลัง) */}
       <HistoricalCourseDialog
         isOpen={isHistoricalDialogOpen || Boolean(editingHistoricalCourse)}
-        courseToEdit={editingHistoricalCourse}
+        courseToEdit={
+          editingHistoricalCourse
+            ? (courses.find((c) => c.id === editingHistoricalCourse.id) ?? editingHistoricalCourse)
+            : null
+        }
         defaultFiscalYear={yearFilterMode === "single" ? selectedSingleYear : "2569"}
         onClose={() => {
           setIsHistoricalDialogOpen(false);
