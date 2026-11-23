@@ -170,6 +170,8 @@ export function CourseEditDialog({
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [previewPdfModal, setPreviewPdfModal] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
 
   const handlePdfChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -356,7 +358,14 @@ export function CourseEditDialog({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (imageBusy || pdfBusy) return;
+    if (imageBusy || pdfBusy || isSavingRef.current) return;
+    isSavingRef.current = true;
+    setIsSaving(true);
+
+    const resetSaving = () => {
+      isSavingRef.current = false;
+      setIsSaving(false);
+    };
 
     const trimmedTitle = title.trim();
     const trimmedShortTitle = shortTitle.trim();
@@ -368,30 +377,37 @@ export function CourseEditDialog({
     const capacity = Number(trimmedSeats.match(/\d+/)?.[0] ?? "");
 
     if (trimmedTitle.length < 3) {
+      resetSaving();
       setError("กรุณากรอกชื่อหลักสูตรอย่างน้อย 3 ตัวอักษร");
       return;
     }
     if (!trimmedDate) {
+      resetSaving();
       setError("กรุณากรอกช่วงวันที่อบรม");
       return;
     }
     if (!trimmedLocation) {
+      resetSaving();
       setError("กรุณากรอกสถานที่อบรม");
       return;
     }
     if (!trimmedSeats) {
+      resetSaving();
       setError("กรุณากรอกจำนวนที่นั่ง");
       return;
     }
     if (!Number.isInteger(remaining) || remaining < 0) {
+      resetSaving();
       setError("ที่นั่งคงเหลือต้องเป็นจำนวนเต็มตั้งแต่ 0 ขึ้นไป");
       return;
     }
     if (status === "open" && remaining < 1) {
+      resetSaving();
       setError("หลักสูตรที่เปิดรับต้องมีที่นั่งคงเหลืออย่างน้อย 1 ที่");
       return;
     }
     if (Number.isFinite(capacity) && remaining > capacity) {
+      resetSaving();
       setError("ที่นั่งคงเหลือต้องไม่เกินจำนวนที่นั่งทั้งหมด");
       return;
     }
@@ -450,11 +466,14 @@ export function CourseEditDialog({
       ...(course.id === 0 || image !== course.image ? { image } : {}),
     });
     if (typeof result === "string") {
+      resetSaving();
       setError(result);
       return;
     }
     if (result) {
       onClose();
+    } else {
+      resetSaving();
     }
   };
 
@@ -916,7 +935,10 @@ export function CourseEditDialog({
                 id="course-location"
                 value={location}
                 onChange={(event) => {
-                  setLocation(event.target.value);
+                  const val = event.target.value;
+                  setLocation(val);
+                  const detected = detectProvinceFromLocation(val);
+                  if (detected) setProvince(detected);
                   if (error) setError("");
                 }}
                 className={fieldClass}
@@ -1540,9 +1562,10 @@ export function CourseEditDialog({
           <button
             type="submit"
             form="course-edit-form"
-            className="inline-flex h-10 items-center justify-center rounded-[5px] bg-[#1e3a8a] px-4 text-[12px] font-semibold text-white transition-colors hover:bg-[#1e40af] sm:h-9"
+            disabled={isSaving || Boolean(pdfBusy) || Boolean(imageBusy)}
+            className="inline-flex h-10 items-center justify-center rounded-[5px] bg-[#1e3a8a] px-4 text-[12px] font-semibold text-white transition-colors hover:bg-[#1e40af] sm:h-9 disabled:opacity-50"
           >
-            {pdfBusy ? "กำลังอัปโหลดเอกสาร..." : "บันทึกการแก้ไข"}
+            {isSaving ? "กำลังบันทึก..." : pdfBusy ? "กำลังอัปโหลดเอกสาร..." : "บันทึกการแก้ไข"}
           </button>
         </div>
       </div>

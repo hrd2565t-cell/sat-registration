@@ -213,6 +213,7 @@ function mergeStoredCourses(stored: Course[]): Course[] {
     const cap = Number(saved.seats?.match(/\d+/)?.[0]) || saved.capacity || seed?.capacity || 40;
     const seedQuotas = seed?.targetQuotas ?? balanceQuotasToCapacity(cap);
     const finalStoredQuotas = saved.targetQuotas ?? seedQuotas;
+    const finalLoc = saved.location || seed?.location || "";
 
     return {
       ...(seed ?? {}),
@@ -225,8 +226,14 @@ function mergeStoredCourses(stored: Course[]): Course[] {
           : saved.shortTitle !== undefined
           ? saved.shortTitle
           : seed?.shortTitle,
-      location: saved.location || seed?.location || "",
-      province: saved.province || seed?.province || detectProvinceFromLocation(saved.location || seed?.location || ""),
+      location: finalLoc,
+      province: (() => {
+        const detectedProv = detectProvinceFromLocation(finalLoc);
+        if (detectedProv && finalLoc.includes("จ.") && saved.province && !saved.province.includes(detectedProv)) {
+          return detectedProv;
+        }
+        return saved.province || seed?.province || detectedProv || "กรุงเทพมหานคร";
+      })(),
       budget: saved.budget !== undefined ? saved.budget : seed?.budget,
       historicalCompleted: saved.historicalCompleted !== undefined ? saved.historicalCompleted : seed?.historicalCompleted,
       historicalApplicants: saved.historicalApplicants !== undefined ? saved.historicalApplicants : seed?.historicalApplicants,
@@ -539,10 +546,15 @@ function mapCloudCourse(
       cloudMeta?.budget !== undefined
         ? Number(cloudMeta.budget)
         : existing?.budget ?? seed?.budget ?? undefined,
-    province:
-      cloudMeta?.province !== undefined
+    province: (() => {
+      const detected = detectProvinceFromLocation(finalLocation);
+      if (detected && finalLocation.includes("จ.") && cloudMeta?.province && !String(cloudMeta.province).includes(detected)) {
+        return detected;
+      }
+      return cloudMeta?.province !== undefined
         ? String(cloudMeta.province)
-        : existing?.province ?? seed?.province ?? detectProvinceFromLocation(finalLocation),
+        : existing?.province ?? seed?.province ?? detected ?? "กรุงเทพมหานคร";
+    })(),
     fiscalYear:
       cloudMeta?.fiscalYear !== undefined
         ? String(cloudMeta.fiscalYear)
@@ -1325,6 +1337,10 @@ export function updateGlobalCourseSchedule(
   let updatedCount = 0;
 
   const nextCourses = state.courses.map((course) => {
+    // ห้ามอัปเดตวันรับสมัครกลางทับประวัติหลักสูตรย้อนหลัง
+    if (course.isHistorical) {
+      return course;
+    }
     if (course.useCustomSchedule && !resetCustomOverrides) {
       return course;
     }

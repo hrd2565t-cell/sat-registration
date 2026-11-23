@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import { ArrowRightIcon, CalendarIcon } from "@/components/ui/icons";
 import { useCourses } from "@/lib/courses-store";
@@ -26,15 +27,19 @@ const THAI_MONTHS_SHORT = [
 
 export function TimelineSummary() {
   const { courses } = useCourses();
-  const globalSchedule = getGlobalCourseSchedule(courses);
+  const activeCourses = useMemo(
+    () => courses.filter((c) => !c.isHistorical),
+    [courses]
+  );
+  const globalSchedule = getGlobalCourseSchedule(activeCourses);
 
-  // Compute dynamic earliest & latest training dates across all courses (including yearBE)
+  // Compute dynamic earliest & latest training dates across all active courses (including yearBE)
   let earliest: CourseDateFields | null = null;
   let earliestTime = Infinity;
   let latest: CourseDateFields | null = null;
   let latestTime = -Infinity;
 
-  for (const c of courses) {
+  for (const c of activeCourses) {
     const sessions = parseCourseDateSessions(c.date);
     for (const s of sessions) {
       const startTime = new Date(
@@ -104,7 +109,7 @@ export function TimelineSummary() {
               Timeline การอบรม ปี 2570
             </h3>
             <p className="mt-0.5 text-[12px] leading-relaxed text-[#6b7280] sm:text-[12.5px]">
-              ดูช่วงเวลาสำคัญของทั้ง {courses.length} หลักสูตร พร้อมเทียบปฏิทินแข่งขันกีฬา กกท. และช่วงเวลาว่างตลอดปี
+              ดูช่วงเวลาสำคัญของทั้ง {activeCourses.length} หลักสูตร พร้อมเทียบปฏิทินแข่งขันกีฬา กกท. และช่วงเวลาว่างตลอดปี
             </p>
           </div>
         </div>
@@ -137,7 +142,7 @@ export function TimelineSummary() {
       </ol>
 
       <p className="mt-3 text-[11px] leading-relaxed text-[#6b7280]">
-        * ช่วงวันที่อัปเดตอัตโนมัติตามข้อมูลจริงของทั้ง {courses.length} หลักสูตร
+        * ช่วงวันที่อัปเดตอัตโนมัติตามข้อมูลจริงของทั้ง {activeCourses.length} หลักสูตร
       </p>
     </section>
   );

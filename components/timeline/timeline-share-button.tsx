@@ -26,6 +26,7 @@ function escapeHtml(str: string): string {
 export function TimelineExportButtons() {
   const { courses } = useCourses();
   const { events } = useSportsEvents();
+  const activeCourses = courses.filter((c) => !c.isHistorical);
 
   // 1. Export as Official Printable PDF (A4 Landscape with Live Data across 16 months)
   const handleDownloadPdf = () => {
@@ -35,7 +36,7 @@ export function TimelineExportButtons() {
       return;
     }
 
-    const sortedCourses = [...courses].sort((a, b) => {
+    const sortedCourses = [...activeCourses].sort((a, b) => {
       const sa = parseCourseDateSessions(a.date)[0];
       const sb = parseCourseDateSessions(b.date)[0];
       const la = sa
@@ -64,7 +65,7 @@ export function TimelineExportButtons() {
 
     const courseRowsHtml = sortedCourses
       .map((course, idx) => {
-        const sched = getCourseScheduleDates(course, courses);
+        const sched = getCourseScheduleDates(course, activeCourses);
         const sessions = parseCourseDateSessions(course.date);
         const first = sessions[0];
         const firstSlotIdx = first
@@ -461,7 +462,7 @@ export function TimelineExportButtons() {
     </thead>
     <tbody>
       <tr class="sec-course">
-        <th colspan="17">🎓 แผนกำหนดการฝึกอบรม (${courses.length} หลักสูตร)</th>
+        <th colspan="17">🎓 แผนกำหนดการฝึกอบรม (${activeCourses.length} หลักสูตร)</th>
       </tr>
       ${courseRowsHtml}
       <tr class="sec-event">
@@ -500,7 +501,7 @@ export function TimelineExportButtons() {
 
     const rows: string[][] = [];
 
-    courses.forEach((c) => {
+    activeCourses.forEach((c) => {
       const sched = getCourseScheduleDates(c);
       const sessions = parseCourseDateSessions(c.date);
       const first = sessions[0];

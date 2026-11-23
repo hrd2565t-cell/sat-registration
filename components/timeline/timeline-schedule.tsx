@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useIsAdmin } from "@/lib/admin-auth";
 import defaultTimelineSettings from "@/data/timeline-settings.json";
@@ -760,8 +760,14 @@ export function TimelineSchedule() {
     }, 4500);
   };
 
-  const courseRows = courses
-    .map((c) => buildCourseTimelineRow(c, courses))
+  // กรองเฉพาะหลักสูตรที่เปิดรับสมัครจริงในปีงบประมาณปัจจุบัน (ไม่รวมข้อมูลประวัติศาสตร์ย้อนหลัง)
+  const activeCourses = useMemo(
+    () => courses.filter((c) => !c.isHistorical),
+    [courses]
+  );
+
+  const courseRows = activeCourses
+    .map((c) => buildCourseTimelineRow(c, activeCourses))
     .sort((a, b) => a.spanLeft - b.spanLeft);
   const sortedEvents = [...events].sort((a, b) => a.left - b.left);
 

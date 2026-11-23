@@ -165,6 +165,7 @@ function RegistrationContent() {
   const [confirmed, setConfirmed] = useState(false);
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [conflictModal, setConflictModal] =
     useState<RegistrationEligibility | null>(null);
   const [showPdpaModal, setShowPdpaModal] = useState(false);
@@ -425,21 +426,28 @@ function RegistrationContent() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setFormError("");
 
+    const fail = (msg: string) => {
+      isSubmittingRef.current = false;
+      setFormError(msg);
+    };
+
     if (isCourseClosed) {
-      setFormError("หลักสูตรนี้ปิดรับสมัครแล้ว กรุณาเลือกหลักสูตรอื่น");
+      fail("หลักสูตรนี้ปิดรับสมัครแล้ว กรุณาเลือกหลักสูตรอื่น");
       return;
     }
 
     // 1. ตรวจสอบเลขบัตรประชาชน
     const cleanId = idCard.replace(/\D/g, "");
     if (cleanId.length !== 13) {
-      setFormError("กรุณากรอกหมายเลขบัตรประจำตัวประชาชนให้ครบ 13 หลัก");
+      fail("กรุณากรอกหมายเลขบัตรประจำตัวประชาชนให้ครบ 13 หลัก");
       return;
     }
     if (!isValidThaiIdCard(cleanId)) {
-      setFormError(
+      fail(
         "หมายเลขบัตรประจำตัวประชาชนไม่ถูกต้องตามสูตรคำนวณของกรมการปกครอง (กรุณาตรวจสอบเลข 13 หลักอีกครั้ง)"
       );
       return;
@@ -453,6 +461,7 @@ function RegistrationContent() {
       courses
     );
     if (!check.allowed && check.existingRecord) {
+      isSubmittingRef.current = false;
       setConflictModal(check);
       return;
     }
@@ -460,60 +469,60 @@ function RegistrationContent() {
     // 2. ตรวจสอบชื่อ-นามสกุล
     const cleanName = name.trim();
     if (cleanName.length < 2) {
-      setFormError("กรุณากรอกชื่อและนามสกุลให้ครบถ้วน");
+      fail("กรุณากรอกชื่อและนามสกุลให้ครบถ้วน");
       return;
     }
 
     // 3. ตรวจสอบหน่วยงาน/สมาคมกีฬา
     if (subAffiliationConfig.required && !subAffiliation.trim()) {
-      setFormError(`กรุณาระบุข้อมูลในข้อ ${subAffiliationConfig.label}`);
+      fail(`กรุณาระบุข้อมูลในข้อ ${subAffiliationConfig.label}`);
       return;
     }
 
     // 4. ตรวจสอบตำแหน่ง
     if (position.trim() === "") {
-      setFormError("กรุณาระบุตำแหน่ง (หน่วยงาน / สมาคมกีฬา)");
+      fail("กรุณาระบุตำแหน่ง (หน่วยงาน / สมาคมกีฬา)");
       return;
     }
 
     // 5. ตรวจสอบเบอร์โทรศัพท์
     const cleanPhone = phone.replace(/\D/g, "");
     if (cleanPhone.length < 9 || cleanPhone.length > 10 || !cleanPhone.startsWith("0")) {
-      setFormError("กรุณากรอกเบอร์โทรศัพท์ที่ถูกต้อง (เช่น 081-234-5678 หรือ 02-xxx-xxxx)");
+      fail("กรุณากรอกเบอร์โทรศัพท์ที่ถูกต้อง (เช่น 081-234-5678 หรือ 02-xxx-xxxx)");
       return;
     }
 
     // 6. ตรวจสอบอีเมล
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setFormError("กรุณากรอกที่อยู่อีเมลให้ถูกต้อง (เช่น somsak@email.com) เพื่อใช้แจ้งผลการสมัคร");
+      fail("กรุณากรอกที่อยู่อีเมลให้ถูกต้อง (เช่น somsak@email.com) เพื่อใช้แจ้งผลการสมัคร");
       return;
     }
 
     // 7. ตรวจสอบความยินยอม
     if (!consent || !confirmed) {
-      setFormError("กรุณายินยอมข้อตกลง PDPA และรับรองความถูกต้องของข้อมูล");
+      fail("กรุณายินยอมข้อตกลง PDPA และรับรองความถูกต้องของข้อมูล");
       return;
     }
 
     // 8. ตรวจสอบเอกสาร
     if (docConfig.photo.enabled && docConfig.photo.required && photoFiles.length === 0) {
-      setFormError("กรุณาแนบรูปถ่ายหน้าตรง");
+      fail("กรุณาแนบรูปถ่ายหน้าตรง");
       return;
     }
     if (docConfig.cover.enabled && docConfig.cover.required && coverFiles.length === 0) {
-      setFormError("กรุณาแนบหนังสือนำส่งจากต้นสังกัด / สมาคมกีฬา");
+      fail("กรุณาแนบหนังสือนำส่งจากต้นสังกัด / สมาคมกีฬา");
       return;
     }
     if (docConfig.certificate.enabled && docConfig.certificate.required && certFiles.length === 0) {
-      setFormError("กรุณาแนบหนังสือรับรองการปฏิบัติหน้าที่ให้กับสมาคม/หน่วยงาน");
+      fail("กรุณาแนบหนังสือรับรองการปฏิบัติหน้าที่ให้กับสมาคม/หน่วยงาน");
       return;
     }
     if (docConfig.idcard?.enabled && docConfig.idcard?.required && idCardFiles.length === 0) {
-      setFormError("กรุณาแนบสำเนาบัตรประจำตัวประชาชน พร้อมลงนามรับรองสำเนาถูกต้อง");
+      fail("กรุณาแนบสำเนาบัตรประจำตัวประชาชน พร้อมลงนามรับรองสำเนาถูกต้อง");
       return;
     }
     if (docConfig.saka.enabled && docConfig.saka.required && sakaFiles.length === 0) {
-      setFormError("กรุณาแนบสำเนาใบ ส.ฬ. 8 สำหรับหลักสูตรนี้");
+      fail("กรุณาแนบสำเนาใบ ส.ฬ. 8 สำหรับหลักสูตรนี้");
       return;
     }
 
@@ -531,7 +540,7 @@ function RegistrationContent() {
         const base64Content = f.dataUrl.split(",")[1] || "";
         const byteLength = (base64Content.length * 3) / 4;
         if (byteLength > MAX_FILE_SIZE_BYTES) {
-          setFormError(`ไฟล์ "${f.name}" มีขนาดใหญ่เกินกำหนด (${(byteLength / (1024 * 1024)).toFixed(1)} MB) กรุณาลดขนาดไฟล์ให้ไม่เกิน 10 MB ต่อไฟล์`);
+          fail(`ไฟล์ "${f.name}" มีขนาดใหญ่เกินกำหนด (${(byteLength / (1024 * 1024)).toFixed(1)} MB) กรุณาลดขนาดไฟล์ให้ไม่เกิน 10 MB ต่อไฟล์`);
           return;
         }
       }

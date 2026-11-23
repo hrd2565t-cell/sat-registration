@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { THAI_PROVINCES, THAI_REGIONS, detectProvinceFromLocation } from "@/lib/provinces";
 import { type Course, balanceQuotasToCapacity, TARGET_GROUPS, type TargetGroupQuotas } from "@/lib/courses";
 import { addCourse, updateCourse, deleteCourse } from "@/lib/courses-store";
@@ -41,6 +41,8 @@ export function HistoricalCourseDialog({
   });
   const [showQuotasDetail, setShowQuotasDetail] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -92,11 +94,22 @@ export function HistoricalCourseDialog({
   };
 
   const handleSave = () => {
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
+    setIsSaving(true);
+
+    const resetSaving = () => {
+      isSavingRef.current = false;
+      setIsSaving(false);
+    };
+
     if (!title.trim()) {
+      resetSaving();
       setErrorMessage("กรุณากรอกชื่อหลักสูตรการฝึกอบรม");
       return;
     }
     if (!fiscalYear.trim()) {
+      resetSaving();
       setErrorMessage("กรุณาระบุปีงบประมาณ");
       return;
     }
@@ -272,7 +285,12 @@ export function HistoricalCourseDialog({
               <input
                 type="text"
                 value={location}
-                onChange={(e) => setLocation(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setLocation(val);
+                  const detected = detectProvinceFromLocation(val);
+                  if (detected) setProvince(detected);
+                }}
                 placeholder="เช่น ศูนย์ฝึกกีฬาแห่งชาติ ภาค 5 จ.เชียงใหม่"
                 className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-[#16265E] focus:outline-none focus:ring-1 focus:ring-[#16265E]"
               />
@@ -427,9 +445,10 @@ export function HistoricalCourseDialog({
             <button
               type="button"
               onClick={handleSave}
-              className="rounded-xl bg-[#16265E] px-5 py-2 text-xs font-bold text-white hover:bg-[#121f4c] shadow transition"
+              disabled={isSaving}
+              className="rounded-xl bg-[#16265E] px-5 py-2 text-xs font-bold text-white hover:bg-[#121f4c] shadow transition disabled:opacity-50"
             >
-              {isEditing ? "บันทึกการแก้ไข" : "บันทึกหลักสูตรย้อนหลัง"}
+              {isSaving ? "กำลังบันทึก..." : isEditing ? "บันทึกการแก้ไข" : "บันทึกหลักสูตรย้อนหลัง"}
             </button>
           </div>
         </div>

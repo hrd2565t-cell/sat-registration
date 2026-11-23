@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   formatCourseDateFields,
   getGlobalCourseSchedule,
@@ -19,9 +19,13 @@ export function GlobalScheduleCard({
   onSaved?: (message: string) => void;
 }) {
   const { courses } = useCourses();
-  const globalSched = getGlobalCourseSchedule(courses);
-  const customCourses = courses.filter((c) => c.useCustomSchedule);
-  const sharedCount = courses.length - customCourses.length;
+  const activeCourses = useMemo(
+    () => courses.filter((c) => !c.isHistorical),
+    [courses]
+  );
+  const globalSched = getGlobalCourseSchedule(activeCourses);
+  const customCourses = activeCourses.filter((c) => c.useCustomSchedule);
+  const sharedCount = activeCourses.length - customCourses.length;
 
   const [isEditing, setIsEditing] = useState(false);
   const [regFields, setRegFields] = useState<CourseDateFields>(() =>
@@ -80,8 +84,8 @@ export function GlobalScheduleCard({
 
           <span className="rounded-full border border-[#cbd5e1] bg-white px-2.5 py-0.5 text-[10.5px] font-semibold text-[#475569]">
             {customCourses.length === 0
-              ? `✓ ใช้ร่วมกันครบทั้ง ${courses.length} หลักสูตร`
-              : `ใช้ร่วมกัน ${sharedCount}/${courses.length} หลักสูตร (กำหนดแยก ${customCourses.length} หลักสูตร)`}
+              ? `✓ ใช้ร่วมกันครบทั้ง ${activeCourses.length} หลักสูตร`
+              : `ใช้ร่วมกัน ${sharedCount}/${activeCourses.length} หลักสูตร (กำหนดแยก ${customCourses.length} หลักสูตร)`}
           </span>
         </div>
 
