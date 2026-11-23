@@ -10,6 +10,7 @@ import {
   DEFAULT_TARGET_QUOTAS,
   balanceQuotasToCapacity,
   isLegacy50Quota,
+  sortCoursesChronologically,
 } from "@/lib/courses";
 import type { ApplicantRecord } from "@/lib/applications-store";
 
@@ -24,6 +25,11 @@ export function TargetGroupAnalytics({
 }: TargetGroupAnalyticsProps) {
   const [selectedCourseId, setSelectedCourseId] = useState<number | "all">("all");
 
+  const activeCoursesList = useMemo(
+    () => sortCoursesChronologically(courses.filter((c) => !c.isHistorical)),
+    [courses]
+  );
+
   const filteredApps = useMemo(() => {
     if (selectedCourseId === "all") return applications;
     return applications.filter((app) => app.courseId === selectedCourseId);
@@ -31,10 +37,10 @@ export function TargetGroupAnalytics({
 
   const activeCourse = useMemo(() => {
     if (selectedCourseId === "all") return null;
-    return courses.find((c) => c.id === selectedCourseId) || null;
-  }, [courses, selectedCourseId]);
+    return activeCoursesList.find((c) => c.id === selectedCourseId) || null;
+  }, [activeCoursesList, selectedCourseId]);
 
-  // Combined quotas across all courses or specific course
+  // Combined quotas across all active courses or specific course
   const totalQuotas: TargetGroupQuotas = useMemo(() => {
     const resolveQuota = (c: Course): TargetGroupQuotas => {
       const raw = c.targetQuotas || DEFAULT_TARGET_QUOTAS;
@@ -44,7 +50,7 @@ export function TargetGroupAnalytics({
     if (activeCourse) {
       return resolveQuota(activeCourse);
     }
-    return courses.reduce(
+    return activeCoursesList.reduce(
       (acc, c) => {
         const q = resolveQuota(c);
         return {
@@ -57,7 +63,7 @@ export function TargetGroupAnalytics({
       },
       { sat: 0, nationalAssoc: 0, provincialAssoc: 0, nsdf: 0, external: 0 }
     );
-  }, [activeCourse, courses]);
+  }, [activeCourse, activeCoursesList]);
 
   // Helper to match applicant's affiliation with TargetGroupKey
   const getAppGroupKey = (affiliation: string): TargetGroupKey => {
@@ -149,9 +155,9 @@ export function TargetGroupAnalytics({
             className="rounded-[6px] border border-[#cbd5e1] bg-white px-2.5 py-1 text-[11.5px] font-medium text-[#1e293b] shadow-sm focus:border-[#1e3a8a] focus:outline-none"
           >
             <option value="all">📊 สรุปทุกหลักสูตร (ภาพรวมทั้งหมด)</option>
-            {courses.map((c) => (
+            {activeCoursesList.map((c, idx) => (
               <option key={c.id} value={c.id}>
-                {c.id}. {c.shortTitle || c.title.slice(0, 32)}
+                {idx + 1}. {c.shortTitle || c.title.slice(0, 32)}
               </option>
             ))}
           </select>

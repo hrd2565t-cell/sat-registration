@@ -229,12 +229,40 @@ export interface Course {
   updatedAt?: string;
 }
 
+export function deriveFiscalYearFromDate(
+  dateStr: string | null | undefined,
+  isHistorical = false
+): string {
+  if (!dateStr || !dateStr.trim()) return "2570";
+  const trimmed = dateStr.trim();
+  const hasThaiMonth = THAI_MONTHS.some((m) => trimmed.includes(m.abbr));
+  if (!hasThaiMonth) {
+    const match = trimmed.match(/25\d{2}/);
+    return match ? match[0] : "2570";
+  }
+  const sessions = parseCourseDateSessions(trimmed);
+  const first = sessions[0];
+  if (!first) {
+    const match = trimmed.match(/25\d{2}/);
+    return match ? match[0] : "2570";
+  }
+  // ปีงบประมาณไทยเริ่ม 1 ต.ค. ถึง 30 ก.ย. (เดือน ต.ค.–ธ.ค. ของปี พ.ศ. Y ถือเป็นปีงบประมาณ Y + 1)
+  const startYearBE =
+    first.startMonth > first.endMonth ? first.yearBE - 1 : first.yearBE;
+  const fy =
+    !isHistorical && first.startMonth >= 9 ? startYearBE + 1 : startYearBE;
+  return String(fy);
+}
+
 export function getCourseFiscalYear(course: Partial<Course> | null | undefined): string {
   if (!course) return "2570";
   if (course.fiscalYear && course.fiscalYear.trim()) {
     return course.fiscalYear.trim();
   }
-  const text = [course.date, course.registrationDate, course.resultDate, course.title]
+  if (course.date && course.date.trim()) {
+    return deriveFiscalYearFromDate(course.date, course.isHistorical);
+  }
+  const text = [course.resultDate, course.registrationDate, course.title]
     .filter(Boolean)
     .join(" ");
   const match = text.match(/25\d{2}/);
@@ -404,7 +432,25 @@ export function parseCourseDateFields(
     }
   }
 
-  // รูปแบบ 2: ข้ามเดือน เช่น "28 พ.ค. - 2 มิ.ย. 2570"
+  // รูปแบบ 2: ข้ามเดือนและระบุปี พ.ศ. ทั้งฝั่งเริ่มและฝั่งจบ เช่น "9 พ.ย. 2569 - 7 พ.ค. 2570"
+  const m2WithYears = s.match(
+    /^(\d{1,2})\s+([ก-๙\.]+)\s+(\d{2,4})\s*-\s*(\d{1,2})\s+([ก-๙\.]+)\s+(\d{4})$/
+  );
+  if (m2WithYears) {
+    const startMonth = THAI_MONTH_INDEX_MAP[m2WithYears[2]];
+    const endMonth = THAI_MONTH_INDEX_MAP[m2WithYears[5]];
+    if (startMonth !== undefined && endMonth !== undefined) {
+      return {
+        startDay: parseInt(m2WithYears[1], 10),
+        startMonth,
+        endDay: parseInt(m2WithYears[4], 10),
+        endMonth,
+        yearBE: parseInt(m2WithYears[6], 10),
+      };
+    }
+  }
+
+  // รูปแบบ 3: ข้ามเดือน เช่น "28 พ.ค. - 2 มิ.ย. 2570"
   const m2 = s.match(
     /^(\d{1,2})\s+([ก-๙\.]+)\s*-\s*(\d{1,2})\s+([ก-๙\.]+)\s+(\d{4})$/
   );
@@ -422,7 +468,7 @@ export function parseCourseDateFields(
     }
   }
 
-  // รูปแบบ 3: วันเดียว เช่น "15 พ.ค. 2570"
+  // รูปแบบ 4: วันเดียว เช่น "15 พ.ค. 2570"
   const m3 = s.match(/^(\d{1,2})\s+([ก-๙\.]+)\s+(\d{4})$/);
   if (m3) {
     const month = THAI_MONTH_INDEX_MAP[m3[2]];
@@ -455,6 +501,9 @@ export function formatCourseDateFields(
     }
     return `${fields.startDay}-${fields.endDay} ${startMonthAbbr}${yearSuffix}`;
   }
+  if (fields.startMonth > fields.endMonth && includeYear) {
+    return `${fields.startDay} ${startMonthAbbr} ${fields.yearBE - 1} - ${fields.endDay} ${endMonthAbbr} ${fields.yearBE}`;
+  }
   return `${fields.startDay} ${startMonthAbbr} - ${fields.endDay} ${endMonthAbbr}${yearSuffix}`;
 }
 
@@ -480,7 +529,7 @@ export function parseCourseDateSessions(
     : 2570;
 
   const segments = dateStr
-    .split(/[,/]/)
+    .split(/[,/&]/)
     .map((seg) => seg.trim())
     .filter(Boolean);
 
@@ -527,7 +576,9 @@ export function getCourseEarliestStartTime(course: Course): number {
   const sessions = parseCourseDateSessions(course.date);
   if (!sessions || sessions.length === 0) return Infinity;
   const first = sessions[0];
-  const yearCE = first.yearBE - 543;
+  const startYearBE =
+    first.startMonth > first.endMonth ? first.yearBE - 1 : first.yearBE;
+  const yearCE = startYearBE - 543;
   return new Date(yearCE, first.startMonth, first.startDay).getTime();
 }
 
@@ -554,7 +605,9 @@ export function computeDefaultCourseScheduleFields(
     endMonth: 4,
     yearBE: 2570,
   };
-  const yearCE = first.yearBE - 543;
+  const startYearBE =
+    first.startMonth > first.endMonth ? first.yearBE - 1 : first.yearBE;
+  const yearCE = startYearBE - 543;
   const trainStart = new Date(yearCE, first.startMonth, first.startDay);
 
   // เปิดรับสมัคร: ล่วงหน้า 30 วัน ถึง 14 วันก่อนวันเริ่มอบรม
@@ -607,22 +660,34 @@ export function computeDefaultCourseSchedule(trainingDateStr: string): {
   };
 }
 
+function normalizeScheduleDateRange(dateStr: string): string {
+  const trimmed = dateStr.trim();
+  if (!trimmed) return trimmed;
+  const hasThaiMonth = THAI_MONTHS.some((m) => trimmed.includes(m.abbr));
+  if (!hasThaiMonth || !/\b25\d{2}\b/.test(trimmed)) return trimmed;
+  return formatCourseDateFields(parseCourseDateFields(trimmed), true);
+}
+
 export function getGlobalCourseSchedule(
   courseList: Course[] = courses
 ): {
   registrationDate: string;
   resultDate: string;
 } {
+  const activeOnly = courseList.filter((c) => !c.isHistorical);
+  const pool = activeOnly.length > 0 ? activeOnly : courseList;
   const sharedCourse =
-    courseList.find((c) => !c.useCustomSchedule && c.registrationDate?.trim()) ??
-    courseList.find((c) => c.registrationDate?.trim());
+    pool.find((c) => !c.useCustomSchedule && c.registrationDate?.trim()) ??
+    pool.find((c) => c.registrationDate?.trim());
 
   return {
-    registrationDate:
+    registrationDate: normalizeScheduleDateRange(
       sharedCourse?.registrationDate?.trim() ||
-      DEFAULT_GLOBAL_REGISTRATION_DATE,
-    resultDate:
-      sharedCourse?.resultDate?.trim() || DEFAULT_GLOBAL_RESULT_DATE,
+        DEFAULT_GLOBAL_REGISTRATION_DATE
+    ),
+    resultDate: normalizeScheduleDateRange(
+      sharedCourse?.resultDate?.trim() || DEFAULT_GLOBAL_RESULT_DATE
+    ),
   };
 }
 
@@ -641,8 +706,8 @@ export function getCourseScheduleDates(
   const isCustom = Boolean(course.useCustomSchedule);
   if (isCustom && course.registrationDate?.trim() && course.resultDate?.trim()) {
     return {
-      registrationDate: course.registrationDate.trim(),
-      resultDate: course.resultDate.trim(),
+      registrationDate: normalizeScheduleDateRange(course.registrationDate),
+      resultDate: normalizeScheduleDateRange(course.resultDate),
       trainingDate: course.date,
       isCustom: true,
     };
@@ -688,7 +753,28 @@ function parseSingleThaiDateRange(
     };
   }
 
-  // รูปแบบ 2: ข้ามเดือน เช่น "28 พ.ค. - 2 มิ.ย. 2570"
+  // รูปแบบ 2: ข้ามเดือนและระบุปี พ.ศ. ทั้งฝั่งเริ่มและฝั่งจบ เช่น "9 พ.ย. 2569 - 7 พ.ค. 2570"
+  const m2WithYears = s.match(
+    /^(\d{1,2})\s+([ก-๙\.]+)\s+(\d{2,4})\s*-\s*(\d{1,2})\s+([ก-๙\.]+)\s+(\d{4})$/
+  );
+  if (m2WithYears) {
+    const startDay = parseInt(m2WithYears[1], 10);
+    const startMonth = THAI_MONTH_INDEX_MAP[m2WithYears[2]];
+    const rawStartYear = parseInt(m2WithYears[3], 10);
+    const startYearBE = rawStartYear < 100 ? rawStartYear + 2500 : rawStartYear;
+    const endDay = parseInt(m2WithYears[4], 10);
+    const endMonth = THAI_MONTH_INDEX_MAP[m2WithYears[5]];
+    const endYearBE = parseInt(m2WithYears[6], 10);
+    if (startMonth === undefined || endMonth === undefined) return null;
+    const startYearCE = startYearBE > 2400 ? startYearBE - 543 : startYearBE;
+    const endYearCE = endYearBE > 2400 ? endYearBE - 543 : endYearBE;
+    return {
+      start: new Date(startYearCE, startMonth, startDay, 0, 0, 0),
+      end: new Date(endYearCE, endMonth, endDay, 23, 59, 59),
+    };
+  }
+
+  // รูปแบบ 3: ข้ามเดือน เช่น "28 พ.ค. - 2 มิ.ย. 2570"
   const m2 = s.match(
     /^(\d{1,2})\s+([ก-๙\.]+)\s*-\s*(\d{1,2})\s+([ก-๙\.]+)\s+(\d{4})$/
   );
@@ -700,8 +786,9 @@ function parseSingleThaiDateRange(
     if (startMonth === undefined || endMonth === undefined) return null;
     const yearBE = parseInt(m2[5], 10);
     const yearCE = yearBE > 2400 ? yearBE - 543 : yearBE;
+    const startYearCE = startMonth > endMonth ? yearCE - 1 : yearCE;
     return {
-      start: new Date(yearCE, startMonth, startDay, 0, 0, 0),
+      start: new Date(startYearCE, startMonth, startDay, 0, 0, 0),
       end: new Date(yearCE, endMonth, endDay, 23, 59, 59),
     };
   }
@@ -738,7 +825,7 @@ export function parseThaiDateRanges(
     : 2570;
 
   const segments = dateStr
-    .split(/[,/]/)
+    .split(/[,/&]/)
     .map((seg) => seg.trim())
     .filter(Boolean);
 

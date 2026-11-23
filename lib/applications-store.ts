@@ -9,6 +9,7 @@ import {
 } from "@/lib/admin-data";
 import {
   courses,
+  getCourseFiscalYear,
   isCourseDateOverlapping,
   type Course,
 } from "@/lib/courses";
@@ -589,10 +590,12 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
   const id = Math.max(10, ...state.applications.map((item) => item.id)) + 1;
   const fileSize = computeTotalFileSizeMB(input.documents);
 
+  const fySuffix = getCourseFiscalYear(course).slice(-2) || "70";
+
   const record: ApplicantRecord = {
     id,
     ref,
-    receiptNo: `${ref}-70`,
+    receiptNo: `${ref}-${fySuffix}`,
     name: input.name.trim() || "ผู้สมัครไม่ระบุชื่อ",
     idCard: input.idCard.replace(/\D/g, ""),
     email: input.email.trim(),
@@ -656,7 +659,7 @@ function dispatchStatusUpdateEmail(
       applicantName: app.name,
       receiptNo: app.receiptNo,
       ref: app.ref,
-      courseTitle: app.courseTitle,
+      courseTitle: course?.title || app.courseTitle,
       courseDate: course?.date,
       courseLocation: course?.location,
       idCard: app.idCard,

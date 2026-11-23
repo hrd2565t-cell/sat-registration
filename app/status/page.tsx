@@ -236,9 +236,10 @@ function ApplicantStatusCard({
     };
   }, [photoDoc, result.ref, result.idCard]);
 
-  const displayCourseTitle = result.courseTitle.startsWith("หลักสูตร")
-    ? result.courseTitle
-    : `หลักสูตร ${result.courseTitle}`;
+  const rawCourseTitle = course?.title || result.courseTitle;
+  const displayCourseTitle = rawCourseTitle.startsWith("หลักสูตร")
+    ? rawCourseTitle
+    : `หลักสูตร ${rawCourseTitle}`;
 
   return (
     <Card

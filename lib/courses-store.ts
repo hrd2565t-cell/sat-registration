@@ -11,6 +11,7 @@ import {
   DEFAULT_GLOBAL_RESULT_DATE,
   getGlobalCourseSchedule,
   balanceQuotasToCapacity,
+  deriveFiscalYearFromDate,
   isLegacy50Quota,
   getCourseFiscalYear,
   type Course,
@@ -990,12 +991,23 @@ export function updateCourse(
           ? Math.min(updatedCapacity, patch.seatsLeft)
           : Math.min(updatedCapacity, course.seatsLeft ?? updatedCapacity);
 
+    const nextDate = patch.date !== undefined ? patch.date : course.date;
+    const nextIsHistorical =
+      patch.isHistorical !== undefined ? patch.isHistorical : course.isHistorical;
+    const nextFiscalYear =
+      patch.fiscalYear !== undefined
+        ? patch.fiscalYear.trim() || undefined
+        : patch.date !== undefined
+          ? deriveFiscalYearFromDate(nextDate, nextIsHistorical)
+          : course.fiscalYear;
+
     updated = {
       ...course,
       ...patch,
       id: course.id,
       capacity: updatedCapacity,
       seatsLeft: remaining,
+      fiscalYear: nextFiscalYear,
       updatedAt: new Date().toISOString(),
       image: nextImage,
       imageAlt: course.imageAlt,
@@ -1251,7 +1263,13 @@ export function addCourse(
     warningMessage: data.warningMessage?.trim() || undefined,
     budget: data.budget,
     province: data.province || detectProvinceFromLocation(data.location || ""),
-    fiscalYear: data.fiscalYear || getCourseFiscalYear({ date: data.date, registrationDate: data.registrationDate }),
+    fiscalYear:
+      data.fiscalYear ||
+      getCourseFiscalYear({
+        date: data.date,
+        registrationDate: data.registrationDate,
+        isHistorical: Boolean(data.isHistorical),
+      }),
     isHistorical: Boolean(data.isHistorical),
     historicalCompleted: data.historicalCompleted,
     historicalApplicants: data.historicalApplicants,

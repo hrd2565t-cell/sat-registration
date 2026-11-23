@@ -29,7 +29,7 @@ import { getDocumentFromStorage } from "@/lib/document-storage";
 import { resolveSupabaseDocumentUrl } from "@/lib/supabase/sync";
 import { useAlumniStore, addTrainee } from "@/lib/alumni-store";
 import { useCourses } from "@/lib/courses-store";
-import { TARGET_GROUPS, getTargetGroupKey } from "@/lib/courses";
+import { TARGET_GROUPS, getCourseFiscalYear, getTargetGroupKey } from "@/lib/courses";
 import { auditApplicantDocuments } from "@/lib/document-checklist";
 
 const emptySubscribe = () => () => {};
@@ -418,9 +418,11 @@ export function ApplicantDetail({
     return trainees.some(
       (t) =>
         (t.idCard === applicant.idCard || t.name === applicant.name) &&
-        t.courseTitle === applicant.courseTitle
+        (t.courseId === applicant.courseId ||
+          t.courseTitle === applicant.courseTitle ||
+          t.courseTitle === currentCourse?.title)
     );
-  }, [trainees, applicant]);
+  }, [trainees, applicant, currentCourse?.title]);
 
   const handlePromoteToAlumni = () => {
     if (!applicant) return;
@@ -428,8 +430,11 @@ export function ApplicantDetail({
       setNotice(`"${applicant.name}" ได้รับการบันทึกเข้าสู่ทำเนียบบุคลากรในหลักสูตรนี้เรียบร้อยแล้ว`);
       return;
     }
-    const currentYearBE = new Date().getFullYear() + 543;
-    const certCode = `SAT-${currentYearBE}-${applicant.ref.replace(/\D/g, "").slice(-4) || Math.floor(1000 + Math.random() * 9000)}`;
+    const resolvedCourseTitle =
+      currentCourse?.title || applicant.courseTitle || applicant.course;
+    const courseYearBE =
+      Number(getCourseFiscalYear(currentCourse)) || new Date().getFullYear() + 543;
+    const certCode = `SAT-${courseYearBE}-${applicant.ref.replace(/\D/g, "").slice(-4) || Math.floor(1000 + Math.random() * 9000)}`;
 
     const match = applicant.name.match(
       /^(นาย|นางสาว|นาง|ดร\.|นาวาเอก|นาวาโท|นาวาตรี|เรือเอก|พ\.ต\.อ\.|ร\.ต\.อ\.|พ\.จ\.ต\.|ส\.อ\.|ว่าที่ ร\.ต\.|ว่าที่ร้อยตรี)\s*(.*)$/
@@ -457,11 +462,11 @@ export function ApplicantDetail({
         ? "การกีฬาแห่งประเทศไทย"
         : "หน่วยงานภายนอก",
       sportsType: "ทั่วไป",
-      yearBE: currentYearBE,
+      yearBE: courseYearBE,
       courseId: applicant.courseId,
-      courseTitle: applicant.courseTitle || applicant.course,
-      courseCategory: (applicant.courseTitle || applicant.course).includes("ผู้บริหาร") ? "ผู้บริหารกีฬา" : "ผู้ฝึกสอนกีฬา",
-      batch: `รุ่นปี พ.ศ. ${currentYearBE}`,
+      courseTitle: resolvedCourseTitle,
+      courseCategory: resolvedCourseTitle.includes("ผู้บริหาร") ? "ผู้บริหารกีฬา" : "ผู้ฝึกสอนกีฬา",
+      batch: `รุ่นปี พ.ศ. ${courseYearBE}`,
       certNo: certCode,
       passedDate: new Date().toISOString().split("T")[0],
       status: "active",
@@ -615,7 +620,7 @@ export function ApplicantDetail({
               </span>
             </div>
             <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[#4b5563]">
-              {applicant.courseTitle}
+              {currentCourse?.title || applicant.courseTitle}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-[#6b7280]">
               <button
@@ -695,7 +700,7 @@ export function ApplicantDetail({
                   </span>
                 }
               />
-              <Field label="หลักสูตรที่สมัคร" value={applicant.courseTitle} />
+              <Field label="หลักสูตรที่สมัคร" value={currentCourse?.title || applicant.courseTitle} />
               <Field
                 label="วันที่สมัคร"
                 value={formatThaiDateTime(applicant.submittedAt)}

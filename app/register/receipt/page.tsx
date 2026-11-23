@@ -140,7 +140,7 @@ function ReceiptContent() {
           applicantName: record.name,
           receiptNo: record.receiptNo,
           ref: record.ref,
-          courseTitle: record.courseTitle,
+          courseTitle: course?.title || record.courseTitle,
           courseDate: course.date,
           courseLocation: course.location,
           idCard: record.idCard,
@@ -354,7 +354,7 @@ function ReceiptContent() {
                     title="คัดลอกเลขบัตรประชาชน 13 หลักเพื่อใช้ตรวจสอบสถานะ"
                   />
                 </div>
-                <ReceiptRow label="หลักสูตร" value={record.courseTitle} />
+                <ReceiptRow label="หลักสูตร" value={course?.title || record.courseTitle} />
                 <ReceiptRow
                   label="วันที่อบรม"
                   value={`วันที่ ${course.date}`}

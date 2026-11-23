@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { CourseEditDialog } from "@/components/admin/course-edit-dialog";
 import { GlobalScheduleCard } from "@/components/admin/global-schedule-card";
+import { HistoricalCourseDialog } from "@/components/admin/historical-course-dialog";
 import { PdfPreviewModal } from "@/components/ui/pdf-preview-modal";
 import {
   DEFAULT_EXPENSES_POLICY,
@@ -12,9 +13,12 @@ import {
   DEFAULT_TARGET_QUOTAS,
   TARGET_GROUPS,
   balanceQuotasToCapacity,
+  getCourseEarliestStartTime,
+  getCourseFiscalYear,
   getCourseScheduleDates,
   getTargetGroupKey,
   isLegacy50Quota,
+  sortCoursesChronologically,
   type Course,
 } from "@/lib/courses";
 import { useApplications } from "@/lib/applications-store";
@@ -215,7 +219,35 @@ export function CoursesAdmin() {
     }
   };
 
-  const totals = courses.reduce(
+  const activeCourses = useMemo(
+    () => sortCoursesChronologically(courses.filter((c) => !c.isHistorical)),
+    [courses]
+  );
+
+  const historicalCourses = useMemo(
+    () =>
+      [...courses.filter((c) => Boolean(c.isHistorical))].sort((a, b) => {
+        const fyDiff = getCourseFiscalYear(b).localeCompare(
+          getCourseFiscalYear(a)
+        );
+        if (fyDiff !== 0) return fyDiff;
+        return getCourseEarliestStartTime(a) - getCourseEarliestStartTime(b);
+      }),
+    [courses]
+  );
+
+  const activeOrderById = useMemo(
+    () => new Map(activeCourses.map((c, idx) => [c.id, idx + 1])),
+    [activeCourses]
+  );
+
+  const displayedCourses = useMemo(() => {
+    if (catalogFilter === "active") return activeCourses;
+    if (catalogFilter === "historical") return historicalCourses;
+    return [...activeCourses, ...historicalCourses];
+  }, [catalogFilter, activeCourses, historicalCourses]);
+
+  const totals = activeCourses.reduce(
     (result, course) => {
       const courseApplications = applications.filter(
         (item) => item.courseId === course.id
@@ -323,7 +355,7 @@ export function CoursesAdmin() {
             <p className="mt-0.5 text-[16px] font-semibold text-[#111827]">
               {totals.open}{" "}
               <span className="text-[10px] font-normal text-[#6b7280]">
-                / {courses.length} หลักสูตร
+                / {activeCourses.length} หลักสูตร (ปีงบฯ 2570)
               </span>
             </p>
           </div>
@@ -389,13 +421,10 @@ export function CoursesAdmin() {
       </div>
 
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {courses
-          .filter((c) => {
-            if (catalogFilter === "active") return !c.isHistorical;
-            if (catalogFilter === "historical") return Boolean(c.isHistorical);
-            return true;
-          })
-          .map((course) => {
+        {displayedCourses.map((course) => {
+          const isHistorical = Boolean(course.isHistorical);
+          const fiscalYear = getCourseFiscalYear(course);
+          const activeOrder = activeOrderById.get(course.id);
           const courseApplications = applications.filter(
             (item) => item.courseId === course.id
           );
@@ -459,26 +488,38 @@ export function CoursesAdmin() {
                     🗑️ ลบ
                   </button>
                 </div>
-                <span
-                  className={`absolute right-2 top-2 z-10 min-w-[84px] text-center rounded-[5px] px-2.5 py-1 text-[10.5px] font-semibold text-white shadow-sm ${
-                    course.status === "open"
-                      ? (course.seatsLeft ?? 0) <= 5
-                        ? "bg-[#d97706]"
-                        : "bg-[#078A43]"
-                      : "bg-[#b42d35]"
-                  }`}
-                >
-                  {course.status === "open"
-                    ? `เหลือ ${course.seatsLeft} ที่นั่ง (Auto)`
-                    : "เต็มแล้ว"}
-                </span>
+                {isHistorical ? (
+                  <span className="absolute right-2 top-2 z-10 rounded-[5px] bg-[#4c1d95] px-2.5 py-1 text-[10.5px] font-semibold text-white shadow-sm">
+                    ปีงบฯ {fiscalYear} (ประวัติย้อนหลัง)
+                  </span>
+                ) : (
+                  <span
+                    className={`absolute right-2 top-2 z-10 min-w-[84px] text-center rounded-[5px] px-2.5 py-1 text-[10.5px] font-semibold text-white shadow-sm ${
+                      course.status === "open"
+                        ? (course.seatsLeft ?? 0) <= 5
+                          ? "bg-[#d97706]"
+                          : "bg-[#078A43]"
+                        : "bg-[#b42d35]"
+                    }`}
+                  >
+                    {course.status === "open"
+                      ? `เหลือ ${course.seatsLeft} ที่นั่ง (Auto)`
+                      : "เต็มแล้ว"}
+                  </span>
+                )}
+
+                {!isHistorical && activeOrder !== undefined && (
+                  <span className="absolute bottom-2 left-2 z-10 inline-flex items-center gap-1 rounded-[5px] bg-[#16265E]/90 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm backdrop-blur-xs">
+                    📅 อบรมลำดับที่ {activeOrder} · ปีงบฯ {fiscalYear}
+                  </span>
+                )}
               </div>
 
               <div className="flex flex-1 flex-col p-3">
                 <h2 className="text-[13px] font-semibold leading-snug text-[#111827]">
                   {course.title}
                 </h2>
-                {(() => {
+                {!isHistorical && (() => {
                   const sched = getCourseScheduleDates(course, courses);
                   return (
                     <div className="mt-1.5 rounded-[5px] border border-[#e2e8f0] bg-[#f8fafc] px-2 py-1.5 text-[10px] space-y-0.5">
@@ -535,45 +576,82 @@ export function CoursesAdmin() {
                   </p>
                 </div>
 
-                <div className="mt-2.5 grid grid-cols-4 gap-1 rounded-[5px] bg-[#f8fafc] px-2 py-2 text-center">
-                  <div>
-                    <p className="text-[13px] font-semibold leading-none text-[#111827]">
-                      {courseApplications.length}
-                    </p>
-                    <p className="mt-1 text-[9px] text-[#6b7280]">ผู้สมัคร</p>
+                {isHistorical ? (
+                  <div className="mt-2.5 grid grid-cols-4 gap-1 rounded-[5px] border border-[#e9d5ff] bg-[#faf5ff] px-2 py-2 text-center">
+                    <div>
+                      <p className="text-[13px] font-semibold leading-none text-[#111827]">
+                        {course.historicalApplicants ?? course.capacity ?? 40}
+                      </p>
+                      <p className="mt-1 text-[9px] text-[#6b7280]">ผู้สมัคร</p>
+                    </div>
+                    <div className="border-l border-[#e9d5ff]">
+                      <p className="text-[13px] font-semibold leading-none text-[#176c3a]">
+                        {course.historicalCompleted ?? course.capacity ?? 40}
+                      </p>
+                      <p className="mt-1 text-[9px] font-medium text-[#176c3a]">ผ่านอบรม</p>
+                    </div>
+                    <div className="border-l border-[#e9d5ff]">
+                      <p className="text-[13px] font-semibold leading-none text-[#4c1d95]">
+                        {course.capacity || 40}
+                      </p>
+                      <p className="mt-1 text-[9px] font-medium text-[#4c1d95]">เป้าหมาย</p>
+                    </div>
+                    <div className="border-l border-[#e9d5ff]">
+                      <p className="text-[11.5px] font-bold leading-none text-[#0f766e]">
+                        {course.budget && course.budget > 0
+                          ? `฿${course.budget.toLocaleString()}`
+                          : "-"}
+                      </p>
+                      <p className="mt-1 text-[9px] text-[#6b7280]">งบจริง</p>
+                    </div>
                   </div>
-                  <div className="border-l border-[#e5e7eb]">
-                    <p className="text-[13px] font-semibold leading-none text-[#176c3a]">
-                      {approved}
-                    </p>
-                    <p className="mt-1 text-[9px] font-medium text-[#176c3a]">ตัวจริง</p>
+                ) : (
+                  <div className="mt-2.5 grid grid-cols-4 gap-1 rounded-[5px] bg-[#f8fafc] px-2 py-2 text-center">
+                    <div>
+                      <p className="text-[13px] font-semibold leading-none text-[#111827]">
+                        {courseApplications.length}
+                      </p>
+                      <p className="mt-1 text-[9px] text-[#6b7280]">ผู้สมัคร</p>
+                    </div>
+                    <div className="border-l border-[#e5e7eb]">
+                      <p className="text-[13px] font-semibold leading-none text-[#176c3a]">
+                        {approved}
+                      </p>
+                      <p className="mt-1 text-[9px] font-medium text-[#176c3a]">ตัวจริง</p>
+                    </div>
+                    <div className="border-l border-[#e5e7eb]">
+                      <p className="text-[13px] font-semibold leading-none text-[#1e40af]">
+                        {reserve}
+                      </p>
+                      <p className="mt-1 text-[9px] font-medium text-[#1e40af]">สำรอง</p>
+                    </div>
+                    <div className="border-l border-[#e5e7eb]">
+                      <p className="text-[13px] font-semibold leading-none text-[#d97706]">
+                        {course.seatsLeft ?? 0}
+                      </p>
+                      <p className="mt-1 text-[9px] text-[#6b7280]">ว่าง</p>
+                    </div>
                   </div>
-                  <div className="border-l border-[#e5e7eb]">
-                    <p className="text-[13px] font-semibold leading-none text-[#1e40af]">
-                      {reserve}
-                    </p>
-                    <p className="mt-1 text-[9px] font-medium text-[#1e40af]">สำรอง</p>
-                  </div>
-                  <div className="border-l border-[#e5e7eb]">
-                    <p className="text-[13px] font-semibold leading-none text-[#d97706]">
-                      {course.seatsLeft ?? 0}
-                    </p>
-                    <p className="mt-1 text-[9px] text-[#6b7280]">ว่าง</p>
-                  </div>
-                </div>
+                )}
 
-                {/* สัดส่วน 5 กลุ่มเป้าหมาย (เป้าหมาย vs อนุมัติจริง) */}
+                {/* สัดส่วน 5 กลุ่มเป้าหมาย */}
                 <div className="mt-2.5 rounded-[6px] border border-[#e2e8f0] bg-[#f8fbff] p-2 text-[10px]">
                   <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-1 font-semibold text-[#1e3a8a]">
                     <span className="text-[10.5px]">เป้าหมายสัดส่วน 5 กลุ่ม</span>
                     <span className="text-[9px] text-[#6b7280]">
-                      ตัวจริง / เป้า (สมัคร)
+                      {isHistorical ? "โควตาเป้าหมาย (คน)" : "ตัวจริง / เป้า (สมัคร)"}
                     </span>
                   </div>
                   <div className="mt-1.5 space-y-1.5">
                     {groupStats.map((item) => {
-                      const pct =
-                        item.target > 0
+                      const pct = isHistorical
+                        ? (course.capacity || 40) > 0
+                          ? Math.min(
+                              100,
+                              Math.round((item.target / (course.capacity || 40)) * 100)
+                            )
+                          : 0
+                        : item.target > 0
                           ? Math.min(
                               100,
                               Math.round((item.approved / item.target) * 100)
@@ -585,21 +663,29 @@ export function CoursesAdmin() {
                             <span className="max-w-[150px] truncate font-medium text-[#374151]">
                               {item.label}
                             </span>
-                            <span className="font-semibold text-[#111827]">
-                              {item.approved}/{item.target} คน{" "}
-                              <span className="font-normal text-[#6b7280]">
-                                ({item.applicants})
+                            {isHistorical ? (
+                              <span className="font-semibold text-[#4c1d95]">
+                                {item.target} คน
                               </span>
-                            </span>
+                            ) : (
+                              <span className="font-semibold text-[#111827]">
+                                {item.approved}/{item.target} คน{" "}
+                                <span className="font-normal text-[#6b7280]">
+                                  ({item.applicants})
+                                </span>
+                              </span>
+                            )}
                           </div>
                           <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#e2e8f0]">
                             <div
                               className={`h-full rounded-full transition-all ${
-                                pct >= 100
-                                  ? "bg-[#10b981]"
-                                  : pct >= 60
-                                    ? "bg-[#3b82f6]"
-                                    : "bg-[#f59e0b]"
+                                isHistorical
+                                  ? "bg-[#7c3aed]"
+                                  : pct >= 100
+                                    ? "bg-[#10b981]"
+                                    : pct >= 60
+                                      ? "bg-[#3b82f6]"
+                                      : "bg-[#f59e0b]"
                               }`}
                               style={{ width: `${pct}%` }}
                             />
@@ -617,63 +703,85 @@ export function CoursesAdmin() {
                 )}
 
                 {/* Announcement PDF Status Strip */}
-                {course.announcementFile?.dataUrl ? (
-                  <div className="mt-2.5 flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50/80 px-2.5 py-1.5 text-[10px] text-emerald-900">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-sm">📄</span>
-                      <span className="font-bold truncate">ประกาศรายชื่อแล้ว (PDF)</span>
+                {!isHistorical && (
+                  course.announcementFile?.dataUrl ? (
+                    <div className="mt-2.5 flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50/80 px-2.5 py-1.5 text-[10px] text-emerald-900">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-sm">📄</span>
+                        <span className="font-bold truncate">ประกาศรายชื่อแล้ว (PDF)</span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPreviewPdf({
+                              url: course.announcementFile!.dataUrl || `/api/announcements/${course.id}`,
+                              courseId: course.id,
+                              name: course.announcementFile!.name,
+                              title: course.title,
+                            })
+                          }
+                          className="rounded bg-white border border-emerald-300 px-2 py-0.5 text-[9.5px] font-bold text-emerald-800 hover:bg-emerald-100 cursor-pointer shadow-2xs"
+                        >
+                          เปิดดู
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingId(course.id)}
+                          className="rounded bg-white border border-gray-300 px-1.5 py-0.5 text-[9.5px] font-semibold text-gray-700 hover:bg-gray-100 cursor-pointer shadow-2xs"
+                          title="เปลี่ยนหรือแก้ไขไฟล์ประกาศ"
+                        >
+                          แก้ไข
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setPreviewPdf({
-                            url: course.announcementFile!.dataUrl || `/api/announcements/${course.id}`,
-                            courseId: course.id,
-                            name: course.announcementFile!.name,
-                            title: course.title,
-                          })
-                        }
-                        className="rounded bg-white border border-emerald-300 px-2 py-0.5 text-[9.5px] font-bold text-emerald-800 hover:bg-emerald-100 cursor-pointer shadow-2xs"
-                      >
-                        เปิดดู
-                      </button>
+                  ) : (
+                    <div className="mt-2.5 flex items-center justify-between rounded-md border border-gray-200 bg-gray-50/80 px-2.5 py-1.5 text-[10px] text-gray-600">
+                      <span className="text-[9.5px]">ยังไม่แนบประกาศรายชื่อ</span>
                       <button
                         type="button"
                         onClick={() => setEditingId(course.id)}
-                        className="rounded bg-white border border-gray-300 px-1.5 py-0.5 text-[9.5px] font-semibold text-gray-700 hover:bg-gray-100 cursor-pointer shadow-2xs"
-                        title="เปลี่ยนหรือแก้ไขไฟล์ประกาศ"
+                        className="rounded border border-blue-200 bg-blue-50/80 px-2 py-0.5 text-[9.5px] font-bold text-blue-900 hover:bg-blue-100 cursor-pointer shadow-2xs"
                       >
-                        แก้ไข
+                        + แนบไฟล์ PDF
                       </button>
                     </div>
-                  </div>
-                ) : (
-                  <div className="mt-2.5 flex items-center justify-between rounded-md border border-gray-200 bg-gray-50/80 px-2.5 py-1.5 text-[10px] text-gray-600">
-                    <span className="text-[9.5px]">ยังไม่แนบประกาศรายชื่อ</span>
-                    <button
-                      type="button"
-                      onClick={() => setEditingId(course.id)}
-                      className="rounded border border-blue-200 bg-blue-50/80 px-2 py-0.5 text-[9.5px] font-bold text-blue-900 hover:bg-blue-100 cursor-pointer shadow-2xs"
-                    >
-                      + แนบไฟล์ PDF
-                    </button>
-                  </div>
+                  )
                 )}
 
                 <div className="mt-auto flex gap-2 pt-3">
-                  <Link
-                    href={`/admin/applicants?course=${course.id}`}
-                    className="inline-flex h-8 flex-1 items-center justify-center rounded-[5px] bg-[#1e3a8a] text-[10.5px] font-semibold text-white transition-colors hover:bg-[#1e40af]"
-                  >
-                    ดูผู้สมัคร
-                  </Link>
-                  <Link
-                    href={`/?course=${course.id}`}
-                    className="inline-flex h-8 flex-1 items-center justify-center rounded-[5px] border border-[#d1d5db] bg-white text-[10.5px] font-medium text-[#374151] transition-colors hover:bg-[#f8fafc]"
-                  >
-                    หน้าหลักสูตร
-                  </Link>
+                  {isHistorical ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(course.id)}
+                        className="inline-flex h-8 flex-1 items-center justify-center rounded-[5px] bg-[#4c1d95] text-[10.5px] font-semibold text-white transition-colors hover:bg-[#5b21b6] cursor-pointer"
+                      >
+                        แก้ไขประวัติ / งบประมาณ
+                      </button>
+                      <Link
+                        href="/admin"
+                        className="inline-flex h-8 flex-1 items-center justify-center rounded-[5px] border border-[#d1d5db] bg-white text-[10.5px] font-medium text-[#374151] transition-colors hover:bg-[#f8fafc]"
+                      >
+                        วิเคราะห์งบประมาณ
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <Link
+                        href={`/admin/applicants?course=${course.id}`}
+                        className="inline-flex h-8 flex-1 items-center justify-center rounded-[5px] bg-[#1e3a8a] text-[10.5px] font-semibold text-white transition-colors hover:bg-[#1e40af]"
+                      >
+                        ดูผู้สมัคร
+                      </Link>
+                      <Link
+                        href={`/?course=${course.id}`}
+                        className="inline-flex h-8 flex-1 items-center justify-center rounded-[5px] border border-[#d1d5db] bg-white text-[10.5px] font-medium text-[#374151] transition-colors hover:bg-[#f8fafc]"
+                      >
+                        หน้าหลักสูตร
+                      </Link>
+                    </>
+                  )}
                 </div>
               </div>
             </section>
@@ -681,7 +789,7 @@ export function CoursesAdmin() {
         })}
       </div>
 
-      {editingCourse && (
+      {editingCourse && !editingCourse.isHistorical && (
         <CourseEditDialog
           key={editingCourse.id}
           course={editingCourse}
@@ -689,6 +797,18 @@ export function CoursesAdmin() {
           onSave={handleSave}
         />
       )}
+
+      <HistoricalCourseDialog
+        isOpen={Boolean(editingCourse?.isHistorical)}
+        onClose={() => setEditingId(null)}
+        courseToEdit={editingCourse?.isHistorical ? editingCourse : null}
+        onSuccess={() => {
+          if (editingCourse) {
+            showNotice(`บันทึกข้อมูลประวัติ "${editingCourse.title}" เรียบร้อยแล้ว`);
+          }
+          setEditingId(null);
+        }}
+      />
 
       {isCreating && (
         <CourseEditDialog

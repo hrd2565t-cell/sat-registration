@@ -13,6 +13,7 @@ import {
   TARGET_GROUPS,
   balanceQuotasToCapacity,
   computeDefaultCourseScheduleFields,
+  deriveFiscalYearFromDate,
   formatCourseDateFields,
   formatCourseDateSessions,
   getGlobalCourseSchedule,
@@ -439,6 +440,11 @@ export function CourseEditDialog({
       setPdfBusy(false);
     }
 
+    const derivedFiscalYear = deriveFiscalYearFromDate(
+      trimmedDate,
+      course.isHistorical
+    );
+
     const result = onSave({
       title: trimmedTitle,
       shortTitle: trimmedShortTitle || undefined,
@@ -446,6 +452,7 @@ export function CourseEditDialog({
       registrationDate: registrationDate.trim() || globalSched.registrationDate,
       resultDate: resultDate.trim() || globalSched.resultDate,
       date: trimmedDate,
+      fiscalYear: derivedFiscalYear,
       location: trimmedLocation,
       seats: trimmedSeats,
       capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : 40,
@@ -869,7 +876,7 @@ export function CourseEditDialog({
               <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                 <div>
                   <label htmlFor="course-year" className="block text-[10.5px] font-medium text-[#475569]">
-                    ปี พ.ศ. (ปีงบประมาณ)
+                    ปี พ.ศ. ช่วงอบรม (ปีงบประมาณ พ.ศ. {deriveFiscalYearFromDate(date, course.isHistorical)})
                   </label>
                   <select
                     id="course-year"
@@ -877,8 +884,8 @@ export function CourseEditDialog({
                     onChange={(e) => handleYearChange(Number(e.target.value))}
                     className="mt-1 h-8 w-full rounded border border-[#d1d5db] bg-white px-2.5 text-[12px] font-medium text-[#111827] outline-none focus:border-[#1e3a8a]"
                   >
-                    <option value={2570}>พ.ศ. 2570 (ปีงบประมาณใหม่ - ค่าเริ่มต้น)</option>
-                    <option value={2569}>พ.ศ. 2569</option>
+                    <option value={2570}>พ.ศ. 2570 (ปีงบประมาณ 2570 - ค่าเริ่มต้น)</option>
+                    <option value={2569}>พ.ศ. 2569 (ต.ค.-ธ.ค. นับเป็นปีงบฯ 2570)</option>
                     <option value={2571}>พ.ศ. 2571</option>
                   </select>
                 </div>

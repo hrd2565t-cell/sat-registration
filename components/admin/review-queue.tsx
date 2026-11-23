@@ -7,7 +7,7 @@ import { DocumentPreviewDialog } from "@/components/admin/document-preview-dialo
 import { Pagination } from "@/components/ui/pagination";
 import { SearchInput } from "@/components/ui/search-input";
 import { Select } from "@/components/ui/select";
-import { getCourseKeyword } from "@/lib/courses";
+import { getCourseKeyword, sortCoursesChronologically } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
 import { auditApplicantDocuments } from "@/lib/document-checklist";
 import {
@@ -165,10 +165,12 @@ export function ReviewQueue() {
   const courseOptions = useMemo(
     () => [
       { value: "", label: "ทุกหลักสูตร" },
-      ...courses.map((c) => ({
-        value: String(c.id),
-        label: getCourseKeyword(c),
-      })),
+      ...sortCoursesChronologically(courses.filter((c) => !c.isHistorical)).map(
+        (c) => ({
+          value: String(c.id),
+          label: getCourseKeyword(c),
+        })
+      ),
     ],
     [courses]
   );

@@ -38,7 +38,7 @@ export function GlobalScheduleCard({
   const [savedBanner, setSavedBanner] = useState("");
 
   const handleOpenEdit = () => {
-    const latest = getGlobalCourseSchedule(courses);
+    const latest = getGlobalCourseSchedule(activeCourses);
     setRegFields(parseCourseDateFields(latest.registrationDate));
     setResultFields(parseCourseDateFields(latest.resultDate));
     setSavedBanner("");

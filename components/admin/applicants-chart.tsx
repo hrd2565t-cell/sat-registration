@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { getCourseKeyword } from "@/lib/courses";
+import { getCourseKeyword, sortCoursesChronologically } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
 import { useApplications } from "@/lib/applications-store";
 
@@ -12,16 +12,17 @@ export function ApplicantsChart() {
   const { applications } = useApplications();
   const { courses } = useCourses();
 
-  const chart = useMemo(
-    () =>
-      courses.map((course, index) => ({
-        id: course.id,
-        label: getCourseKeyword(course),
-        value: applications.filter((item) => item.courseId === course.id).length,
-        color: colors[index % colors.length],
-      })),
-    [courses, applications]
-  );
+  const chart = useMemo(() => {
+    const activeCourses = sortCoursesChronologically(
+      courses.filter((c) => !c.isHistorical)
+    );
+    return activeCourses.map((course, index) => ({
+      id: course.id,
+      label: getCourseKeyword(course),
+      value: applications.filter((item) => item.courseId === course.id).length,
+      color: colors[index % colors.length],
+    }));
+  }, [courses, applications]);
 
   const maxValue = Math.max(10, ...chart.map((item) => item.value));
   const axisMax = Math.ceil(maxValue / 10) * 10;

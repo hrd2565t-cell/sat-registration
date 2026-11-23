@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { statusLabel } from "@/lib/admin-data";
-import { getCourseKeyword } from "@/lib/courses";
+import { getCourseKeyword, sortCoursesChronologically } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
 import { auditApplicantDocuments } from "@/lib/document-checklist";
 import {
@@ -169,10 +169,12 @@ export function ApplicantsTable({
   const courseOptions = useMemo(
     () => [
       { value: "", label: "ทุกหลักสูตร" },
-      ...courses.map((course) => ({
-        value: String(course.id),
-        label: getCourseKeyword(course),
-      })),
+      ...sortCoursesChronologically(courses.filter((c) => !c.isHistorical)).map(
+        (course) => ({
+          value: String(course.id),
+          label: getCourseKeyword(course),
+        })
+      ),
     ],
     [courses]
   );
@@ -200,7 +202,7 @@ export function ApplicantsTable({
       const matchesStatus =
         statusFilter === "all" || row.status === statusFilter;
       const courseTitle =
-        courses.find((c) => c.id === row.courseId)?.title ?? row.course;
+        courses.find((c) => c.id === row.courseId)?.title ?? row.courseTitle ?? row.course;
       const matchesQuery =
         query === "" ||
         row.name.toLowerCase().includes(query) ||
@@ -257,7 +259,7 @@ export function ApplicantsTable({
         row.ref,
         row.name,
         row.idCard,
-        courses.find((c) => c.id === row.courseId)?.title ?? row.course,
+        courses.find((c) => c.id === row.courseId)?.title ?? row.courseTitle ?? row.course,
         fileText !== "ไม่มีไฟล์" ? `เปิดไฟล์ (${fileText})` : "ไม่มีไฟล์",
         `${row.ai.line1} ${row.ai.line2}`,
         statusLabel(row.status),
@@ -493,6 +495,7 @@ export function ApplicantsTable({
                 <td className="px-1.5 py-1 pr-1">
                   <div className="line-clamp-2 leading-[1.3]">
                     {courses.find((c) => c.id === row.courseId)?.title ??
+                      row.courseTitle ??
                       row.course}
                   </div>
                 </td>
@@ -638,7 +641,7 @@ export function ApplicantsTable({
             </div>
 
             <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-[#374151]">
-              {courses.find((c) => c.id === row.courseId)?.title ?? row.course}
+              {courses.find((c) => c.id === row.courseId)?.title ?? row.courseTitle ?? row.course}
             </p>
 
             <div className="mt-2">

@@ -60,15 +60,15 @@ function AnnouncementsContent() {
 
   const stats = useMemo(() => {
     let publishedCount = 0;
-    courses.forEach((c) => {
+    sortedCourses.forEach((c) => {
       if (c.announcementFile?.dataUrl) publishedCount++;
     });
     return {
-      total: courses.length,
+      total: sortedCourses.length,
       published: publishedCount,
-      pending: courses.length - publishedCount,
+      pending: sortedCourses.length - publishedCount,
     };
-  }, [courses]);
+  }, [sortedCourses]);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-gray-900 flex flex-col justify-between">

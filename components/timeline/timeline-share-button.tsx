@@ -39,11 +39,13 @@ export function TimelineExportButtons() {
     const sortedCourses = [...activeCourses].sort((a, b) => {
       const sa = parseCourseDateSessions(a.date)[0];
       const sb = parseCourseDateSessions(b.date)[0];
+      const saYear = sa && sa.startMonth > sa.endMonth ? sa.yearBE - 1 : sa?.yearBE;
+      const sbYear = sb && sb.startMonth > sb.endMonth ? sb.yearBE - 1 : sb?.yearBE;
       const la = sa
-        ? dateToTimelinePercent(sa.startDay, sa.startMonth + 1, sa.yearBE)
+        ? dateToTimelinePercent(sa.startDay, sa.startMonth + 1, saYear)
         : 0;
       const lb = sb
-        ? dateToTimelinePercent(sb.startDay, sb.startMonth + 1, sb.yearBE)
+        ? dateToTimelinePercent(sb.startDay, sb.startMonth + 1, sbYear)
         : 0;
       return la - lb;
     });
@@ -68,16 +70,23 @@ export function TimelineExportButtons() {
         const sched = getCourseScheduleDates(course, activeCourses);
         const sessions = parseCourseDateSessions(course.date);
         const first = sessions[0];
+        const firstStartYear = first
+          ? first.startMonth > first.endMonth
+            ? first.yearBE - 1
+            : first.yearBE
+          : 2570;
         const firstSlotIdx = first
-          ? yearMonthToSlotIndex(first.startMonth + 1, first.yearBE)
+          ? yearMonthToSlotIndex(first.startMonth + 1, firstStartYear)
           : 4;
         const quarterLabel =
           TIMELINE_SLOTS[firstSlotIdx]?.quarterLabel ?? "ไตรมาส 2";
 
         const totalDays = sessions.reduce((acc, s) => {
-          const yearCE = s.yearBE - 543;
-          const start = new Date(yearCE, s.startMonth, s.startDay);
-          const end = new Date(yearCE, s.endMonth, s.endDay);
+          const endYearCE = s.yearBE - 543;
+          const startYearCE =
+            s.startMonth > s.endMonth ? endYearCE - 1 : endYearCE;
+          const start = new Date(startYearCE, s.startMonth, s.startDay);
+          const end = new Date(endYearCE, s.endMonth, s.endDay);
           const diff =
             Math.round(
               (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
@@ -90,7 +99,7 @@ export function TimelineExportButtons() {
           ? dateToTimelinePercent(
               first.startDay,
               first.startMonth + 1,
-              first.yearBE
+              firstStartYear
             )
           : 25;
         const endPct = lastSession
@@ -112,10 +121,11 @@ export function TimelineExportButtons() {
 
         const barsHtml = sessions
           .map((s) => {
+            const sStartYear = s.startMonth > s.endMonth ? s.yearBE - 1 : s.yearBE;
             const left = dateToTimelinePercent(
               s.startDay,
               s.startMonth + 1,
-              s.yearBE
+              sStartYear
             );
             const right = dateToTimelinePercent(
               s.endDay + 1,

@@ -148,23 +148,30 @@ function buildCourseTimelineRow(
   const year = getCourseYear(course);
 
   const firstSession = sessions[0];
+  const firstSessionStartYear = firstSession
+    ? firstSession.startMonth > firstSession.endMonth
+      ? firstSession.yearBE - 1
+      : firstSession.yearBE
+    : 2570;
   const firstSlotIdx = firstSession
-    ? yearMonthToSlotIndex(firstSession.startMonth + 1, firstSession.yearBE)
+    ? yearMonthToSlotIndex(firstSession.startMonth + 1, firstSessionStartYear)
     : 4;
   const quarterLabel =
     TIMELINE_SLOTS[firstSlotIdx]?.quarterLabel ?? "ไตรมาส 2";
 
   const totalDays = sessions.reduce((acc, s) => {
-    const yearCE = s.yearBE - 543;
-    const start = new Date(yearCE, s.startMonth, s.startDay);
-    const end = new Date(yearCE, s.endMonth, s.endDay);
+    const endYearCE = s.yearBE - 543;
+    const startYearCE = s.startMonth > s.endMonth ? endYearCE - 1 : endYearCE;
+    const start = new Date(startYearCE, s.startMonth, s.startDay);
+    const end = new Date(endYearCE, s.endMonth, s.endDay);
     const diff =
       Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     return acc + Math.max(1, diff);
   }, 0);
 
   const rawSegments: SessionSegment[] = sessions.map((s) => {
-    const sLeft = dateToTimelinePercent(s.startDay, s.startMonth + 1, s.yearBE);
+    const sStartYear = s.startMonth > s.endMonth ? s.yearBE - 1 : s.yearBE;
+    const sLeft = dateToTimelinePercent(s.startDay, s.startMonth + 1, sStartYear);
     const sRight = dateToTimelinePercent(
       s.endDay + 1,
       s.endMonth + 1,
@@ -1371,9 +1378,11 @@ export function TimelineSchedule() {
               {TIMELINE_SLOTS.map((slot) => {
                 const monthCourses = courseRows.filter((row) =>
                   row.sessions.some((s) => {
+                    const sStartYear =
+                      s.startMonth > s.endMonth ? s.yearBE - 1 : s.yearBE;
                     const startSlot = yearMonthToSlotIndex(
                       s.startMonth + 1,
-                      s.yearBE
+                      sStartYear
                     );
                     const endSlot = yearMonthToSlotIndex(
                       s.endMonth + 1,
