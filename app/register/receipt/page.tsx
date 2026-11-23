@@ -117,9 +117,18 @@ function ReceiptContent() {
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
   const [resendingEmail, setResendingEmail] = useState(false);
   const [resendStatus, setResendStatus] = useState<"idle" | "sent" | "error">("idle");
+  const [cooldownSec, setCooldownSec] = useState(0);
+
+  useEffect(() => {
+    if (cooldownSec <= 0) return;
+    const timer = setTimeout(() => {
+      setCooldownSec((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [cooldownSec]);
 
   const handleResendEmail = async () => {
-    if (!record || !record.email || resendingEmail) return;
+    if (!record || !record.email || resendingEmail || cooldownSec > 0) return;
     setResendingEmail(true);
     setResendStatus("idle");
     try {
@@ -139,6 +148,11 @@ function ReceiptContent() {
         }),
       });
       if (res.ok) {
+        setResendStatus("sent");
+        setCooldownSec(60);
+      } else if (res.status === 429) {
+        const errData = (await res.json().catch(() => ({}))) as { retryAfterSec?: number };
+        setCooldownSec(errData.retryAfterSec || 60);
         setResendStatus("sent");
       } else {
         setResendStatus("error");
@@ -409,11 +423,13 @@ function ReceiptContent() {
             <button
               type="button"
               onClick={handleResendEmail}
-              disabled={resendingEmail}
+              disabled={resendingEmail || cooldownSec > 0}
               className="inline-flex h-6 shrink-0 items-center gap-1 rounded bg-[#1e40af] px-2.5 text-[10px] font-medium text-white transition hover:bg-[#1e3a8a] disabled:opacity-50"
             >
               {resendingEmail ? (
                 <span>กำลังส่ง...</span>
+              ) : cooldownSec > 0 ? (
+                <span>✓ ส่งซ้ำแล้ว (รอ {cooldownSec} วิ)</span>
               ) : resendStatus === "sent" ? (
                 <span>✓ ส่งซ้ำเรียบร้อย</span>
               ) : resendStatus === "error" ? (

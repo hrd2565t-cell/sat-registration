@@ -11,6 +11,7 @@ import {
   FUTURE_PILLARS,
   loadSurveyTopics,
   saveSurveyTopics,
+  fetchSurveyTopicsFromCloud,
   type SurveySkillTopic,
 } from "@/lib/future-curriculum-store";
 
@@ -72,6 +73,12 @@ function SurveyContent() {
   useEffect(() => {
     const loaded = loadSurveyTopics();
     setTopics(loaded);
+
+    void fetchSurveyTopicsFromCloud().then((cloudTopics) => {
+      if (cloudTopics && cloudTopics.length > 0) {
+        setTopics(cloudTopics);
+      }
+    });
 
     try {
       const storedVotes = localStorage.getItem("sat_user_voted_topic_ids");

@@ -1,5 +1,7 @@
 "use client";
 
+import { isSupabaseConfigured, getSupabaseClient } from "./supabase/client";
+
 export interface SurveySkillTopic {
   id: string;
   title: string;
@@ -466,10 +468,85 @@ export function loadSurveyTopics(): SurveySkillTopic[] {
   return INITIAL_SKILL_TOPICS;
 }
 
+export async function fetchSurveyTopicsFromCloud(): Promise<SurveySkillTopic[] | null> {
+  if (!isSupabaseConfigured()) return null;
+  const supabase = getSupabaseClient();
+  if (!supabase) return null;
+  try {
+    const { data: row } = await supabase
+      .from("courses")
+      .select("id, target_quotas")
+      .order("id")
+      .limit(1)
+      .maybeSingle();
+    const rawQuotas =
+      row?.target_quotas && typeof row.target_quotas === "object"
+        ? (row.target_quotas as Record<string, unknown>)
+        : null;
+    const globalTimeline =
+      rawQuotas?._globalTimeline && typeof rawQuotas._globalTimeline === "object"
+        ? (rawQuotas._globalTimeline as Record<string, unknown>)
+        : null;
+    const cloudTopics = globalTimeline?.surveyTopics;
+    if (Array.isArray(cloudTopics) && cloudTopics.length > 0) {
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEY_TOPICS, JSON.stringify(cloudTopics));
+        } catch {}
+      }
+      return cloudTopics as SurveySkillTopic[];
+    }
+    return null;
+  } catch (err) {
+    console.warn("Failed to fetch survey topics from cloud:", err);
+    return null;
+  }
+}
+
+export async function syncSurveyTopicsToCloud(topics: SurveySkillTopic[]): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+  try {
+    const { data: row } = await supabase
+      .from("courses")
+      .select("id, target_quotas")
+      .order("id")
+      .limit(1)
+      .maybeSingle();
+    if (!row) return;
+    const prevQuotas =
+      row.target_quotas && typeof row.target_quotas === "object"
+        ? (row.target_quotas as Record<string, unknown>)
+        : {};
+    const prevGlobal =
+      prevQuotas._globalTimeline && typeof prevQuotas._globalTimeline === "object"
+        ? (prevQuotas._globalTimeline as Record<string, unknown>)
+        : {};
+    const nextQuotas = {
+      ...prevQuotas,
+      _globalTimeline: {
+        ...prevGlobal,
+        surveyTopics: topics,
+        updatedAt: new Date().toISOString(),
+      },
+    };
+    await supabase
+      .from("courses")
+      .update({
+        target_quotas: nextQuotas as unknown as import("./supabase/types").Json,
+      })
+      .eq("id", row.id);
+  } catch (err) {
+    console.warn("Failed to sync survey topics to Supabase:", err);
+  }
+}
+
 export function saveSurveyTopics(topics: SurveySkillTopic[]): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(LOCAL_STORAGE_KEY_TOPICS, JSON.stringify(topics));
+    void syncSurveyTopicsToCloud(topics);
   } catch (e) {
     console.error("Error saving survey topics:", e);
   }

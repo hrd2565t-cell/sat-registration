@@ -638,6 +638,37 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
   return record;
 }
 
+function dispatchStatusUpdateEmail(
+  app: ApplicantRecord,
+  status: "approved" | "action_required" | "rejected" | "reserve",
+  reasonText: string
+) {
+  if (typeof window === "undefined" || !app.email || !app.email.includes("@")) {
+    return;
+  }
+  const course = getCoursesSnapshot().find((c) => c.id === app.courseId);
+  void fetch("/api/send-email", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    keepalive: true,
+    body: JSON.stringify({
+      to: app.email,
+      applicantName: app.name,
+      receiptNo: app.receiptNo,
+      ref: app.ref,
+      courseTitle: app.courseTitle,
+      courseDate: course?.date,
+      courseLocation: course?.location,
+      idCard: app.idCard,
+      affiliation: app.affiliation,
+      statusUpdate: {
+        status,
+        reason: reasonText,
+      },
+    }),
+  }).catch(() => {});
+}
+
 export function reviewApplication(
   ref: string,
   status: Exclude<ApplicantStatus, "pending">,
@@ -701,16 +732,21 @@ export function reviewApplication(
   emit();
   syncCourseSeats();
 
+  const updatedApp = state.applications.find((a) => a.ref === ref);
+  const noteText =
+    status === "approved"
+      ? reason.trim() || "อนุมัติคุณสมบัติและเอกสารครบถ้วน"
+      : status === "reserve"
+        ? reason.trim() || "ผ่านการตรวจสอบคุณสมบัติ (บัญชีสำรอง)"
+        : status === "action_required"
+          ? reason.trim() || "ขอเอกสารเพิ่มเติมประกอบการพิจารณา"
+          : reason.trim() || "ไม่ผ่านการตรวจสอบคุณสมบัติ";
+
+  if (updatedApp) {
+    dispatchStatusUpdateEmail(updatedApp, status, noteText);
+  }
+
   if (isSupabaseConfigured()) {
-    const updatedApp = state.applications.find((a) => a.ref === ref);
-    const noteText =
-      status === "approved"
-        ? reason.trim() || "อนุมัติคุณสมบัติและเอกสารครบถ้วน"
-        : status === "reserve"
-          ? reason.trim() || "ผ่านการตรวจสอบคุณสมบัติ (บัญชีสำรอง)"
-          : status === "action_required"
-            ? reason.trim() || "ขอเอกสารเพิ่มเติมประกอบการพิจารณา"
-            : reason.trim() || "ไม่ผ่านการตรวจสอบคุณสมบัติ";
     void syncReviewToSupabase(ref, status, noteText, reviewer, now, {
       courseId: updatedApp?.courseId,
       notes: updatedApp?.notes,
@@ -827,12 +863,17 @@ export function promoteReserveToApproved(
   emit();
   syncCourseSeats();
 
+  const promotedApp = state.applications.find((a) => a.ref === ref);
+  const promotedText = `เลื่อนลำดับจากรายชื่อสำรอง (เดิมลำดับที่ ${formerOrder}) เป็นตัวจริง`;
+  if (promotedApp) {
+    dispatchStatusUpdateEmail(promotedApp, "approved", promotedText);
+  }
+
   if (isSupabaseConfigured()) {
-    const promotedApp = state.applications.find((a) => a.ref === ref);
     void syncReviewToSupabase(
       ref,
       "approved",
-      `เลื่อนลำดับจากรายชื่อสำรอง (เดิมลำดับที่ ${formerOrder}) เป็นตัวจริง`,
+      promotedText,
       reviewer,
       now,
       {

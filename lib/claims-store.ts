@@ -2,7 +2,8 @@
 
 import { useSyncExternalStore } from "react";
 import { updatePersonProfile } from "./alumni-store";
-import { isValidThaiIdCard, formatThaiIdCard } from "./validation";
+import { isValidThaiIdCard } from "./validation";
+import { isSupabaseConfigured, getSupabaseClient } from "./supabase/client";
 
 export interface ProfileClaim {
   id: string; // e.g. "CLM-2026-0001"
@@ -51,6 +52,8 @@ let storeState: ClaimsStoreState = {
   revision: 0,
 };
 
+let hydrateStarted = false;
+let claimsRealtimeSubscribed = false;
 const listeners = new Set<() => void>();
 
 function emitChange() {
@@ -81,6 +84,139 @@ function loadFromLocalStorage(): ProfileClaim[] | null {
   return null;
 }
 
+async function syncClaimsToSupabase(claims: ProfileClaim[]): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+  try {
+    const sanitizedClaims = claims.map((c) => ({
+      ...c,
+      idCardPhotoUrl:
+        c.idCardPhotoUrl && c.idCardPhotoUrl.length > 250_000
+          ? undefined
+          : c.idCardPhotoUrl,
+    }));
+
+    const { data: row } = await supabase
+      .from("courses")
+      .select("id, target_quotas")
+      .order("id")
+      .limit(1)
+      .maybeSingle();
+    if (!row) return;
+
+    const prevQuotas =
+      row.target_quotas && typeof row.target_quotas === "object"
+        ? (row.target_quotas as Record<string, unknown>)
+        : {};
+    const prevGlobal =
+      prevQuotas._globalTimeline && typeof prevQuotas._globalTimeline === "object"
+        ? (prevQuotas._globalTimeline as Record<string, unknown>)
+        : {};
+    const nextQuotas = {
+      ...prevQuotas,
+      _globalTimeline: {
+        ...prevGlobal,
+        profileClaims: sanitizedClaims,
+        updatedAt: new Date().toISOString(),
+      },
+    };
+    await supabase
+      .from("courses")
+      .update({
+        target_quotas: nextQuotas as unknown as import("./supabase/types").Json,
+      })
+      .eq("id", row.id);
+  } catch (err) {
+    console.warn("Failed to sync profile claims to Supabase:", err);
+  }
+}
+
+export async function refreshClaimsFromCloud(): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+  try {
+    const { data: row } = await supabase
+      .from("courses")
+      .select("id, target_quotas")
+      .order("id")
+      .limit(1)
+      .maybeSingle();
+    const rawQuotas =
+      row?.target_quotas && typeof row.target_quotas === "object"
+        ? (row.target_quotas as Record<string, unknown>)
+        : null;
+    const globalTimeline =
+      rawQuotas?._globalTimeline && typeof rawQuotas._globalTimeline === "object"
+        ? (rawQuotas._globalTimeline as Record<string, unknown>)
+        : null;
+    const cloudClaims = globalTimeline?.profileClaims;
+    if (Array.isArray(cloudClaims)) {
+      const localMap = new Map(storeState.claims.map((c) => [c.id, c]));
+      const mergedClaims = (cloudClaims as ProfileClaim[]).map((cc) => {
+        const local = localMap.get(cc.id);
+        if (!cc.idCardPhotoUrl && local?.idCardPhotoUrl) {
+          return { ...cc, idCardPhotoUrl: local.idCardPhotoUrl };
+        }
+        return cc;
+      });
+      storeState = {
+        claims: mergedClaims,
+        revision: storeState.revision + 1,
+      };
+      saveToLocalStorage(storeState.claims);
+      emitChange();
+    }
+  } catch (err) {
+    console.warn("Failed to refresh profile claims from cloud:", err);
+  }
+}
+
+function hydrateClaims() {
+  if (hydrateStarted || typeof window === "undefined") return;
+  hydrateStarted = true;
+
+  const saved = loadFromLocalStorage();
+  if (saved && saved.length > 0 && storeState.claims.length === 0) {
+    storeState = {
+      claims: saved,
+      revision: storeState.revision + 1,
+    };
+  }
+
+  void refreshClaimsFromCloud();
+
+  if (!claimsRealtimeSubscribed && isSupabaseConfigured()) {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        claimsRealtimeSubscribed = true;
+        supabase
+          .channel("sat-claims-realtime-channel")
+          .on(
+            "postgres_changes",
+            { event: "UPDATE", schema: "public", table: "courses" },
+            () => {
+              void refreshClaimsFromCloud();
+            }
+          )
+          .subscribe();
+
+        const handleFocusOrVisible = () => {
+          if (document.visibilityState === "visible") {
+            void refreshClaimsFromCloud();
+          }
+        };
+        window.addEventListener("focus", handleFocusOrVisible);
+        document.addEventListener("visibilitychange", handleFocusOrVisible);
+      } catch (err) {
+        console.warn("Failed to subscribe to claims realtime:", err);
+      }
+    }
+  }
+}
+
 // Initialize on client
 if (typeof window !== "undefined") {
   const saved = loadFromLocalStorage();
@@ -95,6 +231,7 @@ if (typeof window !== "undefined") {
 }
 
 export function useProfileClaimsStore() {
+  hydrateClaims();
   const current = useSyncExternalStore(
     (onStoreChange) => {
       listeners.add(onStoreChange);
@@ -179,6 +316,7 @@ export function submitProfileClaim(
 
   saveToLocalStorage(updatedClaims);
   emitChange();
+  void syncClaimsToSupabase(storeState.claims);
 
   return { success: true, claim: newClaim };
 }
@@ -229,6 +367,7 @@ export function approveProfileClaim(
 
   saveToLocalStorage(nextClaims);
   emitChange();
+  void syncClaimsToSupabase(storeState.claims);
 
   return { success: true, updatedCount: updatedRecords };
 }
@@ -267,6 +406,7 @@ export function rejectProfileClaim(
 
   saveToLocalStorage(nextClaims);
   emitChange();
+  void syncClaimsToSupabase(storeState.claims);
 
   return { success: true };
 }
@@ -282,4 +422,5 @@ export function deleteProfileClaim(claimId: string) {
   };
   saveToLocalStorage(nextClaims);
   emitChange();
+  void syncClaimsToSupabase(storeState.claims);
 }

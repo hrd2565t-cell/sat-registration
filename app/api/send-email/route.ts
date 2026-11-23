@@ -11,7 +11,14 @@ export interface SendApplicationEmailRequest {
   courseLocation?: string;
   idCard: string;
   affiliation?: string;
+  statusUpdate?: {
+    status: "approved" | "action_required" | "rejected" | "reserve";
+    reason?: string;
+  };
 }
+
+const emailCooldownMap = new Map<string, number>();
+const EMAIL_COOLDOWN_MS = 60_000;
 
 function escapeHtml(raw: string | undefined | null): string {
   if (!raw) return "";
@@ -44,6 +51,76 @@ function buildEmailHtml(data: SendApplicationEmailRequest, siteUrl: string): str
     timeStyle: "short",
     timeZone: "Asia/Bangkok",
   }).format(new Date());
+
+  const statusUpdate = data.statusUpdate;
+  const safeReason = escapeHtml(statusUpdate?.reason);
+
+  const headerTitle =
+    statusUpdate?.status === "approved"
+      ? "แจ้งผลการพิจารณา: ผ่านการคัดเลือก (ตัวจริง)"
+      : statusUpdate?.status === "action_required"
+        ? "แจ้งขอเอกสารประกอบการสมัครเพิ่มเติม"
+        : statusUpdate?.status === "reserve"
+          ? "แจ้งผลการพิจารณา: บัญชีรายชื่อสำรอง"
+          : statusUpdate?.status === "rejected"
+            ? "แจ้งผลการพิจารณาคุณสมบัติการสมัคร"
+            : "ใบรับเรื่องการสมัครเข้ารับการฝึกอบรม";
+
+  const headerGradient =
+    statusUpdate?.status === "approved"
+      ? "linear-gradient(135deg, #065f46 0%, #059669 100%)"
+      : statusUpdate?.status === "action_required"
+        ? "linear-gradient(135deg, #9a3412 0%, #ea580c 100%)"
+        : statusUpdate?.status === "rejected"
+          ? "linear-gradient(135deg, #7f1d1d 0%, #b91c1c 100%)"
+          : "linear-gradient(135deg, #16265E 0%, #1e3a8a 100%)";
+
+  const introText =
+    statusUpdate?.status === "approved"
+      ? "ขอแสดงความยินดี! ท่านผ่านการตรวจสอบคุณสมบัติและเอกสารเรียบร้อยแล้ว และได้รับอนุมัติสิทธิ์เข้ารับการฝึกอบรมในหลักสูตรนี้"
+      : statusUpdate?.status === "action_required"
+        ? "เจ้าหน้าที่ตรวจพบว่าเอกสารประกอบการสมัครของท่านยังไม่ครบถ้วนหรือไม่ชัดเจน กรุณาอัปโหลดเอกสารเพิ่มเติมผ่านหน้าตรวจสอบสถานะ"
+        : statusUpdate?.status === "reserve"
+          ? "ท่านผ่านการตรวจสอบคุณสมบัติเบื้องต้นแล้ว โดยขณะนี้อยู่ในบัญชีรายชื่อสำรอง เจ้าหน้าที่จะติดต่อแจ้งกลับทันทีหากมีผู้สละสิทธิ์"
+          : statusUpdate?.status === "rejected"
+            ? "เจ้าหน้าที่ได้พิจารณาใบสมัครของท่านแล้ว พบว่ายังไม่ผ่านเกณฑ์คุณสมบัติหรือเอกสารที่กำหนดในรอบนี้"
+            : "ระบบรับสมัครเข้ารับการฝึกอบรม กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ การกีฬาแห่งประเทศไทย ได้รับข้อมูลการสมัครและเอกสารประกอบของท่านเรียบร้อยแล้ว";
+
+  const noticeBoxStyle =
+    statusUpdate?.status === "approved"
+      ? "background-color: #ecfdf5; border-left: 4px solid #10b981;"
+      : statusUpdate?.status === "action_required"
+        ? "background-color: #fff7ed; border-left: 4px solid #f97316;"
+        : statusUpdate?.status === "rejected"
+          ? "background-color: #fef2f2; border-left: 4px solid #ef4444;"
+          : "background-color: #fefce8; border-left: 4px solid #eab308;";
+
+  const noticeTextColor =
+    statusUpdate?.status === "approved"
+      ? "#065f46"
+      : statusUpdate?.status === "action_required"
+        ? "#9a3412"
+        : statusUpdate?.status === "rejected"
+          ? "#991b1b"
+          : "#854d0e";
+
+  const noticeContent =
+    statusUpdate?.status === "approved"
+      ? `<strong>✅ หมายเหตุจากเจ้าหน้าที่:</strong> ${safeReason || "อนุมัติคุณสมบัติและเอกสารครบถ้วน"} ท่านสามารถกดปุ่มด้านล่างเพื่อตรวจสอบสถานะและพิมพ์ใบรับการสมัคร (A4) สำหรับใช้รายงานตัวได้ทันที`
+      : statusUpdate?.status === "action_required"
+        ? `<strong>⚠️ รายการที่ต้องแก้ไข / แนบเพิ่มเติม:</strong> ${safeReason || "กรุณาตรวจสอบและแนบเอกสารใหม่ให้ชัดเจน"} กรุณากดปุ่มด้านล่างเพื่ออัปโหลดเอกสารเพิ่มเติมโดยไม่ต้องกรอกใบสมัครใหม่`
+        : statusUpdate?.status === "reserve"
+          ? `<strong>📌 รายละเอียดบัญชีสำรอง:</strong> ${safeReason || "ผ่านการตรวจสอบคุณสมบัติ (บัญชีสำรอง)"} สามารถติดตามลำดับรายชื่อล่าสุดได้ที่หน้าตรวจสอบสถานะ`
+          : statusUpdate?.status === "rejected"
+            ? `<strong>ℹ️ เหตุผลการพิจารณา:</strong> ${safeReason || "คุณสมบัติหรือเอกสารไม่เป็นไปตามเกณฑ์ที่หลักสูตรกำหนด"}`
+            : `<strong>📋 ขั้นตอนต่อไป:</strong> ข้อมูลและเอกสารของท่านอยู่ระหว่างการตรวจสอบคุณสมบัติโดยเจ้าหน้าที่ (3-5 วันทำการ) ท่านสามารถติดตามสถานะการพิจารณาหรือพิมพ์เอกสารใบสมัครได้ตลอดเวลาผ่านลิงก์ด้านล่าง`;
+
+  const primaryCtaLabel =
+    statusUpdate?.status === "approved"
+      ? "🖨️ พิมพ์ใบรับการสมัคร (A4) / เช็คสถานะ"
+      : statusUpdate?.status === "action_required"
+        ? "📤 อัปโหลดเอกสารเพิ่มเติมทันที"
+        : "🔍 ตรวจสอบสถานะการสมัคร";
 
   return `
 <!DOCTYPE html>
@@ -215,16 +292,16 @@ function buildEmailHtml(data: SendApplicationEmailRequest, siteUrl: string): str
 <body>
   <div class="wrapper">
     <div class="container">
-      <div class="header">
+      <div class="header" style="background: ${headerGradient};">
         <span class="badge">การกีฬาแห่งประเทศไทย (กกท.)</span>
-        <h1>ใบรับเรื่องการสมัครเข้ารับการฝึกอบรม</h1>
+        <h1>${headerTitle}</h1>
         <p>กองพัฒนาบุคลากรกีฬา ฝ่ายพัฒนากีฬาเป็นเลิศ</p>
       </div>
       
       <div class="content">
         <div class="greeting">เรียนคุณ ${safeName}</div>
         <div class="intro">
-          ระบบรับสมัครเข้ารับการฝึกอบรม กองพัฒนาบุคลากรกีฬา การกีฬาแห่งประเทศไทย ได้รับข้อมูลการสมัครและเอกสารประกอบของท่านเรียบร้อยแล้ว
+          ${introText}
         </div>
         
         <div class="card">
@@ -268,14 +345,14 @@ function buildEmailHtml(data: SendApplicationEmailRequest, siteUrl: string): str
           </table>
         </div>
         
-        <div class="notice-box">
-          <p>
-            <strong>📋 ขั้นตอนต่อไป:</strong> ข้อมูลและเอกสารของท่านอยู่ระหว่างการตรวจสอบคุณสมบัติโดยเจ้าหน้าที่ (3-5 วันทำการ) ท่านสามารถติดตามสถานะการพิจารณาหรือพิมพ์เอกสารใบสมัครได้ตลอดเวลาผ่านลิงก์ด้านล่าง
+        <div class="notice-box" style="${noticeBoxStyle}">
+          <p style="color: ${noticeTextColor};">
+            ${noticeContent}
           </p>
         </div>
         
         <div class="button-container">
-          <a href="${statusUrl}" target="_blank" class="btn">🔍 ตรวจสอบสถานะการสมัคร</a>
+          <a href="${statusUrl}" target="_blank" class="btn">${primaryCtaLabel}</a>
           <a href="${receiptUrl}" target="_blank" class="btn btn-secondary">📄 ดาวน์โหลดใบสมัคร (A4 PDF)</a>
         </div>
       </div>
@@ -298,7 +375,18 @@ function buildEmailHtml(data: SendApplicationEmailRequest, siteUrl: string): str
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as SendApplicationEmailRequest;
-    const { to, applicantName, receiptNo, ref, courseTitle, courseDate, courseLocation, idCard, affiliation } = body;
+    const {
+      to,
+      applicantName,
+      receiptNo,
+      ref,
+      courseTitle,
+      courseDate,
+      courseLocation,
+      idCard,
+      affiliation,
+      statusUpdate,
+    } = body;
 
     if (!to || !to.includes("@")) {
       return NextResponse.json(
@@ -306,6 +394,29 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    const nowMs = Date.now();
+    if (emailCooldownMap.size > 1000) {
+      for (const [k, ts] of emailCooldownMap.entries()) {
+        if (nowMs - ts >= EMAIL_COOLDOWN_MS) {
+          emailCooldownMap.delete(k);
+        }
+      }
+    }
+    const rateKey = `${to.trim().toLowerCase()}:${ref || ""}:${statusUpdate?.status || "registration"}`;
+    const lastSent = emailCooldownMap.get(rateKey);
+    if (lastSent && nowMs - lastSent < EMAIL_COOLDOWN_MS) {
+      const retryAfterSec = Math.max(1, Math.ceil((EMAIL_COOLDOWN_MS - (nowMs - lastSent)) / 1000));
+      return NextResponse.json(
+        {
+          success: false,
+          retryAfterSec,
+          error: `กรุณารอ ${retryAfterSec} วินาที ก่อนส่งอีเมลซ้ำ`,
+        },
+        { status: 429 }
+      );
+    }
+    emailCooldownMap.set(rateKey, nowMs);
 
     const siteUrl = (
       process.env.NEXT_PUBLIC_SITE_URL ||
@@ -315,11 +426,20 @@ export async function POST(request: Request) {
     ).replace(/\/$/, "");
 
     const emailHtml = buildEmailHtml(
-      { to, applicantName, receiptNo, ref, courseTitle, courseDate, courseLocation, idCard, affiliation },
+      { to, applicantName, receiptNo, ref, courseTitle, courseDate, courseLocation, idCard, affiliation, statusUpdate },
       siteUrl
     );
 
-    const subject = `[กกท.] ยืนยันการสมัครเข้ารับการฝึกอบรม: ${courseTitle} (${receiptNo})`;
+    const subject =
+      statusUpdate?.status === "approved"
+        ? `[กกท.] ผลการคัดเลือก: ผ่านการพิจารณา - ${courseTitle} (${receiptNo})`
+        : statusUpdate?.status === "action_required"
+          ? `[กกท.] แจ้งขอเอกสารเพิ่มเติมประกอบการสมัคร - ${courseTitle} (${receiptNo})`
+          : statusUpdate?.status === "reserve"
+            ? `[กกท.] ผลการพิจารณา: รายชื่อสำรอง - ${courseTitle} (${receiptNo})`
+            : statusUpdate?.status === "rejected"
+              ? `[กกท.] แจ้งผลการพิจารณาการสมัคร - ${courseTitle} (${receiptNo})`
+              : `[กกท.] ยืนยันการสมัครเข้ารับการฝึกอบรม: ${courseTitle} (${receiptNo})`;
 
     // 1. ตรวจสอบการส่งผ่าน SMTP ก่อน (เช่น Gmail ของ กกท. หรือ Server ของหน่วยงาน)
     const smtpHost = process.env.SMTP_HOST;
