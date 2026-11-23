@@ -65,3 +65,13 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - **การตรวจสอบเอกสารของผู้สมัครในมุมมองแอดมิน**:
   - ต้องตรวจสอบผ่านเอนจิน `auditApplicantDocuments` เพื่อเทียบเอกสารที่แนบจริงกับข้อกำหนดของหลักสูตร (`Course.documentConfig`) เสมอ เพื่อแสดงสถานะว่าครบถ้วนหรือขาดเอกสารบังคับรายการใด พร้อมระบบ Auto-fill เหตุผลเมื่อขอเอกสารเพิ่ม
 
+## 8. มาตรฐานการพัฒนาฟีเจอร์ใหม่และการซิงค์ข้อมูล Cloud อัตโนมัติ (Mandatory Cloud-First Sync & Anti-Overwrite Rules)
+- **ทุกฟีเจอร์ใหม่ต้องเชื่อมต่อ Supabase Cloud Sync ตั้งแต่วันแรก (Cloud-First by Default)**:
+  - ห้ามสร้าง Store หรือฟีเจอร์ใหม่ที่เก็บข้อมูลไว้เฉพาะใน `localStorage`, `sessionStorage`, `IndexedDB` หรือไฟล์ `data/*.json` เพียงอย่างเดียวเด็ดขาด
+  - ข้อมูลทุกชนิดที่ผู้ใช้หรือแอดมินสร้าง/แก้ไข (เช่น หลักสูตร, งบประมาณ, ใบสมัคร, ทำเนียบบุคลากร, คำร้องยืนยันตัวตน, ผลสำรวจ/โหวต, ปฏิทินกิจกรรม) ต้องซิงก์ขึ้นฐานข้อมูล **Supabase Cloud** ทันที และใช้ `localStorage` เป็นเพียง Offline Cache เท่านั้น
+- **ป้องกันข้อมูลรีเซ็ตหลัง Deploy (Anti-Overwrite Hydration Guard)**:
+  - ห้ามให้การโหลดหน้าเว็บครั้งแรก (`hydrate()` หรือการคำนวณอัตโนมัติ เช่น `syncCourseSeats`) ส่งค่าเริ่มต้นจากไฟล์ Hardcode (`data/*.json`) ขึ้นไปเขียนทับฐานข้อมูล Supabase เด็ดขาด
+  - ต้องมีตัวแปรล็อก (เช่น `hasLoadedFromCloud = true`) เพื่ออนุญาตให้ซิงก์ข้อมูลขึ้น Server เฉพาะหลังจากดึงข้อมูลจริงจาก Supabase Cloud สำเร็จแล้ว และเมื่อผู้ใช้/แอดมินสั่งบันทึกจริงเท่านั้น
+- **ซิงก์ข้อมูลแบบ Realtime ข้ามทุกอุปกรณ์**:
+  - ทุก Store ที่เชื่อมต่อ Supabase ต้องดึงข้อมูลล่าสุดจาก Cloud เมื่อเปิดหน้าเว็บ (`refreshFromCloud`), เมื่อสลับแท็บกลับมา (`focus` / `visibilitychange`), และเปิดรับ `postgres_changes` แบบ Realtime เพื่อให้ทุกเครื่องเห็นข้อมูลตรงกัน 100%
+
