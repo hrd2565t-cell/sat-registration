@@ -369,7 +369,7 @@ function hydrate() {
         };
 
         if (fromLegacy || result.changedCount > 0) {
-          persist();
+          saveToLocalStorage(state.trainees);
         }
         emit();
       } else if (Array.isArray(parsed) && parsed.length < 100) {
@@ -378,7 +378,7 @@ function hydrate() {
           trainees: SEED_TRAINEES,
           revision: state.revision + 1,
         };
-        persist();
+        saveToLocalStorage(state.trainees);
         emit();
       }
     }

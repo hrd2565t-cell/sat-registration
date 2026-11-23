@@ -162,6 +162,8 @@ export async function POST(request: Request) {
                   ...(c.isHistorical !== undefined ? { isHistorical: c.isHistorical } : {}),
                   ...(c.historicalCompleted !== undefined ? { historicalCompleted: c.historicalCompleted } : {}),
                   ...(c.historicalApplicants !== undefined ? { historicalApplicants: c.historicalApplicants } : {}),
+                  ...(c.announcementFile !== undefined ? { announcementFile: c.announcementFile } : {}),
+                  ...(c.status !== undefined ? { status: c.status } : {}),
                 },
               };
 
@@ -176,7 +178,7 @@ export async function POST(request: Request) {
                     location: c.location,
                     seats: c.seats,
                     seats_left: typeof c.seatsLeft === "number" ? c.seatsLeft : 0,
-                    status: c.status,
+                    status: c.status === "completed" ? "closed" : c.status,
                     image: c.image,
                     warning_message: warningText ? warningText : null,
                     target_quotas: quotasPayload,
