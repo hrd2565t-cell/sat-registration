@@ -14,6 +14,7 @@ function AdminLoginForm() {
   const [error, setError] = useState<string>("");
   const [isShaking, setIsShaking] = useState<boolean>(false);
   const [isSuccess, setIsSuccess] = useState<boolean>(false);
+  const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [showPin, setShowPin] = useState<boolean>(false);
 
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
@@ -31,23 +32,31 @@ function AdminLoginForm() {
     }
   }, [nextUrl]);
 
-  const verifyPin = (fullPin: string) => {
-    if (fullPin.length !== 6) return;
+  const verifyPin = async (fullPin: string) => {
+    if (fullPin.length !== 6 || isVerifying) return;
+    setIsVerifying(true);
 
-    if (loginAdmin(fullPin)) {
-      setIsSuccess(true);
-      setError("");
-      setTimeout(() => {
-        window.location.href = nextUrl;
-      }, 250);
-    } else {
-      setError("รหัส PIN ไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง");
-      setIsShaking(true);
-      setTimeout(() => {
-        setIsShaking(false);
-        setPin(["", "", "", "", "", ""]);
-        inputsRef.current[0]?.focus();
-      }, 500);
+    try {
+      const ok = await loginAdmin(fullPin);
+      if (ok) {
+        setIsSuccess(true);
+        setError("");
+        setTimeout(() => {
+          window.location.href = nextUrl;
+        }, 250);
+      } else {
+        setError("รหัส PIN ไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง");
+        setIsShaking(true);
+        setTimeout(() => {
+          setIsShaking(false);
+          setPin(["", "", "", "", "", ""]);
+          inputsRef.current[0]?.focus();
+        }, 500);
+      }
+    } catch {
+      setError("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setIsVerifying(false);
     }
   };
 

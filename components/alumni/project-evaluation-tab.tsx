@@ -158,9 +158,10 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
     setEditingTargetCourse(null);
   };
 
-  const handleUnlockPin = (e: React.FormEvent) => {
+  const handleUnlockPin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginAdmin(pinInput.trim())) {
+    const ok = await loginAdmin(pinInput.trim());
+    if (ok) {
       setShowPinPrompt(false);
       setPinError("");
       if (pendingAction?.type === "category") {

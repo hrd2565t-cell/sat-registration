@@ -114,9 +114,10 @@ export function PersonnelPassportModal({
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleUnlockPin = (e: React.FormEvent) => {
+  const handleUnlockPin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginAdmin(pinInput.trim())) {
+    const ok = await loginAdmin(pinInput.trim());
+    if (ok) {
       setShowPinPrompt(false);
       setPinError("");
       handleStartEditProfile();

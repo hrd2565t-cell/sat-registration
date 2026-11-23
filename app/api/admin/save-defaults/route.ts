@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { isAdminRequestAuthorized } from "@/lib/server-auth";
 
 export async function POST(request: Request) {
   try {
-    const adminAuthorized = request.headers.get("x-admin-authorized");
-    const adminPinHeader = request.headers.get("x-admin-pin");
-    const expectedPin = process.env.NEXT_PUBLIC_ADMIN_PIN || "336699";
-    if (adminAuthorized !== "true" && adminPinHeader !== expectedPin) {
+    const isAuth = await isAdminRequestAuthorized(request);
+    if (!isAuth) {
       return NextResponse.json(
         { ok: false, error: "ไม่ได้รับอนุญาต (ต้องเป็นผู้ดูแลระบบ)" },
         { status: 403 }

@@ -102,7 +102,7 @@ git push -u origin main
 | `NEXT_PUBLIC_SUPABASE_URL` | `https://xyzabc.supabase.co` | URL ของ Supabase Project |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `eyJhbGci...` | Anon Key จาก Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | `eyJhbGci...` | Service Role Key จาก Supabase |
-| `NEXT_PUBLIC_ADMIN_PIN` | `336699` | รหัส PIN 6 หลักสำหรับเข้าห้องผู้ดูแลระบบ |
+| `ADMIN_PIN` | `336699` | รหัส PIN 6 หลักสำหรับเข้าห้องผู้ดูแลระบบ (Server-side เท่านั้น) |
 | `NEXT_PUBLIC_SITE_URL` | `https://your-sat-project.vercel.app` | โดเมนของระบบ (อัปเดตหลัง deploy ได้) |
 | `RESEND_API_KEY` | `re_xxxxxxxxx` | API Key สำหรับส่งอีเมลยืนยันการรับสมัครผ่าน Resend |
 | `EMAIL_FROM` | `กองพัฒนาบุคลากรกีฬา กกท. <onboarding@resend.dev>` | ชื่อและอีเมลผู้ส่ง |
@@ -138,6 +138,6 @@ git push -u origin main
 
 ## 💡 คำแนะนำเพิ่มเติมและการดูแลรักษา
 
-- **การเปลี่ยนรหัส PIN Admin**: สามารถเปลี่ยนได้ตลอดเวลาใน Vercel Settings > Environment Variables แก้ไข `NEXT_PUBLIC_ADMIN_PIN` แล้วกด Redeploy
+- **การเปลี่ยนรหัส PIN Admin**: สามารถเปลี่ยนได้ตลอดเวลาใน Vercel Settings > Environment Variables แก้ไข `ADMIN_PIN` แล้วกด Redeploy
 - **การสำรองข้อมูล (Backup)**: ใน Supabase Dashboard มีระบบ Automated Daily Backups ให้ในตัว
 - **Custom Domain**: หากต้องการใช้โดเมนทางการของ กกท. (เช่น `course.sat.or.th`) สามารถนำ Domain มาผูกใน Vercel > Settings > Domains ได้ฟรี พร้อม SSL Certificate อัตโนมัติ

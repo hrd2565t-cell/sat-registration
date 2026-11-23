@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/service";
+import { isAdminRequestAuthorized } from "@/lib/server-auth";
 import type { Json } from "@/lib/supabase/types";
 
 export async function POST(request: Request) {
   try {
-    const adminAuthorized = request.headers.get("x-admin-authorized");
-    const adminPinHeader = request.headers.get("x-admin-pin");
-    const expectedPin = process.env.NEXT_PUBLIC_ADMIN_PIN || "336699";
+    const isAuth = await isAdminRequestAuthorized(request);
 
-    if (adminAuthorized !== "true" && adminPinHeader !== expectedPin) {
+    if (!isAuth) {
       return NextResponse.json(
         { ok: false, error: "ไม่ได้รับอนุญาต (ต้องเป็นผู้ดูแลระบบ)" },
         { status: 403 }
