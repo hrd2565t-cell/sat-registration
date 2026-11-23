@@ -70,8 +70,23 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   - ห้ามสร้าง Store หรือฟีเจอร์ใหม่ที่เก็บข้อมูลไว้เฉพาะใน `localStorage`, `sessionStorage`, `IndexedDB` หรือไฟล์ `data/*.json` เพียงอย่างเดียวเด็ดขาด
   - ข้อมูลทุกชนิดที่ผู้ใช้หรือแอดมินสร้าง/แก้ไข (เช่น หลักสูตร, งบประมาณ, ใบสมัคร, ทำเนียบบุคลากร, คำร้องยืนยันตัวตน, ผลสำรวจ/โหวต, ปฏิทินกิจกรรม) ต้องซิงก์ขึ้นฐานข้อมูล **Supabase Cloud** ทันที และใช้ `localStorage` เป็นเพียง Offline Cache เท่านั้น
 - **ป้องกันข้อมูลรีเซ็ตหลัง Deploy (Anti-Overwrite Hydration Guard)**:
-  - ห้ามให้การโหลดหน้าเว็บครั้งแรก (`hydrate()` หรือการคำนวณอัตโนมัติ เช่น `syncCourseSeats`) ส่งค่าเริ่มต้นจากไฟล์ Hardcode (`data/*.json`) ขึ้นไปเขียนทับฐานข้อมูล Supabase เด็ดขาด
+  - ห้ามให้การโหลดหน้าเว็บครั้งแรก (`hydrate()` หรือการคำนวณอัตโนมัติ เช่น `syncCourseSeats` / `syncCourseSeatsWithApprovedCounts`) ส่งค่าเริ่มต้นจากไฟล์ Hardcode (`data/*.json`) ขึ้นไปเขียนทับฐานข้อมูล Supabase เด็ดขาด ให้แยก `saveToLocalStorage()` ออกจาก `persist(syncToServer)` และใช้กับงานคำนวณอัตโนมัติเฉพาะ `saveToLocalStorage()` เท่านั้น
   - ต้องมีตัวแปรล็อก (เช่น `hasLoadedFromCloud = true`) เพื่ออนุญาตให้ซิงก์ข้อมูลขึ้น Server เฉพาะหลังจากดึงข้อมูลจริงจาก Supabase Cloud สำเร็จแล้ว และเมื่อผู้ใช้/แอดมินสั่งบันทึกจริงเท่านั้น
+  - ข้อมูลหลักสูตรประวัติศาสตร์ที่มีสถานะ `"completed"` ต้องเก็บ `"completed"` ไว้ใน `_metadata.status` ควบคู่กับการบันทึกคอลัมน์ `status` เป็น `"closed"` ใน Supabase เพื่อไม่ให้หลุดกลับเป็น `"open"` เมื่อโหลดจาก Cloud
 - **ซิงก์ข้อมูลแบบ Realtime ข้ามทุกอุปกรณ์**:
   - ทุก Store ที่เชื่อมต่อ Supabase ต้องดึงข้อมูลล่าสุดจาก Cloud เมื่อเปิดหน้าเว็บ (`refreshFromCloud`), เมื่อสลับแท็บกลับมา (`focus` / `visibilitychange`), และเปิดรับ `postgres_changes` แบบ Realtime เพื่อให้ทุกเครื่องเห็นข้อมูลตรงกัน 100%
+
+## 9. การแยกหลักสูตรปัจจุบันกับประวัติย้อนหลังและการซิงก์จังหวัด (Timeline & Province Integrity)
+- **กรอง `!c.isHistorical` เสมอในหน้าเปิดรับสมัครและ Timeline**:
+  - ตาราง Timeline ประจำปีงบประมาณปัจจุบัน, การ์ดสรุป Timeline, รายงาน PDF/CSV และ `GlobalScheduleCard` ต้องกรองเฉพาะหลักสูตรปัจจุบัน (`!c.isHistorical`) ห้ามนำหลักสูตรย้อนหลัง (`id >= 100`) มารวมคำนวณหรือถูกเขียนทับด้วยกำหนดการกลาง (`updateGlobalCourseSchedule`)
+- **ความสอดคล้องของสถานที่และจังหวัด (`location` & `province`)**:
+  - ฟอร์มแก้ไขหลักสูตรและ Store ต้องเรียก `detectProvinceFromLocation()` เพื่อซิงก์จังหวัดให้ตรงกับชื่อสถานที่ที่มีการระบุจังหวัดชัดเจนโดยอัตโนมัติ ป้องกันค่าจังหวัดเดิมในแคชไม่ตรงกับสถานที่จริง
+
+## 10. ความปลอดภัยฝั่ง Server และการป้องกันการส่งข้อมูลซ้ำ (Server-Side Auth, Click Lock & Rate Limiting)
+- **ห้ามเปิดเผยความลับ/PIN ในฝั่ง Client (`NEXT_PUBLIC_`)**:
+  - รหัส PIN ของแอดมินและ Secret Keys ต้องเก็บเฉพาะฝั่ง Server และตรวจสอบผ่าน API ร่วมกับคุกกี้ `HttpOnly` ที่ลงลายมือชื่อ (`HMAC-SHA256`) เท่านั้น
+- **Synchronous Click Lock (`useRef`)**:
+  - ฟอร์มส่งใบสมัครและหน้าต่างบันทึกข้อมูลของแอดมินต้องใช้ `useRef` ล็อกทันทีในบรรทัดแรกของ Handler ก่อนคำสั่ง Async หรือการตรวจ Validation เพื่อตัดปัญหาการกดเบิ้ลก่อน React Re-render
+- **Rate Limiting & Cooldown 60 วินาทีสำหรับการส่งอีเมล**:
+  - Endpoint `/api/send-email` ต้องจำกัดอัตราส่งไม่ให้ส่งอีเมลประเภทเดิมซ้ำไปยังผู้รับและ `ref` เดิมภายใน 60 วินาที (ตอบกลับ HTTP `429`) พร้อมแสดงตัวนับถอยหลัง Cooldown บน UI
 
