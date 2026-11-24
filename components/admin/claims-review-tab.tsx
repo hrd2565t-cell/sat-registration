@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import Image from "next/image";
 import {
   useProfileClaimsStore,
+  refreshClaimsFromCloud,
   approveProfileClaim,
   rejectProfileClaim,
   deleteProfileClaim,
@@ -20,6 +21,12 @@ export function ClaimsReviewTab() {
   const [rejectReason, setRejectReason] = useState("");
   const [isRejectOpen, setIsRejectOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const isProcessingRef = useRef(false);
+
+  useEffect(() => {
+    void refreshClaimsFromCloud();
+  }, []);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -48,7 +55,8 @@ export function ClaimsReviewTab() {
     return { total, pending, approved, rejected };
   }, [claims]);
 
-  const handleApprove = (claim: ProfileClaim) => {
+  const handleApprove = async (claim: ProfileClaim) => {
+    if (isProcessingRef.current) return;
     if (
       !confirm(
         `ยืนยันการอนุมัติคำขอของ "${claim.traineeName}" ใช่หรือไม่?\n\nระบบจะทำการอัปเดตเลขประจำตัวประชาชน 13 หลัก (${formatThaiIdCard(
@@ -59,30 +67,44 @@ export function ClaimsReviewTab() {
       return;
     }
 
-    const res = approveProfileClaim(claim.id, "ผู้ดูแลระบบ กกท.");
-    if (res.success) {
-      showToast(
-        `✓ อนุมัติและผูกสิทธิ์สำเร็จ! อัปเดตประวัติของ ${claim.traineeName} จำนวน ${res.updatedCount} รายการหลักสูตร`
-      );
-    } else {
-      alert(`เกิดข้อผิดพลาด: ${res.error}`);
+    isProcessingRef.current = true;
+    setIsProcessing(true);
+    try {
+      const res = await approveProfileClaim(claim.id, "ผู้ดูแลระบบ กกท.");
+      if (res.success) {
+        showToast(
+          `✓ อนุมัติและผูกสิทธิ์สำเร็จ! อัปเดตประวัติของ ${claim.traineeName} จำนวน ${res.updatedCount} รายการหลักสูตร`
+        );
+      } else {
+        alert(`เกิดข้อผิดพลาด: ${res.error}`);
+      }
+    } finally {
+      isProcessingRef.current = false;
+      setIsProcessing(false);
     }
   };
 
-  const handleConfirmReject = () => {
-    if (!actionClaim) return;
-    const res = rejectProfileClaim(
-      actionClaim.id,
-      rejectReason || "ข้อมูลหรือหลักฐานไม่เพียงพอ",
-      "ผู้ดูแลระบบ กกท."
-    );
-    if (res.success) {
-      showToast(`✕ ปฏิเสธคำขอของ ${actionClaim.traineeName} แล้ว`);
-      setIsRejectOpen(false);
-      setActionClaim(null);
-      setRejectReason("");
-    } else {
-      alert(`เกิดข้อผิดพลาด: ${res.error}`);
+  const handleConfirmReject = async () => {
+    if (!actionClaim || isProcessingRef.current) return;
+    isProcessingRef.current = true;
+    setIsProcessing(true);
+    try {
+      const res = await rejectProfileClaim(
+        actionClaim.id,
+        rejectReason || "ข้อมูลหรือหลักฐานไม่เพียงพอ",
+        "ผู้ดูแลระบบ กกท."
+      );
+      if (res.success) {
+        showToast(`✕ ปฏิเสธคำขอของ ${actionClaim.traineeName} แล้ว`);
+        setIsRejectOpen(false);
+        setActionClaim(null);
+        setRejectReason("");
+      } else {
+        alert(`เกิดข้อผิดพลาด: ${res.error}`);
+      }
+    } finally {
+      isProcessingRef.current = false;
+      setIsProcessing(false);
     }
   };
 
@@ -314,8 +336,9 @@ export function ClaimsReviewTab() {
                     <div className="flex items-center gap-2 w-full sm:w-auto">
                       <button
                         type="button"
+                        disabled={isProcessing}
                         onClick={() => handleApprove(claim)}
-                        className="flex-1 sm:flex-initial rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
+                        className="flex-1 sm:flex-initial rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
                       >
                         <span>✓</span>
                         <span>อนุมัติและผูกสิทธิ์</span>
@@ -323,11 +346,12 @@ export function ClaimsReviewTab() {
 
                       <button
                         type="button"
+                        disabled={isProcessing}
                         onClick={() => {
                           setActionClaim(claim);
                           setIsRejectOpen(true);
                         }}
-                        className="rounded-xl border border-red-300 bg-white px-3.5 py-2 text-xs font-bold text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                        className="rounded-xl border border-red-300 bg-white px-3.5 py-2 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors cursor-pointer"
                       >
                         ปฏิเสธ
                       </button>
@@ -359,12 +383,24 @@ export function ClaimsReviewTab() {
                       </p>
                       <button
                         type="button"
-                        onClick={() => {
+                        disabled={isProcessing}
+                        onClick={async () => {
+                          if (isProcessingRef.current) return;
                           if (confirm("ต้องการลบคำขอนี้ใช่หรือไม่?")) {
-                            deleteProfileClaim(claim.id);
+                            isProcessingRef.current = true;
+                            setIsProcessing(true);
+                            try {
+                              const res = await deleteProfileClaim(claim.id);
+                              if (!res.success && res.error) {
+                                alert(res.error);
+                              }
+                            } finally {
+                              isProcessingRef.current = false;
+                              setIsProcessing(false);
+                            }
                           }
                         }}
-                        className="text-[10px] text-red-400 hover:text-red-600 underline mt-1 cursor-pointer"
+                        className="text-[10px] text-red-400 hover:text-red-600 underline mt-1 cursor-pointer disabled:opacity-50"
                       >
                         ลบคำขอ
                       </button>

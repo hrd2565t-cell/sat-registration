@@ -22,6 +22,7 @@ import {
   backfillDocumentToSupabase,
   deleteApplicationFromSupabase,
   fetchApplicationsFromSupabase,
+  syncApplicationDocumentsToSupabase,
   syncApplicationToSupabase,
   syncRankingsToSupabase,
   syncReviewToSupabase,
@@ -531,7 +532,19 @@ export function getApplicationByRef(ref: string | null | undefined): ApplicantRe
   return undefined;
 }
 
-export function createApplication(input: NewApplicationInput): ApplicantRecord {
+export interface ApplicationOverrideMeta {
+  id?: number;
+  ref?: string;
+  receiptNo?: string;
+  submittedAt?: string;
+  updatedAt?: string;
+  skipCloudSync?: boolean;
+}
+
+export function createApplication(
+  input: NewApplicationInput,
+  overrideMeta?: ApplicationOverrideMeta
+): ApplicantRecord {
   const cleanIdCard = input.idCard.replace(/\D/g, "");
   const courseOption =
     adminCourseOptions.find((item) => item.id === input.courseId) ??
@@ -539,21 +552,26 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
   const course = getCoursesSnapshot().find(
     (item) => item.id === input.courseId
   );
-  const now = new Date().toISOString();
+  const now = overrideMeta?.updatedAt || new Date().toISOString();
 
   // ตรวจสอบว่าเคยมีใบสมัครของหลักสูตรนี้อยู่แล้วหรือไม่
   // หากมีอยู่แล้ว ให้อัปเดตข้อมูลด้วยข้อมูลใหม่ล่าสุดที่ผู้สมัครกรอก (ไม่แสดงข้อมูลเก่าหรือข้อมูลเดโม)
   const existingIndex = state.applications.findIndex(
-    (item) => item.idCard === cleanIdCard && item.courseId === input.courseId
+    (item) =>
+      (overrideMeta?.ref && item.ref === overrideMeta.ref) ||
+      (item.idCard === cleanIdCard && item.courseId === input.courseId)
   );
 
   if (existingIndex >= 0) {
     const existing = state.applications[existingIndex];
-    if (existing.status !== "rejected") {
+    if (existing.status !== "rejected" || overrideMeta?.ref) {
       const fileSize = computeTotalFileSizeMB(input.documents);
 
       const updatedRecord: ApplicantRecord = {
         ...existing,
+        id: overrideMeta?.id ?? existing.id,
+        ref: overrideMeta?.ref ?? existing.ref,
+        receiptNo: overrideMeta?.receiptNo ?? existing.receiptNo,
         name: input.name.trim() || existing.name,
         email: input.email.trim() || existing.email,
         phone: input.phone.trim() || existing.phone,
@@ -561,6 +579,9 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
         position: input.position.trim(),
         documents: input.documents.length > 0 ? input.documents : existing.documents,
         fileSize: fileSize !== null ? fileSize : existing.fileSize,
+        status: existing.status === "rejected" ? "pending" : existing.status,
+        reviewReason: existing.status === "rejected" ? undefined : existing.reviewReason,
+        submittedAt: overrideMeta?.submittedAt ?? existing.submittedAt,
         updatedAt: now,
       };
 
@@ -574,7 +595,7 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
       emit();
       syncCourseSeats();
 
-      if (isSupabaseConfigured()) {
+      if (isSupabaseConfigured() && !overrideMeta?.skipCloudSync) {
         syncApplicationToSupabase(updatedRecord);
       }
       return updatedRecord;
@@ -586,8 +607,10 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
     .filter((value) => Number.isFinite(value));
   // เริ่มต้นรหัสอย่างน้อยที่ 5 (SAT-00005) เพื่อไม่ให้ชนกับรหัส 00001-00004 ในฐานข้อมูล Supabase
   const nextRef = Math.max(4, ...numericRefs) + 1;
-  const ref = padRef(nextRef);
-  const id = Math.max(10, ...state.applications.map((item) => item.id)) + 1;
+  const ref = overrideMeta?.ref || padRef(nextRef);
+  const id =
+    overrideMeta?.id ??
+    Math.max(10, ...state.applications.map((item) => item.id)) + 1;
   const fileSize = computeTotalFileSizeMB(input.documents);
 
   const fySuffix = getCourseFiscalYear(course).slice(-2) || "70";
@@ -595,7 +618,7 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
   const record: ApplicantRecord = {
     id,
     ref,
-    receiptNo: `${ref}-${fySuffix}`,
+    receiptNo: overrideMeta?.receiptNo || `${ref}-${fySuffix}`,
     name: input.name.trim() || "ผู้สมัครไม่ระบุชื่อ",
     idCard: input.idCard.replace(/\D/g, ""),
     email: input.email.trim(),
@@ -605,7 +628,7 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
     courseId: input.courseId,
     course: course?.shortTitle ?? courseOption?.label ?? "หลักสูตรอบรม",
     courseTitle: course?.title ?? courseOption?.title ?? "หลักสูตรอบรม กกท.",
-    submittedAt: now,
+    submittedAt: overrideMeta?.submittedAt || now,
     updatedAt: now,
     fileSize,
     documents: input.documents,
@@ -618,7 +641,7 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
     notes: [
       {
         id: `${ref}-created`,
-        at: now,
+        at: overrideMeta?.submittedAt || now,
         author: "ระบบรับสมัคร",
         kind: "created",
         text: "ได้รับข้อมูลการสมัครและเอกสารเรียบร้อยแล้ว",
@@ -634,11 +657,112 @@ export function createApplication(input: NewApplicationInput): ApplicantRecord {
   emit();
   syncCourseSeats();
 
-  if (isSupabaseConfigured()) {
+  if (isSupabaseConfigured() && !overrideMeta?.skipCloudSync) {
     syncApplicationToSupabase(record);
   }
 
   return record;
+}
+
+/**
+ * ลงทะเบียนใบสมัครผ่าน Server API เพื่อออกรหัส SAT-XXXXX แบบ Atomic
+ * แล้วรออัปโหลดไฟล์แนบทุกชิ้นขึ้น Supabase Storage จนเสร็จก่อนเปลี่ยนหน้า
+ */
+export async function createAndSyncApplication(
+  input: NewApplicationInput,
+  options?: { onStageChange?: (stage: string) => void }
+): Promise<{
+  record: ApplicantRecord;
+  syncedToCloud: boolean;
+  failedDocs: number;
+}> {
+  const cleanId = input.idCard.replace(/\D/g, "");
+  const course = getCoursesSnapshot().find((item) => item.id === input.courseId);
+  const courseOption =
+    adminCourseOptions.find((item) => item.id === input.courseId) ??
+    adminCourseOptions[0];
+  const fileSize = computeTotalFileSizeMB(input.documents);
+  const fiscalYearSuffix = getCourseFiscalYear(course).slice(-2) || "70";
+
+  options?.onStageChange?.("กำลังลงทะเบียนใบสมัครและออกรหัสอ้างอิง...");
+
+  let apiRes: Response | null = null;
+  try {
+    apiRes = await fetch("/api/applications/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: input.name,
+        idCard: cleanId,
+        email: input.email,
+        phone: input.phone,
+        affiliation: input.affiliation,
+        position: input.position,
+        courseId: input.courseId,
+        course: course?.shortTitle ?? courseOption?.label,
+        courseTitle: course?.title ?? courseOption?.title,
+        fileSize,
+        fiscalYearSuffix,
+      }),
+    });
+  } catch (networkErr) {
+    console.warn("Atomic register API unreachable, using local fallback:", networkErr);
+    const record = createApplication({ ...input, idCard: cleanId });
+    return { record, syncedToCloud: false, failedDocs: 0 };
+  }
+
+  const data = (await apiRes.json().catch(() => ({}))) as {
+    ok?: boolean;
+    offline?: boolean;
+    error?: string;
+    id?: number;
+    ref?: string;
+    receiptNo?: string;
+    submittedAt?: string;
+    updatedAt?: string;
+  };
+
+  if (apiRes.status === 503 || data.offline) {
+    const record = createApplication({ ...input, idCard: cleanId });
+    return { record, syncedToCloud: false, failedDocs: 0 };
+  }
+
+  if (!apiRes.ok || !data.ok || !data.ref) {
+    throw new Error(
+      data.error || "ไม่สามารถบันทึกข้อมูลใบสมัครได้ กรุณาตรวจสอบและลองใหม่อีกครั้ง"
+    );
+  }
+
+  const record = createApplication(
+    { ...input, idCard: cleanId },
+    {
+      id: data.id,
+      ref: data.ref,
+      receiptNo: data.receiptNo,
+      submittedAt: data.submittedAt,
+      updatedAt: data.updatedAt,
+      skipCloudSync: true,
+    }
+  );
+
+  let failedDocs = 0;
+  if (record.documents.length > 0 && isSupabaseConfigured()) {
+    options?.onStageChange?.(
+      `กำลังอัปโหลดเอกสารแนบขึ้นระบบ (0/${record.documents.length})...`
+    );
+    const uploadResult = await syncApplicationDocumentsToSupabase(
+      record.ref,
+      record.documents,
+      (completed, total) => {
+        options?.onStageChange?.(
+          `กำลังอัปโหลดเอกสารแนบขึ้นระบบ (${completed}/${total})...`
+        );
+      }
+    );
+    failedDocs = uploadResult.failedCount;
+  }
+
+  return { record, syncedToCloud: true, failedDocs };
 }
 
 function dispatchStatusUpdateEmail(
@@ -653,6 +777,7 @@ function dispatchStatusUpdateEmail(
   void fetch("/api/send-email", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     keepalive: true,
     body: JSON.stringify({
       to: app.email,

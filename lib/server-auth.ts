@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 
 const COOKIE_NAME = "sat_admin_session";
 const SESSION_MAX_AGE = 7 * 24 * 60 * 60; // 7 days in seconds
+let warnedMissingAdminPin = false;
 
 function getAuthSecret(): string {
   return (
@@ -13,11 +14,87 @@ function getAuthSecret(): string {
 }
 
 export function getExpectedAdminPin(): string {
-  return (
-    process.env.ADMIN_PIN ||
-    process.env.NEXT_PUBLIC_ADMIN_PIN ||
-    "336699"
-  );
+  const configured = process.env.ADMIN_PIN?.trim();
+  if (configured) {
+    return configured;
+  }
+  if (process.env.NODE_ENV === "production" && !warnedMissingAdminPin) {
+    warnedMissingAdminPin = true;
+    console.warn(
+      "[SECURITY WARNING] ADMIN_PIN is not configured; using fallback PIN."
+    );
+  }
+  return "336699";
+}
+
+/**
+ * Constant-time PIN comparison via SHA-256 digests to avoid timing leaks
+ * and length-mismatch differences.
+ */
+export function isPinMatch(candidate: string): boolean {
+  const normalizedCandidate = candidate.trim();
+  if (!normalizedCandidate) return false;
+  const expected = getExpectedAdminPin();
+  const candDigest = crypto.createHash("sha256").update(normalizedCandidate).digest();
+  const expDigest = crypto.createHash("sha256").update(expected).digest();
+  return crypto.timingSafeEqual(candDigest, expDigest);
+}
+
+function getEncryptionKey(): Buffer {
+  return crypto.createHash("sha256").update(getAuthSecret()).digest();
+}
+
+/**
+ * Encrypts sensitive server payloads using AES-256-GCM into a versioned JSON envelope.
+ */
+export function encryptServerPayload(plaintext: string): string {
+  const key = getEncryptionKey();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return JSON.stringify({
+    v: 1,
+    iv: iv.toString("base64url"),
+    tag: tag.toString("base64url"),
+    data: encrypted.toString("base64url"),
+  });
+}
+
+/**
+ * Decrypts payloads produced by encryptServerPayload. Returns null if tampered or invalid.
+ */
+export function decryptServerPayload(encoded: string): string | null {
+  try {
+    if (!encoded || typeof encoded !== "string") return null;
+    const rawJson = encoded.trim().startsWith("{")
+      ? encoded
+      : Buffer.from(encoded, "base64url").toString("utf8");
+    const parsed = JSON.parse(rawJson) as {
+      v?: unknown;
+      iv?: unknown;
+      tag?: unknown;
+      data?: unknown;
+    };
+    if (
+      parsed.v !== 1 ||
+      typeof parsed.iv !== "string" ||
+      typeof parsed.tag !== "string" ||
+      typeof parsed.data !== "string"
+    ) {
+      return null;
+    }
+    const key = getEncryptionKey();
+    const iv = Buffer.from(parsed.iv, "base64url");
+    const tag = Buffer.from(parsed.tag, "base64url");
+    const ciphertext = Buffer.from(parsed.data, "base64url");
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+    decipher.setAuthTag(tag);
+    const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    return decrypted.toString("utf8");
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -78,7 +155,7 @@ export function verifyAdminSessionToken(token?: string | null): boolean {
 export async function isAdminRequestAuthorized(request: Request): Promise<boolean> {
   // Check header PIN first (used by internal scripts or API clients)
   const pinHeader = request.headers.get("x-admin-pin");
-  if (pinHeader && pinHeader === getExpectedAdminPin()) {
+  if (pinHeader && isPinMatch(pinHeader)) {
     return true;
   }
 

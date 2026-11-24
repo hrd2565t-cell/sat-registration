@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type ClipboardEvent } from "react";
-import { isAdminAuthenticated, loginAdmin } from "@/lib/admin-auth";
+import { isAdminAuthenticated, loginAdminDetailed } from "@/lib/admin-auth";
 
 function AdminLoginForm() {
   const searchParams = useSearchParams();
@@ -37,15 +37,15 @@ function AdminLoginForm() {
     setIsVerifying(true);
 
     try {
-      const ok = await loginAdmin(fullPin);
-      if (ok) {
+      const res = await loginAdminDetailed(fullPin);
+      if (res.ok) {
         setIsSuccess(true);
         setError("");
         setTimeout(() => {
           window.location.href = nextUrl;
         }, 250);
       } else {
-        setError("รหัส PIN ไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง");
+        setError(res.error || "รหัส PIN ไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง");
         setIsShaking(true);
         setTimeout(() => {
           setIsShaking(false);

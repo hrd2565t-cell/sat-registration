@@ -1,4 +1,5 @@
 import { getSupabaseClient, isSupabaseConfigured } from "./client";
+import { isAdminAuthenticated } from "@/lib/admin-auth";
 import {
   computeTotalFileSizeMB,
   type ApplicantRecord,
@@ -123,6 +124,140 @@ export async function uploadDocumentToSupabaseStorage(
   }
 }
 
+export async function syncApplicationDocumentsToSupabase(
+  targetRef: string,
+  documents: ApplicantDocument[],
+  onProgress?: (completed: number, total: number) => void
+): Promise<{ uploadedCount: number; failedCount: number }> {
+  if (!targetRef || !documents || documents.length === 0) {
+    return { uploadedCount: 0, failedCount: 0 };
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return { uploadedCount: 0, failedCount: documents.length };
+  }
+
+  let uploadedCount = 0;
+  let failedCount = 0;
+  const total = documents.length;
+
+  try {
+    const { data: existingDocs } = await supabase
+      .from("application_documents")
+      .select("id, kind, name, file_type, storage_path, data_url")
+      .eq("application_ref", targetRef);
+
+    for (let idx = 0; idx < documents.length; idx++) {
+      const doc = documents[idx];
+      const matchesDoc = (ed: {
+        kind: string;
+        name: string;
+        file_type: string | null;
+        storage_path: string | null;
+      }) => {
+        const edIsIdCard =
+          ed.kind === "idcard" ||
+          (ed.file_type && ed.file_type.startsWith("idcard:")) ||
+          (ed.storage_path && ed.storage_path.includes("idcard-"));
+        const edIsSaka =
+          ed.kind === "saka" ||
+          (ed.file_type && ed.file_type.startsWith("saka:")) ||
+          (ed.storage_path && ed.storage_path.includes("saka-"));
+        const edRealKind = edIsIdCard ? "idcard" : edIsSaka ? "saka" : ed.kind;
+        return edRealKind === doc.kind && ed.name === doc.name;
+      };
+
+      const alreadyHasContent = (existingDocs || []).some(
+        (ed) => matchesDoc(ed) && Boolean(ed.data_url || ed.storage_path)
+      );
+      if (alreadyHasContent) {
+        uploadedCount++;
+        onProgress?.(idx + 1, total);
+        continue;
+      }
+
+      let effectiveDataUrl = doc.dataUrl;
+      if (!effectiveDataUrl && typeof window !== "undefined") {
+        const stored = await getDocumentFromStorage(doc.id, doc.name);
+        if (stored?.dataUrl) {
+          effectiveDataUrl = stored.dataUrl;
+        }
+      }
+
+      const alreadyHasPlaceholder = (existingDocs || []).some(matchesDoc);
+      if (alreadyHasPlaceholder && !effectiveDataUrl) {
+        onProgress?.(idx + 1, total);
+        continue;
+      }
+
+      let storagePath: string | null = null;
+      if (effectiveDataUrl && effectiveDataUrl.startsWith("data:")) {
+        const extension =
+          (doc.name.split(".").pop() || "bin").replace(/[^a-zA-Z0-9]/g, "") ||
+          "pdf";
+        const safeId = String(doc.id || doc.kind).replace(/[^a-zA-Z0-9_-]/g, "");
+        const path = `${targetRef}/${doc.kind}-${safeId}-${Date.now()}.${extension}`;
+        storagePath = await uploadDocumentToSupabaseStorage(
+          "sat-documents",
+          path,
+          effectiveDataUrl
+        );
+      }
+
+      // ป้องกัน CHECK constraint violation สำหรับฐานข้อมูลที่ยังไม่มี 'idcard' หรือ 'saka'
+      const dbKind = doc.kind === "idcard" ? "certificate" : doc.kind;
+      const dbFileType =
+        doc.kind === "idcard" ? `idcard:${doc.type || ""}` : (doc.type ?? null);
+
+      // เก็บ Base64 data_url ไว้ในฐานข้อมูลเสมอสำหรับรูปถ่าย (photo) ไฟล์ขนาดเล็ก (< 500KB) หรือเมื่อ Storage ไม่สำเร็จ
+      const shouldKeepInlineDataUrl =
+        doc.kind === "photo" ||
+        !storagePath ||
+        Boolean(effectiveDataUrl && effectiveDataUrl.length < 500_000);
+
+      let { error: insertErr } = await supabase
+        .from("application_documents")
+        .insert({
+          application_ref: targetRef,
+          kind: dbKind,
+          name: doc.name,
+          size: doc.size,
+          file_type: dbFileType,
+          storage_path: storagePath,
+          data_url: shouldKeepInlineDataUrl ? (effectiveDataUrl ?? null) : null,
+        });
+
+      // Fallback หากตาราง application_documents บนฐานข้อมูลยังไม่มี 'saka' ใน CHECK constraint
+      if (insertErr && doc.kind === "saka") {
+        const retry = await supabase.from("application_documents").insert({
+          application_ref: targetRef,
+          kind: "certificate",
+          name: doc.name,
+          size: doc.size,
+          file_type: `saka:${doc.type || ""}`,
+          storage_path: storagePath,
+          data_url: shouldKeepInlineDataUrl ? (effectiveDataUrl ?? null) : null,
+        });
+        insertErr = retry.error;
+      }
+
+      if (insertErr) {
+        console.warn("Supabase document insert error:", insertErr.message);
+        failedCount++;
+      } else {
+        uploadedCount++;
+      }
+      onProgress?.(idx + 1, total);
+    }
+
+    return { uploadedCount, failedCount };
+  } catch (err) {
+    console.warn("Failed to sync documents to Supabase:", err);
+    return { uploadedCount, failedCount: Math.max(failedCount, total - uploadedCount) };
+  }
+}
+
 /**
  * Syncs a newly created application record to Supabase
  */
@@ -134,7 +269,8 @@ export async function syncApplicationToSupabase(
 
   try {
     let targetRef = record.ref;
-    let targetReceiptNo = record.receiptNo;
+    const fySuffix = record.receiptNo?.split("-").pop() || "70";
+    let targetReceiptNo = record.receiptNo || `${targetRef}-${fySuffix}`;
 
     // ตรวจสอบรหัส ref ในฐานข้อมูลก่อนบันทึก เพื่อป้องกันการชนกันของรหัสอ้างอิง
     const { data: existingRefs } = await supabase
@@ -147,14 +283,14 @@ export async function syncApplicationToSupabase(
       );
       if (sameApplicantCourse) {
         targetRef = sameApplicantCourse.ref;
-        targetReceiptNo = `${targetRef}-70`;
+        targetReceiptNo = `${targetRef}-${fySuffix}`;
       } else if (existingRefs.some((r) => r.ref === targetRef)) {
         const maxNum = existingRefs.reduce((max, r) => {
           const num = Number(r.ref.replace(/\D/g, ""));
           return Number.isFinite(num) && num > max ? num : max;
         }, 4);
         targetRef = `SAT-${String(maxNum + 1).padStart(5, "0")}`;
-        targetReceiptNo = `${targetRef}-70`;
+        targetReceiptNo = `${targetRef}-${fySuffix}`;
       }
     }
 
@@ -230,79 +366,7 @@ export async function syncApplicationToSupabase(
 
     // Insert documents (เฉพาะเอกสารใหม่ที่ยังไม่มีในระบบเพื่อป้องกันข้อมูลซ้ำซ้อน)
     if (record.documents && record.documents.length > 0) {
-      const { data: existingDocs } = await supabase
-        .from("application_documents")
-        .select("id, kind, name, file_type, storage_path, data_url")
-        .eq("application_ref", targetRef);
-
-      for (const doc of record.documents) {
-        const alreadyHasContent = (existingDocs || []).some((ed) => {
-          const edIsIdCard =
-            ed.kind === "idcard" ||
-            (ed.file_type && ed.file_type.startsWith("idcard:")) ||
-            (ed.storage_path && ed.storage_path.includes("idcard-"));
-          const edRealKind = edIsIdCard ? "idcard" : ed.kind;
-          return (
-            edRealKind === doc.kind &&
-            ed.name === doc.name &&
-            Boolean(ed.data_url || ed.storage_path)
-          );
-        });
-        if (alreadyHasContent) continue;
-
-        let effectiveDataUrl = doc.dataUrl;
-        if (!effectiveDataUrl && typeof window !== "undefined") {
-          const stored = await getDocumentFromStorage(doc.id, doc.name);
-          if (stored?.dataUrl) {
-            effectiveDataUrl = stored.dataUrl;
-          }
-        }
-
-        const alreadyHasPlaceholder = (existingDocs || []).some((ed) => {
-          const edIsIdCard =
-            ed.kind === "idcard" ||
-            (ed.file_type && ed.file_type.startsWith("idcard:")) ||
-            (ed.storage_path && ed.storage_path.includes("idcard-"));
-          const edRealKind = edIsIdCard ? "idcard" : ed.kind;
-          return edRealKind === doc.kind && ed.name === doc.name;
-        });
-
-        // หากมีแถวว่างอยู่แล้วและเครื่องนี้ก็ไม่มีไฟล์จริงใน IndexedDB ไม่ต้อง insert แถวว่างซ้ำ
-        if (alreadyHasPlaceholder && !effectiveDataUrl) continue;
-
-        let storagePath: string | null = null;
-        if (effectiveDataUrl && effectiveDataUrl.startsWith("data:")) {
-          const extension = (doc.name.split(".").pop() || "bin").replace(/[^a-zA-Z0-9]/g, "") || "pdf";
-          const safeId = String(doc.id || doc.kind).replace(/[^a-zA-Z0-9_-]/g, "");
-          const path = `${targetRef}/${doc.kind}-${safeId}-${Date.now()}.${extension}`;
-          storagePath = await uploadDocumentToSupabaseStorage(
-            "sat-documents",
-            path,
-            effectiveDataUrl
-          );
-        }
-
-        // ป้องกัน constraint violation ของ Supabase ที่ยังไม่มี 'idcard' ใน CHECK constraint
-        const dbKind = doc.kind === "idcard" ? "certificate" : doc.kind;
-        const dbFileType = doc.kind === "idcard" ? `idcard:${doc.type || ""}` : (doc.type ?? null);
-
-        // เก็บ Base64 data_url ไว้ในฐานข้อมูลเสมอสำหรับรูปถ่าย (photo) หรือไฟล์ขนาดเล็ก (< 500KB)
-        // เพื่อให้แสดงผลได้ทันทีแม้ถัง sat-documents จะตั้งค่าเป็น Private Bucket
-        const shouldKeepInlineDataUrl =
-          doc.kind === "photo" ||
-          !storagePath ||
-          Boolean(effectiveDataUrl && effectiveDataUrl.length < 500_000);
-
-        await supabase.from("application_documents").insert({
-          application_ref: targetRef,
-          kind: dbKind,
-          name: doc.name,
-          size: doc.size,
-          file_type: dbFileType,
-          storage_path: storagePath,
-          data_url: shouldKeepInlineDataUrl ? (effectiveDataUrl ?? null) : null,
-        });
-      }
+      await syncApplicationDocumentsToSupabase(targetRef, record.documents);
     }
 
     return true;
@@ -531,15 +595,14 @@ export async function syncReviewToSupabase(
     }
 
     // 3. ยิงคำสั่งไปยัง Server API (/api/admin/review-application) ซึ่งมีสิทธิ์ระดับ Service Role
-    // เพื่อให้บันทึกลงตาราง applications และ review_notes ได้ 100% ไร้ข้อจำกัดของ RLS
-    if (typeof window !== "undefined") {
+    // เฉพาะเมื่อเป็นแอดมินที่เข้าสู่ระบบแล้ว (ใช้คุกกี้ HttpOnly) เพื่อไม่ให้ผู้สมัครทั่วไปยิงได้
+    if (typeof window !== "undefined" && isAdminAuthenticated()) {
       fetch("/api/admin/review-application", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-authorized": "true",
-          "x-admin-pin": "336699",
         },
+        credentials: "same-origin",
         body: JSON.stringify({
           ref,
           status,
@@ -782,11 +845,21 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
             doc.kind === "idcard" ||
             (doc.file_type && doc.file_type.startsWith("idcard:")) ||
             (doc.storage_path && doc.storage_path.includes("idcard-"));
-          const realKind = isIdCard ? "idcard" : (doc.kind as ApplicantDocument["kind"]);
+          const isSaka =
+            doc.kind === "saka" ||
+            (doc.file_type && doc.file_type.startsWith("saka:")) ||
+            (doc.storage_path && doc.storage_path.includes("saka-"));
+          const realKind = isIdCard
+            ? "idcard"
+            : isSaka
+              ? "saka"
+              : (doc.kind as ApplicantDocument["kind"]);
           const realType =
             doc.file_type && doc.file_type.startsWith("idcard:")
               ? doc.file_type.replace("idcard:", "")
-              : (doc.file_type ?? undefined);
+              : doc.file_type && doc.file_type.startsWith("saka:")
+                ? doc.file_type.replace("saka:", "")
+                : (doc.file_type ?? undefined);
 
           // ให้ความสำคัญกับ data_url (Base64) ก่อน storage_path เพราะถัง sat-documents อาจเป็น Private Bucket
           return {
@@ -1116,9 +1189,8 @@ export async function deleteApplicationFromSupabase(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-authorized": "true",
-          "x-admin-pin": "336699",
         },
+        credentials: "same-origin",
         body: JSON.stringify({ ref, courseId }),
       });
       if (res.ok) {

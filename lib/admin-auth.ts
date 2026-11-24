@@ -24,16 +24,23 @@ export function isAdminAuthenticated(): boolean {
  * Server-verified admin login: sends PIN to /api/admin/login
  * Never exposes the expected PIN in client bundle!
  */
-export async function loginAdmin(pin: string): Promise<boolean> {
-  if (typeof window === "undefined") return false;
+export async function loginAdminDetailed(
+  pin: string
+): Promise<{ ok: boolean; error?: string; status?: number }> {
+  if (typeof window === "undefined") {
+    return { ok: false, error: "ไม่สามารถยืนยันตัวตนฝั่งเซิร์ฟเวอร์ได้" };
+  }
   try {
     const res = await fetch("/api/admin/login", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
+      credentials: "same-origin",
       body: JSON.stringify({ pin: pin.trim() }),
     });
+
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
 
     if (res.ok) {
       try {
@@ -42,13 +49,22 @@ export async function loginAdmin(pin: string): Promise<boolean> {
         // Storage unavailable in private browsing edge cases
       }
       notify();
-      return true;
+      return { ok: true, status: res.status };
     }
-    return false;
+    return {
+      ok: false,
+      status: res.status,
+      error: data.error || "รหัส PIN ไม่ถูกต้อง",
+    };
   } catch (err) {
     console.error("Login request failed:", err);
-    return false;
+    return { ok: false, error: "เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง" };
   }
+}
+
+export async function loginAdmin(pin: string): Promise<boolean> {
+  const result = await loginAdminDetailed(pin);
+  return result.ok;
 }
 
 export async function logoutAdmin(): Promise<void> {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useRef, useState, useMemo } from "react";
 import {
   useAlumniStore,
   getTraineePassport,
@@ -9,7 +9,7 @@ import {
   type HistoricalTrainee,
   type DutyRecord,
 } from "@/lib/alumni-store";
-import { useProfileClaimsStore } from "@/lib/claims-store";
+import { checkPendingClaimStatus } from "@/lib/claims-store";
 import { isValidThaiIdCard, formatThaiIdCard } from "@/lib/validation";
 import { DutyRecordModal } from "./duty-record-modal";
 
@@ -27,13 +27,14 @@ export function TraineePortalModal({
   onOpenPassport,
 }: TraineePortalModalProps) {
   const { trainees } = useAlumniStore();
-  const { claims } = useProfileClaimsStore();
 
   const [idCardInput, setIdCardInput] = useState(
     initialIdCard ? formatThaiIdCard(initialIdCard.replace(/\D/g, "")) : ""
   );
   const [phoneInput, setPhoneInput] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const isLoggingInRef = useRef(false);
   const [loggedInIdCard, setLoggedInIdCard] = useState<string | null>(() => {
     const clean = initialIdCard.replace(/\D/g, "");
     if (clean.length === 13) {
@@ -84,14 +85,19 @@ export function TraineePortalModal({
     if (loginError) setLoginError("");
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoggingInRef.current) return;
+    isLoggingInRef.current = true;
+
     if (!cleanId || cleanId.length !== 13) {
+      isLoggingInRef.current = false;
       setLoginError("กรุณากรอกเลขประจำตัวประชาชน 13 หลัก");
       return;
     }
 
     if (!isValidThaiIdCard(cleanId)) {
+      isLoggingInRef.current = false;
       setLoginError("เลขประจำตัวประชาชนไม่ถูกต้องตามหลักการทะเบียนราษฎร์");
       return;
     }
@@ -102,27 +108,30 @@ export function TraineePortalModal({
     );
 
     if (match) {
+      isLoggingInRef.current = false;
       setLoggedInIdCard(cleanId);
       initEditFields(match);
       setLoginError("");
       return;
     }
 
-    // Check if there is a pending claim
-    const pendingClaim = claims.find(
-      (c) => c.idCard.replace(/\D/g, "") === cleanId && c.status === "pending"
-    );
+    setIsLoggingIn(true);
+    try {
+      const pendingStatus = await checkPendingClaimStatus(cleanId);
+      if (pendingStatus.hasPending && pendingStatus.claimId) {
+        setLoginError(
+          `คำขอยืนยันตัวตนของคุณ (${pendingStatus.claimId}) อยู่ระหว่างการตรวจสอบของเจ้าหน้าที่ กกท. เมื่อได้รับการอนุมัติแล้ว ท่านจะสามารถเข้าสู่ระบบได้ทันที`
+        );
+        return;
+      }
 
-    if (pendingClaim) {
       setLoginError(
-        `คำขอยืนยันตัวตนของคุณ (${pendingClaim.id}) อยู่ระหว่างการตรวจสอบของเจ้าหน้าที่ กกท. เมื่อได้รับการอนุมัติแล้ว ท่านจะสามารถเข้าสู่ระบบได้ทันที`
+        "ไม่พบข้อมูลเลขประจำตัวประชาชนนี้ในระบบ หากท่านเคยผ่านการอบรมกับ กกท. ในอดีต โปรดค้นหาชื่อของท่านในทำเนียบ แล้วกด 'ยืนยันตัวตนเจ้าของประวัติ' เพื่อผูกเลข 13 หลัก"
       );
-      return;
+    } finally {
+      isLoggingInRef.current = false;
+      setIsLoggingIn(false);
     }
-
-    setLoginError(
-      "ไม่พบข้อมูลเลขประจำตัวประชาชนนี้ในระบบ หากท่านเคยผ่านการอบรมกับ กกท. ในอดีต โปรดค้นหาชื่อของท่านในทำเนียบ แล้วกด 'ยืนยันตัวตนเจ้าของประวัติ' เพื่อผูกเลข 13 หลัก"
-    );
   };
 
   const handleSaveProfile = (e: React.FormEvent) => {
@@ -259,11 +268,11 @@ export function TraineePortalModal({
                 <div className="pt-2">
                   <button
                     type="submit"
-                    disabled={!isIdValid}
+                    disabled={!isIdValid || isLoggingIn}
                     className="w-full rounded-xl bg-[#16265E] px-5 py-3 text-sm font-bold text-white hover:bg-[#1e3a8a] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
                   >
                     <span>🔐</span>
-                    <span>เข้าสู่ระบบบุคลากรกีฬา</span>
+                    <span>{isLoggingIn ? "กำลังตรวจสอบข้อมูล..." : "เข้าสู่ระบบบุคลากรกีฬา"}</span>
                   </button>
                 </div>
               </form>

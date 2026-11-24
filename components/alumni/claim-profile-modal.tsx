@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { isValidThaiIdCard, formatThaiIdCard } from "@/lib/validation";
 import { submitProfileClaim } from "@/lib/claims-store";
 
@@ -36,6 +36,7 @@ export function ClaimProfileModal({
 
   const [errorMsg, setErrorMsg] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [submittedClaimId, setSubmittedClaimId] = useState<string | null>(null);
 
   const cleanId = idCardInput.replace(/\D/g, "");
@@ -82,17 +83,23 @@ export function ClaimProfileModal({
   };
 
   // Submit Handler
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
     if (!isIdValid) {
+      isSubmittingRef.current = false;
       setErrorMsg("กรุณากรอกเลขประจำตัวประชาชน 13 หลักที่ถูกต้องตามทะเบียนราษฎร์");
       return;
     }
     if (!isPhoneValid) {
+      isSubmittingRef.current = false;
       setErrorMsg("กรุณากรอกหมายเลขโทรศัพท์มือถือ 9-10 หลัก");
       return;
     }
     if (!pdpaConsent) {
+      isSubmittingRef.current = false;
       setErrorMsg("กรุณาให้ความยินยอมตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล (PDPA)");
       return;
     }
@@ -100,30 +107,35 @@ export function ClaimProfileModal({
     setIsSubmitting(true);
     setErrorMsg("");
 
-    const res = submitProfileClaim({
-      traineeId: trainee.id,
-      traineePersonnelId: trainee.personnelId || "",
-      traineeName: trainee.name,
-      currentAffiliation: trainee.affiliation,
-      currentCourseTitle: trainee.courseTitle,
-      latestYearBE: trainee.latestYearBE,
-      totalCoursesCount: trainee.totalCoursesCount,
-      claimantName: trainee.name,
-      idCard: cleanId,
-      phone: phoneInput.trim(),
-      email: emailInput.trim() || undefined,
-      newAffiliation: newAffiliation.trim() !== trainee.affiliation ? newAffiliation.trim() : undefined,
-      note: note.trim() || undefined,
-      idCardPhotoUrl: idPhotoUrl || undefined,
-    });
+    try {
+      const res = await submitProfileClaim({
+        traineeId: trainee.id,
+        traineePersonnelId: trainee.personnelId || "",
+        traineeName: trainee.name,
+        currentAffiliation: trainee.affiliation,
+        currentCourseTitle: trainee.courseTitle,
+        latestYearBE: trainee.latestYearBE,
+        totalCoursesCount: trainee.totalCoursesCount,
+        claimantName: trainee.name,
+        idCard: cleanId,
+        phone: phoneInput.trim(),
+        email: emailInput.trim() || undefined,
+        newAffiliation: newAffiliation.trim() !== trainee.affiliation ? newAffiliation.trim() : undefined,
+        note: note.trim() || undefined,
+        idCardPhotoUrl: idPhotoUrl || undefined,
+      });
 
-    setIsSubmitting(false);
-
-    if (res.success && res.claim) {
-      setSubmittedClaimId(res.claim.id);
-      if (onSuccess) onSuccess(res.claim.id);
-    } else {
-      setErrorMsg(res.error || "เกิดข้อผิดพลาดในการส่งคำขอ โปรดลองใหม่อีกครั้ง");
+      if (res.success && res.claim) {
+        setSubmittedClaimId(res.claim.id);
+        if (onSuccess) onSuccess(res.claim.id);
+      } else {
+        setErrorMsg(res.error || "เกิดข้อผิดพลาดในการส่งคำขอ โปรดลองใหม่อีกครั้ง");
+      }
+    } catch {
+      setErrorMsg("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
     }
   };
 

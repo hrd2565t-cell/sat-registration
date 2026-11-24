@@ -31,7 +31,7 @@ import {
 import { useCourses } from "@/lib/courses-store";
 import {
   checkRegistrationEligibility,
-  createApplication,
+  createAndSyncApplication,
   useApplications,
   type ApplicantDocument,
   type ApplicantDocumentKind,
@@ -186,6 +186,7 @@ function RegistrationContent() {
   const [confirmed, setConfirmed] = useState(false);
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submitStage, setSubmitStage] = useState("");
   const isSubmittingRef = useRef(false);
   const [conflictModal, setConflictModal] =
     useState<RegistrationEligibility | null>(null);
@@ -721,6 +722,37 @@ function RegistrationContent() {
       : affiliation;
 
     setSubmitting(true);
+    setSubmitStage("กำลังเตรียมส่งข้อมูลการสมัคร...");
+
+    let record;
+    try {
+      const result = await createAndSyncApplication(
+        {
+          name: fullApplicantName,
+          idCard: cleanId,
+          email: email.trim(),
+          phone: cleanPhone,
+          affiliation: fullAffiliation,
+          position: position.trim(),
+          courseId: course.id,
+          documents,
+        },
+        {
+          onStageChange: (stage) => setSubmitStage(stage),
+        }
+      );
+      record = result.record;
+    } catch (err) {
+      isSubmittingRef.current = false;
+      setSubmitting(false);
+      setSubmitStage("");
+      fail(
+        err instanceof Error
+          ? err.message
+          : "ไม่สามารถบันทึกข้อมูลใบสมัครได้ กรุณาลองใหม่อีกครั้ง"
+      );
+      return;
+    }
 
     // 1. อัปเดตข้อมูลล่าสุดกลับไปยังฐานข้อมูลทำเนียบบุคลากรกีฬา (หากมีชื่อในระบบทำเนียบอยู่แล้ว)
     if (priorTraineeRecords.length > 0) {
@@ -742,18 +774,8 @@ function RegistrationContent() {
       });
     }
 
-    const record = createApplication({
-      name: fullApplicantName,
-      idCard,
-      email: email.trim(),
-      phone: cleanPhone,
-      affiliation: fullAffiliation,
-      position: position.trim(),
-      courseId: course.id,
-      documents,
-    });
-
     // ส่งอีเมลยืนยันการรับสมัครไปยังอีเมลของผู้สมัครอัตโนมัติ (await + keepalive เพื่อป้องกัน browser ตัดการเชื่อมต่อตอนเปลี่ยนหน้า)
+    setSubmitStage("กำลังส่งอีเมลยืนยันการรับสมัคร...");
     try {
       const emailPromise = fetch("/api/send-email", {
         method: "POST",
@@ -1054,7 +1076,11 @@ function RegistrationContent() {
                           id="affiliation"
                           value={affiliation}
                           onChange={(event) => {
-                            setAffiliation(event.target.value);
+                            const nextGroup = event.target.value;
+                            if (nextGroup !== affiliation) {
+                              setAffiliation(nextGroup);
+                              setSubAffiliation("");
+                            }
                             if (autofillMismatchNotice) {
                               setAutofillMismatchNotice(null);
                             }
@@ -1438,7 +1464,7 @@ function RegistrationContent() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
-                  <span>กำลังส่งข้อมูลการสมัคร...</span>
+                  <span>{submitStage || "กำลังส่งข้อมูลการสมัคร..."}</span>
                 </>
               ) : (
                 <>

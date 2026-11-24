@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
+import { isAdminRequestAuthorized } from "@/lib/server-auth";
+import { getSupabaseAdminClient } from "@/lib/supabase/service";
 
 export interface SendApplicationEmailRequest {
   to: string;
@@ -393,6 +395,54 @@ export async function POST(request: Request) {
         { success: false, error: "ที่อยู่อีเมลไม่ถูกต้อง" },
         { status: 400 }
       );
+    }
+
+    // ตรวจสอบสิทธิ์ก่อนทำ Rate Limit เพื่อป้องกันการสวมรอยส่งอีเมลหรือปั่น Cooldown
+    if (statusUpdate) {
+      const isAdmin = await isAdminRequestAuthorized(request);
+      if (!isAdmin) {
+        return NextResponse.json(
+          { success: false, error: "ไม่ได้รับอนุญาตให้ส่งอีเมลแจ้งผลการพิจารณา" },
+          { status: 403 }
+        );
+      }
+    } else {
+      const cleanRef = typeof ref === "string" ? ref.trim() : "";
+      if (cleanRef.length < 3) {
+        return NextResponse.json(
+          { success: false, error: "ไม่พบรหัสอ้างอิงใบสมัครสำหรับส่งอีเมลยืนยัน" },
+          { status: 400 }
+        );
+      }
+
+      const supabase = getSupabaseAdminClient();
+      if (supabase) {
+        const { data: appRow } = await supabase
+          .from("applications")
+          .select("ref, email")
+          .eq("ref", cleanRef)
+          .maybeSingle();
+
+        if (appRow) {
+          if (
+            appRow.email &&
+            appRow.email.trim().toLowerCase() !== to.trim().toLowerCase()
+          ) {
+            return NextResponse.json(
+              { success: false, error: "อีเมลไม่ตรงกับข้อมูลใบสมัครในระบบ" },
+              { status: 403 }
+            );
+          }
+        } else {
+          const isAdmin = await isAdminRequestAuthorized(request);
+          if (!isAdmin) {
+            return NextResponse.json(
+              { success: false, error: "ไม่พบข้อมูลใบสมัครที่อ้างอิงในระบบ" },
+              { status: 403 }
+            );
+          }
+        }
+      }
     }
 
     const nowMs = Date.now();
