@@ -1163,6 +1163,10 @@ export function CourseEditDialog({
                       </div>
                     ))}
                   </div>
+                  <p className="mt-2.5 text-[10.5px] text-[#475569] leading-relaxed">
+                    💡 <span className="font-semibold text-[#1e3a8a]">หมายเหตุ:</span> เฉพาะกลุ่มเป้าหมายที่กำหนดจำนวน{" "}
+                    <span className="font-semibold">มากกว่า 0 คน</span> เท่านั้นที่จะแสดงให้ผู้สมัครเลือกในหน้าแบบฟอร์มสมัครเรียน (หากตั้งเป็น 0 คน ระบบจะซ่อนตัวเลือกนั้นให้อัตโนมัติ)
+                  </p>
                 </div>
               );
             })()}

@@ -12,13 +12,22 @@ import type { FileItem } from "@/components/ui/file-upload";
 import { Avatar } from "@/components/ui/avatar";
 import { IdCardInput } from "@/components/ui/id-card-input";
 import {
+  getAllowedTargetGroupsForCourse,
   getCourseById,
   getDefaultCourse,
   getCourseDocumentConfig,
+  isAffiliationAllowedForCourse,
   isDocumentApplicableForAffiliation,
+  resolveTargetGroupKeyFromAffiliation,
   SAKA_ASSOCIATION_HINT,
   TARGET_GROUPS,
 } from "@/lib/courses";
+import { useNationalAssociationsStore } from "@/lib/associations-store";
+import { THAI_PROVINCES } from "@/lib/provinces";
+import {
+  AssociationAutocompleteInput,
+  type AssociationSuggestion,
+} from "@/components/register/association-autocomplete-input";
 import { useCourses } from "@/lib/courses-store";
 import {
   checkRegistrationEligibility,
@@ -156,10 +165,20 @@ function RegistrationContent() {
     return [];
   }, [idCard, name, prefix, trainees]);
 
+  const { associations: nationalAssociations } = useNationalAssociationsStore();
+  const allowedTargetGroups = useMemo(
+    () => getAllowedTargetGroupsForCourse(course),
+    [course]
+  );
+  const isSingleTargetGroup = allowedTargetGroups.length === 1;
+
   const [affiliation, setAffiliation] = useState<string>(
-    TARGET_GROUPS[0].label
+    () => allowedTargetGroups[0]?.label ?? TARGET_GROUPS[0].label
   );
   const [subAffiliation, setSubAffiliation] = useState("");
+  const [autofillMismatchNotice, setAutofillMismatchNotice] = useState<
+    string | null
+  >(null);
   const [position, setPosition] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -172,6 +191,65 @@ function RegistrationContent() {
     useState<RegistrationEligibility | null>(null);
   const [showPdpaModal, setShowPdpaModal] = useState(false);
   const hasAutofilledRef = useRef(false);
+
+  // รีเซ็ตสถานะการเติมข้อมูลอัตโนมัติและข้อความแจ้งเตือนเมื่อเปลี่ยนหลักสูตร
+  useEffect(() => {
+    hasAutofilledRef.current = false;
+    setAutofillMismatchNotice(null);
+  }, [course.id]);
+
+  // ตรวจสอบและล็อกกลุ่มเป้าหมาย / สังกัดหลัก ให้สอดคล้องกับโควตาที่หลักสูตรเปิดรับเสมอ
+  useEffect(() => {
+    if (allowedTargetGroups.length === 0) return;
+    if (allowedTargetGroups.length === 1) {
+      if (affiliation !== allowedTargetGroups[0].label) {
+        setAffiliation(allowedTargetGroups[0].label);
+      }
+      return;
+    }
+    const isCurrentAllowed = allowedTargetGroups.some(
+      (tg) => tg.label === affiliation
+    );
+    if (!isCurrentAllowed) {
+      setAffiliation(allowedTargetGroups[0].label);
+    }
+  }, [allowedTargetGroups, affiliation]);
+
+  // เตรียมรายการ Autocomplete สำหรับช่อง 3.1 (สมาคมกีฬาแห่งประเทศไทย / สมาคมกีฬาแห่งจังหวัด)
+  const subAffiliationSuggestions = useMemo<AssociationSuggestion[] | null>(() => {
+    if (affiliation === "สมาคมกีฬาแห่งประเทศไทย") {
+      return [...nationalAssociations]
+        .sort((a, b) => a.orderNo - b.orderNo)
+        .map((assoc) => ({
+          value: assoc.name,
+          subtitle: `ลำดับ ${assoc.orderNo}`,
+          searchTerms: assoc.aliases,
+        }));
+    }
+    if (affiliation === "สมาคมกีฬาแห่งจังหวัด") {
+      return THAI_PROVINCES.map((province) => {
+        const cleanProvinceName = province.nameTh.replace(/^จังหวัด/, "").trim();
+        const assocName =
+          cleanProvinceName === "กรุงเทพมหานคร"
+            ? "สมาคมกีฬาแห่งจังหวัดกรุงเทพมหานคร"
+            : `สมาคมกีฬาแห่งจังหวัด${cleanProvinceName}`;
+        return {
+          value: assocName,
+          subtitle: province.regionNameTh,
+          searchTerms: [
+            province.nameTh,
+            cleanProvinceName,
+            province.nameEn,
+            province.regionNameTh,
+            ...(cleanProvinceName === "กรุงเทพมหานคร"
+              ? ["สมาคมกีฬาแห่งกรุงเทพมหานคร", "กทม", "กรุงเทพ"]
+              : []),
+          ],
+        };
+      });
+    }
+    return null;
+  }, [affiliation, nationalAssociations]);
 
   // คำนวณจำนวนผู้สมัครและสถานะการเปิดรับ (แนวทางที่ 1: เปิดรับตามกำหนดเวลา ไม่ปิดกั้นเมื่อเกินเป้าหมาย)
   const courseCapacity = useMemo(() => {
@@ -218,11 +296,31 @@ function RegistrationContent() {
             if (prior.email) setEmail(prior.email);
             if (prior.affiliation) {
               const match = prior.affiliation.match(/^(.*?)\s*\((.*?)\)$/);
-              if (match) {
-                setAffiliation(match[1]);
-                setSubAffiliation(match[2]);
+              const priorPrimary = match
+                ? match[1].trim()
+                : prior.affiliation.trim();
+              const priorSub = match ? match[2].trim() : "";
+              const resolvedKey =
+                resolveTargetGroupKeyFromAffiliation(priorPrimary);
+              const canonicalGroup = resolvedKey
+                ? allowedTargetGroups.find((tg) => tg.key === resolvedKey)
+                : allowedTargetGroups.find((tg) => tg.label === priorPrimary);
+
+              if (
+                canonicalGroup &&
+                isAffiliationAllowedForCourse(priorPrimary, course)
+              ) {
+                setAffiliation(canonicalGroup.label);
+                if (priorSub) {
+                  setSubAffiliation(priorSub);
+                } else if (priorPrimary !== canonicalGroup.label) {
+                  setSubAffiliation(priorPrimary);
+                }
+                setAutofillMismatchNotice(null);
               } else {
-                setAffiliation(prior.affiliation);
+                setAutofillMismatchNotice(
+                  `ข้อมูลการสมัครก่อนหน้าของคุณระบุสังกัด "${priorPrimary}" ซึ่งไม่อยู่ในกลุ่มเป้าหมายที่หลักสูตรนี้เปิดรับ กรุณาตรวจสอบกลุ่มเป้าหมายและระบุหน่วยงาน/สมาคมกีฬาใหม่ในข้อ 3.1`
+                );
               }
             }
             if (prior.position) setPosition(prior.position);
@@ -241,14 +339,33 @@ function RegistrationContent() {
             setName(parsed.name);
           }
           if (alumni.affiliationGroup) {
-            setAffiliation(alumni.affiliationGroup);
-          }
-          if (
-            alumni.affiliation &&
-            alumni.affiliation !== alumni.affiliationGroup &&
-            !subAffiliation.trim()
-          ) {
-            setSubAffiliation(alumni.affiliation);
+            const resolvedKey = resolveTargetGroupKeyFromAffiliation(
+              alumni.affiliationGroup
+            );
+            const canonicalGroup = resolvedKey
+              ? allowedTargetGroups.find((tg) => tg.key === resolvedKey)
+              : allowedTargetGroups.find(
+                  (tg) => tg.label === alumni.affiliationGroup
+                );
+
+            if (
+              canonicalGroup &&
+              isAffiliationAllowedForCourse(alumni.affiliationGroup, course)
+            ) {
+              setAffiliation(canonicalGroup.label);
+              if (
+                alumni.affiliation &&
+                alumni.affiliation !== alumni.affiliationGroup &&
+                !subAffiliation.trim()
+              ) {
+                setSubAffiliation(alumni.affiliation);
+              }
+              setAutofillMismatchNotice(null);
+            } else {
+              setAutofillMismatchNotice(
+                `ข้อมูลประวัติผู้ผ่านการอบรมเดิมระบุสังกัด "${alumni.affiliationGroup}" ซึ่งไม่อยู่ในกลุ่มเป้าหมายที่หลักสูตรนี้เปิดรับ กรุณาตรวจสอบกลุ่มเป้าหมายและระบุหน่วยงาน/สมาคมกีฬาใหม่ในข้อ 3.1`
+              );
+            }
           }
           if (alumni.phone && !phone.trim()) setPhone(alumni.phone);
           if (alumni.email && !email.trim()) setEmail(alumni.email);
@@ -263,7 +380,17 @@ function RegistrationContent() {
         return () => clearTimeout(timer);
       }
     }
-  }, [idCard, name, phone, email, subAffiliation, applications, priorTraineeRecords]);
+  }, [
+    idCard,
+    name,
+    phone,
+    email,
+    subAffiliation,
+    applications,
+    priorTraineeRecords,
+    allowedTargetGroups,
+    course,
+  ]);
 
   // การตั้งค่าช่อง 3.1 ตามกลุ่มสังกัดที่เลือก
   const subAffiliationConfig = useMemo(() => {
@@ -479,7 +606,11 @@ function RegistrationContent() {
       return;
     }
 
-    // 3. ตรวจสอบหน่วยงาน/สมาคมกีฬา
+    // 3. ตรวจสอบกลุ่มเป้าหมาย / สังกัดหลัก และหน่วยงาน/สมาคมกีฬา
+    if (!allowedTargetGroups.some((tg) => tg.label === affiliation)) {
+      fail("กลุ่มเป้าหมาย / สังกัดหลักที่เลือกไม่ได้เปิดรับในหลักสูตรนี้ กรุณาเลือกใหม่");
+      return;
+    }
     if (subAffiliationConfig.required && !subAffiliation.trim()) {
       fail(`กรุณาระบุข้อมูลในข้อ ${subAffiliationConfig.label}`);
       return;
@@ -899,46 +1030,108 @@ function RegistrationContent() {
                   <label htmlFor="affiliation" className={labelClass}>
                     3. กลุ่มเป้าหมาย / สังกัดหลัก <span className="text-red-500">*</span>
                   </label>
-                  <div className="relative">
-                    <select
-                      id="affiliation"
-                      value={affiliation}
-                      onChange={(event) => setAffiliation(event.target.value)}
-                      className="block h-9 w-full appearance-none rounded-[4px] border border-[#d1d5db] bg-white px-3 pr-8 text-[13px] text-[#1f2937] transition-all focus:border-[#1e3a8a] focus:outline-none focus:ring-2 focus:ring-[#1e3a8a]/20"
-                    >
-                      {TARGET_GROUPS.map((option) => (
-                        <option key={option.key} value={option.label}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <svg
-                      className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6b7280]"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M19 9l-7 7-7-7"
-                      />
-                    </svg>
-                  </div>
+                  {isSingleTargetGroup ? (
+                    <div className="flex flex-col gap-1">
+                      <div
+                        id="affiliation"
+                        className="flex h-9 w-full items-center justify-between gap-2 rounded-[4px] border border-[#bfdbfe] bg-[#eff6ff] px-3 text-[13px] font-medium text-[#1e3a8a]"
+                      >
+                        <span className="truncate">
+                          {allowedTargetGroups[0]?.label ?? affiliation}
+                        </span>
+                        <span className="shrink-0 rounded bg-white/90 px-2 py-0.5 text-[10.5px] font-semibold text-[#1d4ed8] border border-[#bfdbfe]">
+                          กำหนดตามหลักสูตร
+                        </span>
+                      </div>
+                      <p className="text-[10.5px] text-[#64748b]">
+                        หลักสูตรนี้เปิดรับเฉพาะกลุ่มเป้าหมายนี้เท่านั้น (ระบบเลือกให้อัตโนมัติ)
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1">
+                      <div className="relative">
+                        <select
+                          id="affiliation"
+                          value={affiliation}
+                          onChange={(event) => {
+                            setAffiliation(event.target.value);
+                            if (autofillMismatchNotice) {
+                              setAutofillMismatchNotice(null);
+                            }
+                          }}
+                          className="block h-9 w-full appearance-none rounded-[4px] border border-[#d1d5db] bg-white px-3 pr-8 text-[13px] text-[#1f2937] transition-all focus:border-[#1e3a8a] focus:outline-none focus:ring-2 focus:ring-[#1e3a8a]/20"
+                        >
+                          {allowedTargetGroups.map((option) => (
+                            <option key={option.key} value={option.label}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        <svg
+                          className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6b7280]"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M19 9l-7 7-7-7"
+                          />
+                        </svg>
+                      </div>
+                      {allowedTargetGroups.length < TARGET_GROUPS.length && (
+                        <p className="text-[10.5px] text-[#64748b]">
+                          แสดงเฉพาะกลุ่มเป้าหมายที่หลักสูตรนี้เปิดรับ ({allowedTargetGroups.length} จาก 5 กลุ่ม)
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {autofillMismatchNotice && (
+                    <div className="flex items-start justify-between gap-2 rounded-md border border-[#fde68a] bg-[#fffbeb] px-2.5 py-2 text-[11px] text-[#92400e]">
+                      <span className="leading-relaxed">{autofillMismatchNotice}</span>
+                      <button
+                        type="button"
+                        aria-label="ปิดการแจ้งเตือน"
+                        onClick={() => setAutofillMismatchNotice(null)}
+                        className="shrink-0 rounded px-1 text-[#b45309] hover:bg-[#fef3c7]"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {/* 3.1 ระบุชื่อหน่วยงาน / ชื่อสมาคมกีฬา (Dynamic) */}
+                {/* 3.1 ระบุชื่อหน่วยงาน / ชื่อสมาคมกีฬา (Dynamic + Autocomplete) */}
                 <div className="flex flex-col gap-1">
-                  <Input
-                    fullWidth
-                    label={`${subAffiliationConfig.label} ${
-                      subAffiliationConfig.required ? "*" : ""
-                    }`}
-                    placeholder={subAffiliationConfig.placeholder}
-                    value={subAffiliation}
-                    onChange={(event) => setSubAffiliation(event.target.value)}
-                  />
+                  {subAffiliationSuggestions ? (
+                    <AssociationAutocompleteInput
+                      id="sub-affiliation"
+                      label={subAffiliationConfig.label}
+                      required={subAffiliationConfig.required}
+                      placeholder={subAffiliationConfig.placeholder}
+                      value={subAffiliation}
+                      onChange={setSubAffiliation}
+                      suggestions={subAffiliationSuggestions}
+                      listTitle={
+                        affiliation === "สมาคมกีฬาแห่งประเทศไทย"
+                          ? `รายชื่อสมาคมกีฬาแห่งประเทศไทย (${subAffiliationSuggestions.length} สมาคม)`
+                          : `รายชื่อสมาคมกีฬาแห่งจังหวัด (${subAffiliationSuggestions.length} จังหวัด)`
+                      }
+                    />
+                  ) : (
+                    <Input
+                      fullWidth
+                      label={`${subAffiliationConfig.label} ${
+                        subAffiliationConfig.required ? "*" : ""
+                      }`}
+                      placeholder={subAffiliationConfig.placeholder}
+                      value={subAffiliation}
+                      onChange={(event) => setSubAffiliation(event.target.value)}
+                    />
+                  )}
                   {subAffiliationConfig.helper && (
                     <p className="text-[10.5px] text-[#64748b]">
                       {subAffiliationConfig.helper}

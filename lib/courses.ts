@@ -87,6 +87,40 @@ export function getTotalTargetQuotas(
   );
 }
 
+/**
+ * คืนรายการกลุ่มเป้าหมายที่เปิดรับสำหรับหลักสูตรที่ระบุ (พิจารณาจาก targetQuotas > 0)
+ * หากหลักสูตรไม่ได้กำหนดโควตา หรือโควตาทุกกลุ่มเป็น 0 จะคืนทั้ง 5 กลุ่มเป็นค่า fallback
+ */
+export function getAllowedTargetGroupsForCourse(
+  course?: Pick<Course, "targetQuotas"> | null
+) {
+  const quotas = course?.targetQuotas;
+  if (!quotas) return [...TARGET_GROUPS];
+  const allowed = TARGET_GROUPS.filter((tg) => (quotas[tg.key] ?? 0) > 0);
+  return allowed.length > 0 ? allowed : [...TARGET_GROUPS];
+}
+
+/**
+ * ตรวจสอบว่าสังกัดหลัก (เช่น label หรือ "สังกัด (หน่วยงานย่อย)")
+ * อยู่ในกลุ่มเป้าหมายที่หลักสูตรนี้เปิดรับหรือไม่
+ */
+export function isAffiliationAllowedForCourse(
+  affiliation: string | null | undefined,
+  course?: Pick<Course, "targetQuotas"> | null
+): boolean {
+  const allowed = getAllowedTargetGroupsForCourse(course);
+  const resolvedKey = resolveTargetGroupKeyFromAffiliation(affiliation);
+  if (resolvedKey) {
+    return allowed.some((tg) => tg.key === resolvedKey);
+  }
+  const normalized = (affiliation ?? "").trim();
+  if (!normalized) return false;
+  return allowed.some(
+    (tg) =>
+      normalized === tg.label || normalized.startsWith(`${tg.label} (`)
+  );
+}
+
 export interface DocumentItemSetting {
   enabled: boolean;
   required: boolean;

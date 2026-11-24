@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import type { Course } from "@/lib/courses";
 import {
   TARGET_GROUPS,
+  getAllowedTargetGroupsForCourse,
   getCourseScheduleDates,
   getCourseDocumentConfig,
   SAKA_ASSOCIATION_HINT,
@@ -312,44 +313,80 @@ export function CourseDetailDialog({
           )}
 
           {/* Section: สัดส่วนกลุ่มเป้าหมาย (5 กลุ่ม) */}
-          {course.targetQuotas && (
-            <section className="space-y-2.5">
-              <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#fef3c7] text-[#b45309] text-xs">
-                    📊
+          {course.targetQuotas && (() => {
+            const allowedGroups = getAllowedTargetGroupsForCourse(course);
+            const isAllOpen = allowedGroups.length === TARGET_GROUPS.length;
+            return (
+              <section className="space-y-2.5">
+                <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#fef3c7] text-[#b45309] text-xs">
+                      📊
+                    </span>
+                    <h3 className="text-[14.5px] font-bold text-[#16265E]">
+                      สัดส่วนเป้าหมายผู้เข้ารับการอบรม (5 กลุ่มเป้าหมาย)
+                    </h3>
+                  </div>
+                  <span className="text-[11px] text-[#6b7280]">
+                    รวมเป้าหมาย {Object.values(course.targetQuotas).reduce((a, b) => a + b, 0)} คน
                   </span>
-                  <h3 className="text-[14.5px] font-bold text-[#16265E]">
-                    สัดส่วนเป้าหมายผู้เข้ารับการอบรม (5 กลุ่มเป้าหมาย)
-                  </h3>
                 </div>
-                <span className="text-[11px] text-[#6b7280]">
-                  รวมเป้าหมาย {Object.values(course.targetQuotas).reduce((a, b) => a + b, 0)} คน
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[12px]">
-                {TARGET_GROUPS.map((tg) => {
-                  const quota = course.targetQuotas?.[tg.key] ?? 0;
-                  return (
-                    <div
-                      key={tg.key}
-                      className="flex items-center justify-between rounded-lg border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2"
-                    >
-                      <span className="text-[#334155] font-medium truncate pr-2">
-                        {tg.label}
+
+                <div className="rounded-lg border border-[#dbeafe] bg-[#eff6ff]/70 px-3 py-2 text-[11.5px]">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-semibold text-[#1e3a8a]">
+                      กลุ่มเป้าหมายที่เปิดรับในหน้าสมัคร ({isAllOpen ? "ครบทั้ง 5 กลุ่ม" : `${allowedGroups.length} กลุ่ม`}):
+                    </span>
+                    {allowedGroups.map((tg) => (
+                      <span
+                        key={tg.key}
+                        className="inline-flex items-center rounded-full border border-[#93c5fd] bg-white px-2.5 py-0.5 text-[11px] font-semibold text-[#1d4ed8]"
+                      >
+                        ✓ {tg.label}
                       </span>
-                      <span className="shrink-0 font-bold text-[#1e3a8a] bg-[#dbeafe] px-2 py-0.5 rounded-full text-[11px]">
-                        {quota} คน
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="text-[11px] text-[#94a3b8] italic">
-                *หมายเหตุ: สัดส่วนเป็นเป้าหมายเชิงแนวทาง คณะกรรมการอาจพิจารณาปรับเกลี่ยตามความเหมาะสมของผู้สมัครจริง
-              </p>
-            </section>
-          )}
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[12px]">
+                  {TARGET_GROUPS.map((tg) => {
+                    const quota = course.targetQuotas?.[tg.key] ?? 0;
+                    const isOpen = quota > 0;
+                    return (
+                      <div
+                        key={tg.key}
+                        className={`flex items-center justify-between rounded-lg border px-3 py-2 ${
+                          isOpen
+                            ? "border-[#dbeafe] bg-[#f8fbff]"
+                            : "border-[#e2e8f0] bg-[#f8fafc] opacity-65"
+                        }`}
+                      >
+                        <span
+                          className={`font-medium truncate pr-2 ${
+                            isOpen ? "text-[#1e293b]" : "text-[#64748b]"
+                          }`}
+                        >
+                          {tg.label}
+                        </span>
+                        <span
+                          className={`shrink-0 font-bold px-2 py-0.5 rounded-full text-[11px] ${
+                            isOpen
+                              ? "text-[#1e3a8a] bg-[#dbeafe]"
+                              : "text-[#64748b] bg-[#e2e8f0]"
+                          }`}
+                        >
+                          {isOpen ? `${quota} คน` : "ไม่เปิดรับ"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-[#94a3b8] italic">
+                  *หมายเหตุ: สัดส่วนเป็นเป้าหมายเชิงแนวทาง คณะกรรมการอาจพิจารณาปรับเกลี่ยตามความเหมาะสมของผู้สมัครจริง
+                </p>
+              </section>
+            );
+          })()}
 
           {/* Section: เอกสารประกอบการสมัคร */}
           {(() => {
