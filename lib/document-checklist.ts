@@ -1,5 +1,9 @@
 import type { ApplicantDocument, ApplicantRecord } from "@/lib/applications-store";
-import { getCourseDocumentConfig, type Course } from "@/lib/courses";
+import {
+  getCourseDocumentConfig,
+  isDocumentApplicableForAffiliation,
+  type Course,
+} from "@/lib/courses";
 
 export interface DocumentCheckItem {
   key: "photo" | "cover" | "certificate" | "idcard" | "saka";
@@ -91,7 +95,7 @@ export function auditApplicantDocuments(
   };
 
   const items: DocumentCheckItem[] = keys
-    .filter((k) => docConfig[k]?.enabled)
+    .filter((k) => isDocumentApplicableForAffiliation(docConfig[k], applicant.affiliation))
     .map((k) => {
       const cfg = docConfig[k];
       const attached = findDoc(k);

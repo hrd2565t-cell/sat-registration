@@ -23,6 +23,8 @@ import {
   parseCourseDateFields,
   parseCourseDateSessions,
   getCourseDocumentConfig,
+  SAKA_ASSOCIATION_TARGET_GROUPS,
+  SAKA_ASSOCIATION_HINT,
   type Course,
   type CourseDateFields,
   type TargetGroupQuotas,
@@ -466,7 +468,14 @@ export function CourseEditDialog({
       evaluationCriteria: evalCrit,
       satSupport: satSup,
       expensesPolicy: expensesPolicy.trim(),
-      documentConfig: docConfig,
+      documentConfig: {
+        ...docConfig,
+        saka: {
+          ...docConfig.saka,
+          hint: docConfig.saka.hint || SAKA_ASSOCIATION_HINT,
+          policyVersion: 2,
+        },
+      },
       announcementFile: finalAnnouncement,
       budget: budget.trim() ? Number(budget.replace(/,/g, "")) : undefined,
       province: province.trim() || undefined,
@@ -1353,7 +1362,11 @@ export function CourseEditDialog({
                         onChange={(e) =>
                           setDocConfig({
                             ...docConfig,
-                            saka: { ...docConfig.saka, enabled: e.target.checked },
+                            saka: {
+                              ...docConfig.saka,
+                              enabled: e.target.checked,
+                              policyVersion: 2,
+                            },
                           })
                         }
                         className="h-3.5 w-3.5 rounded border-[#cbd5e1] text-[#b45309]"
@@ -1362,20 +1375,78 @@ export function CourseEditDialog({
                     </label>
                   </div>
                   {docConfig.saka.enabled && (
-                    <label className="mt-2 flex items-center gap-1.5 cursor-pointer text-[11px] text-[#92400e]">
-                      <input
-                        type="checkbox"
-                        checked={docConfig.saka.required}
-                        onChange={(e) =>
-                          setDocConfig({
-                            ...docConfig,
-                            saka: { ...docConfig.saka, required: e.target.checked },
-                          })
-                        }
-                        className="h-3.5 w-3.5 rounded border-[#cbd5e1] text-[#dc2626]"
-                      />
-                      <span className="font-semibold text-[#b91c1c]">⚠️ บังคับต้องแนบเพื่อการสมัคร</span>
-                    </label>
+                    <div className="mt-2 space-y-2">
+                      <div className="rounded-[4px] border border-[#fde68a] bg-white/80 p-2 space-y-1">
+                        <p className="text-[10.5px] font-semibold text-[#92400e]">
+                          กลุ่มเป้าหมายที่ต้องแสดงเอกสารนี้:
+                        </p>
+                        <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-[#334155]">
+                          <input
+                            type="radio"
+                            name="saka-target-scope"
+                            checked={
+                              !docConfig.saka.onlyTargetGroups ||
+                              docConfig.saka.onlyTargetGroups.length === 0
+                            }
+                            onChange={() =>
+                              setDocConfig({
+                                ...docConfig,
+                                saka: {
+                                  ...docConfig.saka,
+                                  onlyTargetGroups: undefined,
+                                  policyVersion: 2,
+                                },
+                              })
+                            }
+                            className="h-3.5 w-3.5 text-[#1e3a8a]"
+                          />
+                          <span>ใช้กับทุกกลุ่มเป้าหมาย</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-[#334155]">
+                          <input
+                            type="radio"
+                            name="saka-target-scope"
+                            checked={
+                              Boolean(docConfig.saka.onlyTargetGroups?.length)
+                            }
+                            onChange={() =>
+                              setDocConfig({
+                                ...docConfig,
+                                saka: {
+                                  ...docConfig.saka,
+                                  onlyTargetGroups: [...SAKA_ASSOCIATION_TARGET_GROUPS],
+                                  hint: docConfig.saka.hint || SAKA_ASSOCIATION_HINT,
+                                  policyVersion: 2,
+                                },
+                              })
+                            }
+                            className="h-3.5 w-3.5 text-[#1e3a8a]"
+                          />
+                          <span>
+                            เฉพาะสมาคมกีฬาแห่งประเทศไทย และสมาคมกีฬาแห่งจังหวัด (ซ่อนสำหรับกลุ่มอื่น)
+                          </span>
+                        </label>
+                      </div>
+
+                      <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-[#92400e]">
+                        <input
+                          type="checkbox"
+                          checked={docConfig.saka.required}
+                          onChange={(e) =>
+                            setDocConfig({
+                              ...docConfig,
+                              saka: {
+                                ...docConfig.saka,
+                                required: e.target.checked,
+                                policyVersion: 2,
+                              },
+                            })
+                          }
+                          className="h-3.5 w-3.5 rounded border-[#cbd5e1] text-[#dc2626]"
+                        />
+                        <span className="font-semibold text-[#b91c1c]">⚠️ บังคับต้องแนบเพื่อการสมัคร</span>
+                      </label>
+                    </div>
                   )}
                 </div>
               </div>

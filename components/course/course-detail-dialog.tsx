@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import type { Course } from "@/lib/courses";
-import { TARGET_GROUPS, getCourseScheduleDates } from "@/lib/courses";
+import {
+  TARGET_GROUPS,
+  getCourseScheduleDates,
+  getCourseDocumentConfig,
+  SAKA_ASSOCIATION_HINT,
+} from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
 import { useApplications } from "@/lib/applications-store";
 
@@ -347,30 +352,68 @@ export function CourseDetailDialog({
           )}
 
           {/* Section: เอกสารประกอบการสมัคร */}
-          {course.requiredDocuments && course.requiredDocuments.length > 0 && (
-            <section className="space-y-2.5">
-              <div className="flex items-center gap-2 border-b border-[#e2e8f0] pb-1.5">
-                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#f3e8ff] text-[#7e22ce] text-xs">
-                  📂
-                </span>
-                <h3 className="text-[14.5px] font-bold text-[#16265E]">
-                  เอกสารและหลักฐานประกอบการสมัคร
-                </h3>
-              </div>
-              <ul className="space-y-2 pl-1">
-                {course.requiredDocuments.map((doc, idx) => (
-                  <li key={idx} className="flex items-start gap-2.5 text-[13px] leading-relaxed text-[#374151]">
-                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center text-[#7e22ce]">
-                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                    </span>
-                    <span>{doc}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+          {(() => {
+            const docConfig = getCourseDocumentConfig(course);
+            const baseDocs = course.requiredDocuments || [];
+            const hasExplicitSaka = baseDocs.some(
+              (doc) => doc.includes("ส.ฬ.") || doc.includes("ส.ฬ")
+            );
+            const showAutoSakaNote = docConfig.saka.enabled && !hasExplicitSaka;
+
+            if (baseDocs.length === 0 && !showAutoSakaNote) return null;
+
+            return (
+              <section className="space-y-2.5">
+                <div className="flex items-center gap-2 border-b border-[#e2e8f0] pb-1.5">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#f3e8ff] text-[#7e22ce] text-xs">
+                    📂
+                  </span>
+                  <h3 className="text-[14.5px] font-bold text-[#16265E]">
+                    เอกสารและหลักฐานประกอบการสมัคร
+                  </h3>
+                </div>
+                <ul className="space-y-2 pl-1">
+                  {baseDocs.map((doc, idx) => (
+                    <li key={idx} className="flex items-start gap-2.5 text-[13px] leading-relaxed text-[#374151]">
+                      <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center text-[#7e22ce]">
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </span>
+                      <span>{doc}</span>
+                    </li>
+                  ))}
+
+                  {showAutoSakaNote && (
+                    <li className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50/60 p-2.5 text-[13px] leading-relaxed text-[#374151]">
+                      <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center text-[#b45309]">
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </span>
+                      <div className="space-y-0.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-semibold text-[#1e293b]">
+                            {docConfig.saka.label || "สำเนาใบ ส.ฬ. 8"}
+                          </span>
+                          <span className="rounded bg-[#fef3c7] px-1.5 py-0.5 text-[11px] font-bold text-[#92400e] border border-[#fde68a]">
+                            {docConfig.saka.onlyTargetGroups?.length
+                              ? "บังคับเฉพาะสังกัดสมาคมกีฬาแห่งประเทศไทย และสมาคมกีฬาแห่งจังหวัด"
+                              : docConfig.saka.required
+                              ? "บังคับแนบ"
+                              : "เอกสารประกอบ"}
+                          </span>
+                        </div>
+                        <p className="text-[11.5px] text-[#78350f]">
+                          {docConfig.saka.hint || SAKA_ASSOCIATION_HINT}
+                        </p>
+                      </div>
+                    </li>
+                  )}
+                </ul>
+              </section>
+            );
+          })()}
 
           {/* Section: เกณฑ์การสำเร็จการอบรม */}
           {course.evaluationCriteria && course.evaluationCriteria.length > 0 && (

@@ -14,6 +14,7 @@ import {
   deriveFiscalYearFromDate,
   isLegacy50Quota,
   getCourseFiscalYear,
+  mergeCourseSakaConfig,
   type Course,
   type TargetGroupQuotas,
 } from "@/lib/courses";
@@ -345,11 +346,11 @@ function mergeStoredCourses(stored: Course[]): Course[] {
               ...(seed?.documentConfig?.idcard || {}),
               ...(saved.documentConfig.idcard || {}),
             },
-            saka: {
-              ...DEFAULT_DOCUMENT_CONFIG.saka,
-              ...(seed?.documentConfig?.saka || {}),
-              ...saved.documentConfig.saka,
-            },
+            saka: mergeCourseSakaConfig(
+              { id: saved.id, title: saved.title || seed?.title || "" },
+              seed?.documentConfig?.saka,
+              saved.documentConfig.saka
+            ),
           }
         : seed?.documentConfig,
       warningMessage:
@@ -551,11 +552,11 @@ function mapCloudCourse(
             ...(seed?.documentConfig?.idcard || {}),
             ...(cloudDocConfig.idcard || {}),
           },
-          saka: {
-            ...DEFAULT_DOCUMENT_CONFIG.saka,
-            ...(seed?.documentConfig?.saka || {}),
-            ...(cloudDocConfig.saka || {}),
-          },
+          saka: mergeCourseSakaConfig(
+            { id: c.id, title: finalTitle },
+            seed?.documentConfig?.saka,
+            cloudDocConfig.saka
+          ),
         }
       : seed?.documentConfig,
     announcementFile: (() => {

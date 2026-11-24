@@ -92,7 +92,17 @@ export interface DocumentItemSetting {
   required: boolean;
   label?: string;
   hint?: string;
+  onlyTargetGroups?: TargetGroupKey[];
+  policyVersion?: number;
 }
+
+export const SAKA_ASSOCIATION_TARGET_GROUPS: TargetGroupKey[] = [
+  "nationalAssoc",
+  "provincialAssoc",
+];
+
+export const SAKA_ASSOCIATION_HINT =
+  "สำเนาใบสำคัญแสดงการจดทะเบียนแต่งตั้งคณะกรรมการสมาคมกีฬา (แบบ ส.ฬ. 8) เพื่อยืนยันสถานะการดำรงตำแหน่งในสมาคม (ไฟล์ PDF หรือรูปภาพ)";
 
 export interface CourseDocumentConfig {
   photo: DocumentItemSetting;
@@ -131,9 +141,109 @@ export const DEFAULT_DOCUMENT_CONFIG: CourseDocumentConfig = {
     enabled: false,
     required: false,
     label: "สำเนาใบ ส.ฬ. 8",
-    hint: "แนบเฉพาะหลักสูตรที่กำหนด (ไฟล์ PDF หรือไฟล์รูปภาพ)",
+    hint: SAKA_ASSOCIATION_HINT,
   },
 };
+
+export function isExecutiveManagementCourse(
+  course?: Pick<Course, "id" | "title"> | null
+): boolean {
+  if (!course) return false;
+  if (course.id === 1) return true;
+  return (
+    typeof course.title === "string" &&
+    course.title.includes("การเสริมสร้างศักยภาพการบริหารจัดการองค์กีฬาเพื่อความเป็นเลิศ")
+  );
+}
+
+export function resolveTargetGroupKeyFromAffiliation(
+  affiliation?: string | null
+): TargetGroupKey | null {
+  const raw = (affiliation || "").trim();
+  if (!raw) return null;
+
+  for (const tg of TARGET_GROUPS) {
+    if (
+      raw === tg.label ||
+      raw.startsWith(`${tg.label} (`) ||
+      raw.startsWith(tg.label)
+    ) {
+      return tg.key;
+    }
+  }
+
+  const compact = raw.replace(/[\u200B-\u200D\uFEFF\s]+/g, "");
+  if (compact.includes("กองทุนพัฒนาการกีฬาแห่งชาติ") || compact.includes("กองทุน")) {
+    return "nsdf";
+  }
+  if (
+    compact.includes("การกีฬาแห่งประเทศไทย") ||
+    compact === "กกท" ||
+    compact === "กกท."
+  ) {
+    return "sat";
+  }
+  if (
+    !compact.includes("คนพิการ") &&
+    !compact.includes("คนตาบอด") &&
+    (compact.includes("สมาคมกีฬาแห่งจังหวัด") || compact.includes("สมาคมกีฬาจังหวัด"))
+  ) {
+    return "provincialAssoc";
+  }
+  if (
+    compact.includes("สมาคมกีฬา") &&
+    (compact.includes("แห่งประเทศไทย") || compact.includes("แห่งชาติ"))
+  ) {
+    return "nationalAssoc";
+  }
+  return "external";
+}
+
+export function isDocumentApplicableForAffiliation(
+  setting: DocumentItemSetting | undefined,
+  affiliation?: string | null
+): boolean {
+  if (!setting?.enabled) return false;
+  if (!Array.isArray(setting.onlyTargetGroups) || setting.onlyTargetGroups.length === 0) {
+    return true;
+  }
+  const groupKey = resolveTargetGroupKeyFromAffiliation(affiliation);
+  if (!groupKey) return false;
+  return setting.onlyTargetGroups.includes(groupKey);
+}
+
+export function mergeCourseSakaConfig(
+  course: Pick<Course, "id" | "title"> | null | undefined,
+  seedSaka: DocumentItemSetting | undefined,
+  persistedSaka: DocumentItemSetting | undefined
+): DocumentItemSetting {
+  const isExecCourse = isExecutiveManagementCourse(course);
+  if (
+    isExecCourse &&
+    !(persistedSaka?.policyVersion && persistedSaka.policyVersion >= 2)
+  ) {
+    return {
+      ...DEFAULT_DOCUMENT_CONFIG.saka,
+      enabled: true,
+      required: true,
+      onlyTargetGroups: [...SAKA_ASSOCIATION_TARGET_GROUPS],
+      hint: persistedSaka?.hint || SAKA_ASSOCIATION_HINT,
+      policyVersion: 2,
+    };
+  }
+  if (persistedSaka) {
+    return {
+      ...DEFAULT_DOCUMENT_CONFIG.saka,
+      ...(seedSaka || {}),
+      ...persistedSaka,
+      onlyTargetGroups: persistedSaka.onlyTargetGroups,
+    };
+  }
+  return {
+    ...DEFAULT_DOCUMENT_CONFIG.saka,
+    ...(seedSaka || {}),
+  };
+}
 
 export function getCourseDocumentConfig(
   course?: Course | null
@@ -157,16 +267,14 @@ export function getCourseDocumentConfig(
         ...DEFAULT_DOCUMENT_CONFIG.idcard,
         ...(course.documentConfig.idcard || {}),
       },
-      saka: {
-        ...DEFAULT_DOCUMENT_CONFIG.saka,
-        ...(course.documentConfig.saka || {}),
-      },
+      saka: mergeCourseSakaConfig(course, undefined, course.documentConfig.saka),
     };
   }
 
   // Smart defaults based on course ID / title if not set yet
   const isCoachCourse =
     course.id === 2 || (typeof course.title === "string" && course.title.includes("ผู้ฝึกสอน"));
+  const isExecCourse = isExecutiveManagementCourse(course);
   return {
     ...DEFAULT_DOCUMENT_CONFIG,
     certificate: {
@@ -179,11 +287,20 @@ export function getCourseDocumentConfig(
       enabled: true,
       required: true,
     },
-    saka: {
-      ...DEFAULT_DOCUMENT_CONFIG.saka,
-      enabled: isCoachCourse,
-      required: isCoachCourse,
-    },
+    saka: isExecCourse
+      ? {
+          ...DEFAULT_DOCUMENT_CONFIG.saka,
+          enabled: true,
+          required: true,
+          onlyTargetGroups: [...SAKA_ASSOCIATION_TARGET_GROUPS],
+          hint: SAKA_ASSOCIATION_HINT,
+          policyVersion: 2,
+        }
+      : {
+          ...DEFAULT_DOCUMENT_CONFIG.saka,
+          enabled: isCoachCourse,
+          required: isCoachCourse,
+        },
   };
 }
 

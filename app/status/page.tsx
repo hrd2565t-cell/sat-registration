@@ -410,6 +410,7 @@ function ApplicantStatusCard({
           {result.status === "pending" && showResubmitManual && (
             <ResubmitDocumentsBox
               application={result}
+              course={course}
               onSuccess={() => setShowResubmitManual(false)}
             />
           )}
@@ -473,7 +474,7 @@ function ApplicantStatusCard({
                     : "เจ้าหน้าที่ตรวจสอบเอกสารแล้วพบว่ามีเอกสารบางรายการยังไม่ครบถ้วนหรือไม่ชัดเจน กรุณาแนบเอกสารใหม่ด้านล่างนี้"
                 }
               />
-              <ResubmitDocumentsBox application={result} />
+              <ResubmitDocumentsBox application={result} course={course} />
             </div>
           )}
 

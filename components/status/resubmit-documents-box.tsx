@@ -1,16 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FileUpload, type FileItem } from "@/components/ui/file-upload";
 import {
   resubmitApplicantDocuments,
   type ApplicantDocument,
   type ApplicantRecord,
 } from "@/lib/applications-store";
+import {
+  getCourseDocumentConfig,
+  isDocumentApplicableForAffiliation,
+  SAKA_ASSOCIATION_HINT,
+  type Course,
+} from "@/lib/courses";
 import { saveDocumentToStorage } from "@/lib/document-storage";
 
 interface ResubmitDocumentsBoxProps {
   application: ApplicantRecord;
+  course?: Course | null;
   onSuccess?: () => void;
 }
 
@@ -25,10 +32,31 @@ const DOC_KIND_OPTIONS: {
   { kind: "saka", label: "5. สำเนาใบ ส.ฬ. 8 (PDF/รูปภาพ)" },
 ];
 
-export function ResubmitDocumentsBox({ application, onSuccess }: ResubmitDocumentsBoxProps) {
+export function ResubmitDocumentsBox({
+  application,
+  course,
+  onSuccess,
+}: ResubmitDocumentsBoxProps) {
+  const availableDocOptions = useMemo(() => {
+    if (!course) return DOC_KIND_OPTIONS;
+    const docConfig = getCourseDocumentConfig(course);
+    return DOC_KIND_OPTIONS.filter((opt) =>
+      isDocumentApplicableForAffiliation(docConfig[opt.kind], application.affiliation)
+    );
+  }, [course, application.affiliation]);
+
   const [selectedKind, setSelectedKind] = useState<
     "photo" | "cover" | "certificate" | "idcard" | "saka"
   >("idcard");
+
+  useEffect(() => {
+    if (
+      availableDocOptions.length > 0 &&
+      !availableDocOptions.some((opt) => opt.kind === selectedKind)
+    ) {
+      setSelectedKind(availableDocOptions[0].kind);
+    }
+  }, [availableDocOptions, selectedKind]);
   const [newFiles, setNewFiles] = useState<FileItem[]>([]);
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -154,12 +182,17 @@ export function ResubmitDocumentsBox({ application, onSuccess }: ResubmitDocumen
             }}
             className="mt-1 block w-full rounded-md border border-[#f59e0b] bg-white px-2.5 py-1.5 text-[12px] text-[#111827] focus:border-[#d97706] focus:outline-none focus:ring-1 focus:ring-[#d97706]"
           >
-            {DOC_KIND_OPTIONS.map((opt) => (
+            {availableDocOptions.map((opt) => (
               <option key={opt.kind} value={opt.kind}>
                 {opt.label}
               </option>
             ))}
           </select>
+          {selectedKind === "saka" && (
+            <p className="mt-1 text-[10.5px] text-[#78350f]">
+              📌 {SAKA_ASSOCIATION_HINT}
+            </p>
+          )}
         </div>
 
         <div>

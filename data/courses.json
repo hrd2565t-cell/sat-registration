@@ -68,8 +68,14 @@
         "required": true
       },
       "saka": {
-        "enabled": false,
-        "required": false
+        "enabled": true,
+        "required": true,
+        "onlyTargetGroups": [
+          "nationalAssoc",
+          "provincialAssoc"
+        ],
+        "hint": "สำเนาใบสำคัญแสดงการจดทะเบียนแต่งตั้งคณะกรรมการสมาคมกีฬา (แบบ ส.ฬ. 8) เพื่อยืนยันสถานะการดำรงตำแหน่งในสมาคม (ไฟล์ PDF หรือรูปภาพ)",
+        "policyVersion": 2
       }
     }
   },

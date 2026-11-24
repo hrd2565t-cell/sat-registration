@@ -15,6 +15,8 @@ import {
   getCourseById,
   getDefaultCourse,
   getCourseDocumentConfig,
+  isDocumentApplicableForAffiliation,
+  SAKA_ASSOCIATION_HINT,
   TARGET_GROUPS,
 } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
@@ -283,7 +285,7 @@ function RegistrationContent() {
       case "สมาคมกีฬาแห่งประเทศไทย":
         return {
           label: "3.1 ระบุชื่อสมาคมกีฬาแห่งประเทศไทย (เฉพาะเจาะจง)",
-          placeholder: "เช่น สมาคมกีฬาว่ายน้ำแห่งประเทศไทย, สมาคมกีฬาเทควันโดแห่งประเทศไทย",
+          placeholder: "เช่น สมาคมกีฬาทางน้ำแห่งประเทศไทย, สมาคมกีฬาเทควันโดแห่งประเทศไทย",
           required: true,
           helper: "* จำเป็นต้องระบุชื่อสมาคมกีฬาเพื่อการตรวจสอบสิทธิ์และจัดสรรโควตาสัดส่วน",
         };
@@ -355,6 +357,10 @@ function RegistrationContent() {
   };
 
   const docConfig = useMemo(() => getCourseDocumentConfig(course), [course]);
+  const isSakaApplicable = useMemo(
+    () => isDocumentApplicableForAffiliation(docConfig.saka, affiliation),
+    [docConfig.saka, affiliation]
+  );
 
   const docItems = useMemo(() => {
     const items: {
@@ -402,17 +408,17 @@ function RegistrationContent() {
         hint: docConfig.idcard.hint,
       });
     }
-    if (docConfig.saka.enabled) {
+    if (isSakaApplicable) {
       items.push({
         key: "saka",
         num: count++,
         label: docConfig.saka.label || "สำเนาใบ ส.ฬ. 8",
         required: docConfig.saka.required,
-        hint: docConfig.saka.hint,
+        hint: docConfig.saka.hint || SAKA_ASSOCIATION_HINT,
       });
     }
     return items;
-  }, [docConfig]);
+  }, [docConfig, isSakaApplicable]);
 
   const handleNameInput = (val: string) => {
     const parsed = splitPrefixAndName(val);
@@ -521,8 +527,12 @@ function RegistrationContent() {
       fail("กรุณาแนบสำเนาบัตรประจำตัวประชาชน พร้อมลงนามรับรองสำเนาถูกต้อง");
       return;
     }
-    if (docConfig.saka.enabled && docConfig.saka.required && sakaFiles.length === 0) {
-      fail("กรุณาแนบสำเนาใบ ส.ฬ. 8 สำหรับหลักสูตรนี้");
+    if (isSakaApplicable && docConfig.saka.required && sakaFiles.length === 0) {
+      fail(
+        docConfig.saka.onlyTargetGroups?.length
+          ? "กรุณาแนบสำเนาใบ ส.ฬ. 8 (จำเป็นสำหรับผู้สมัครสังกัดสมาคมกีฬาแห่งประเทศไทย และสมาคมกีฬาแห่งจังหวัด)"
+          : "กรุณาแนบสำเนาใบ ส.ฬ. 8 สำหรับหลักสูตรนี้"
+      );
       return;
     }
 
@@ -533,7 +543,7 @@ function RegistrationContent() {
       ...coverFiles,
       ...certFiles,
       ...idCardFiles,
-      ...sakaFiles,
+      ...(isSakaApplicable ? sakaFiles : []),
     ];
     for (const f of allFiles) {
       if (f.dataUrl) {
@@ -563,7 +573,7 @@ function RegistrationContent() {
             toDocument("idcard", file, index)
           )
         : []),
-      ...(docConfig.saka.enabled
+      ...(isSakaApplicable
         ? sakaFiles.map((file, index) => toDocument("saka", file, index))
         : []),
     ];
@@ -1122,9 +1132,9 @@ function RegistrationContent() {
                   </div>
                 )}
 
-                {/* 5. สำเนาใบ ส.ฬ. 8 */}
-                {docConfig.saka.enabled && (
-                  <div>
+                {/* 5. สำเนาใบ ส.ฬ. 8 (แสดงเฉพาะกลุ่มเป้าหมายที่ตรงเงื่อนไข) */}
+                {isSakaApplicable && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3">
                     <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
                       <p className={labelClass}>
                         {docItems.find((i) => i.key === "saka")?.num}. สำเนาใบ ส.ฬ. 8{" "}
@@ -1135,8 +1145,10 @@ function RegistrationContent() {
                         )}
                       </p>
                       {docConfig.saka.required && (
-                        <span className="inline-flex items-center gap-1 rounded-[3px] bg-[#fef3c7] px-1.5 py-[2px] text-[10.5px] font-medium text-[#b45309]">
-                          หลักสูตรนี้ต้องแนบเอกสารนี้เพื่อการสมัคร
+                        <span className="inline-flex items-center gap-1 rounded-[3px] bg-[#fef3c7] px-2 py-[2px] text-[10.5px] font-semibold text-[#92400e] border border-[#fde68a]">
+                          {docConfig.saka.onlyTargetGroups?.length
+                            ? "บังคับเฉพาะสมาคมกีฬาแห่งประเทศไทย / สมาคมกีฬาแห่งจังหวัด"
+                            : "หลักสูตรนี้ต้องแนบเอกสารนี้เพื่อการสมัคร"}
                         </span>
                       )}
                     </div>
@@ -1147,6 +1159,9 @@ function RegistrationContent() {
                       emptyText="คลิกเพื่อแนบสำเนาใบ ส.ฬ. 8 (ไฟล์ PDF หรือรูปภาพ)"
                       accept=".pdf,.jpg,.jpeg,.png,.webp"
                     />
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-[#78350f]">
+                      📌 {docConfig.saka.hint || SAKA_ASSOCIATION_HINT}
+                    </p>
                   </div>
                 )}
               </div>
