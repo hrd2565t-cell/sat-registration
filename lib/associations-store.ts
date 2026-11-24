@@ -129,12 +129,18 @@ export async function refreshNationalAssociationsFromCloud(force = false): Promi
   if (!supabase) return;
 
   try {
-    const { data: row } = await supabase
+    const { data: row, error } = await supabase
       .from("courses")
       .select("id, target_quotas")
       .order("id")
       .limit(1)
       .maybeSingle();
+
+    if (error) {
+      console.warn("Failed to fetch national associations master from cloud:", error.message);
+      return;
+    }
+
     hasLoadedFromCloud = true;
 
     const rawQuotas =

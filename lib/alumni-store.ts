@@ -1198,9 +1198,18 @@ export interface EvaluationStats {
   byCourseCategory: { name: string; count: number; activeCount: number; percent: number }[];
   byCourse: { name: string; count: number; activeRate: number; category?: string }[];
   dimensionBreakdown: { key: string; label: string; icon: string; count: number; percent: number }[];
-  averageImpactRating: number;
+  averageImpactRating: number | null;
   totalRatingsCount: number;
   qualitativeHighlights: QualitativeHighlight[];
+}
+
+export function computeEvaluationStatsForYear(
+  trainees: HistoricalTrainee[],
+  yearFilter: number | "all"
+): EvaluationStats {
+  if (yearFilter === "all") return computeEvaluationStats(trainees);
+  const filtered = trainees.filter((t) => t.yearBE === Number(yearFilter));
+  return computeEvaluationStats(filtered);
 }
 
 export function computeEvaluationStats(trainees: HistoricalTrainee[]): EvaluationStats {
@@ -1379,7 +1388,7 @@ export function computeEvaluationStats(trainees: HistoricalTrainee[]): Evaluatio
   }).sort((a, b) => b.count - a.count);
 
   const averageImpactRating =
-    totalRatingsCount > 0 ? Math.round((totalRatingSum / totalRatingsCount) * 10) / 10 : 4.8;
+    totalRatingsCount > 0 ? Math.round((totalRatingSum / totalRatingsCount) * 10) / 10 : null;
 
   return {
     totalTrainees,

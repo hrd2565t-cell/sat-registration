@@ -120,7 +120,7 @@ export function AlumniDirectoryTab({
         setPendingEditPerson(null);
       }
     } else {
-      setPinError("รหัส PIN ไม่ถูกต้อง (รหัสเริ่มต้น: 336699)");
+      setPinError("รหัส PIN ไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง");
     }
   };
 
@@ -1531,7 +1531,7 @@ export function AlumniDirectoryTab({
               <div>
                 <input
                   type="password"
-                  placeholder="รหัส PIN 6 หลัก (มาตรฐาน: 336699)"
+                  placeholder="กรอกรหัส PIN 6 หลักสำหรับผู้ดูแลระบบ"
                   value={pinInput}
                   onChange={(e) => setPinInput(e.target.value)}
                   className="w-full rounded-xl border border-gray-300 p-2.5 text-center text-sm font-mono tracking-widest focus:border-[#16265E] focus:outline-hidden"

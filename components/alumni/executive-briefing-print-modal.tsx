@@ -2,11 +2,20 @@
 
 import { useMemo, useRef } from "react";
 import Image from "next/image";
-import type { HistoricalTrainee, CourseMatrixRow, YearCohortSummary } from "@/lib/alumni-store";
+import type {
+  HistoricalTrainee,
+  CourseMatrixRow,
+  YearCohortSummary,
+  EvaluationStats,
+} from "@/lib/alumni-store";
 import type {
   NationalCoverageResult,
   ProvincialCoverageResult,
 } from "@/lib/association-coverage";
+import type {
+  AggregatedAdminMetrics,
+  AnnualOutcomeRecord,
+} from "@/lib/annual-outcomes";
 
 interface ExecutiveBriefingPrintModalProps {
   onClose: () => void;
@@ -26,6 +35,9 @@ interface ExecutiveBriefingPrintModalProps {
   selectedYear?: string;
   nationalCoverage?: NationalCoverageResult;
   provincialCoverage?: ProvincialCoverageResult;
+  scopedStats?: EvaluationStats;
+  annualOutcomeRecord?: AnnualOutcomeRecord;
+  aggregatedAdminMetrics?: AggregatedAdminMetrics;
 }
 
 export function ExecutiveBriefingPrintModal({
@@ -38,13 +50,40 @@ export function ExecutiveBriefingPrintModal({
   selectedYear,
   nationalCoverage,
   provincialCoverage,
+  scopedStats,
+  annualOutcomeRecord,
+  aggregatedAdminMetrics,
 }: ExecutiveBriefingPrintModalProps) {
   const printDocRef = useRef<HTMLDivElement>(null);
 
   const yearLabel =
-    selectedYear && selectedYear !== "all"
+    selectedYear === "2570"
+      ? "แผนปีงบประมาณ พ.ศ. 2570 (ประกอบสถิติสะสม พ.ศ. 2547–2569)"
+      : selectedYear && selectedYear !== "all"
       ? `ปีงบประมาณ พ.ศ. ${selectedYear}`
       : "ปีงบประมาณ พ.ศ. 2547 – 2569";
+
+  const scopedTrainees = useMemo(() => {
+    if (selectedYear && selectedYear !== "all" && selectedYear !== "2570") {
+      return trainees.filter((t) => t.yearBE === Number(selectedYear));
+    }
+    return trainees;
+  }, [trainees, selectedYear]);
+
+  const l1ReactionPct =
+    selectedYear && selectedYear !== "all"
+      ? annualOutcomeRecord?.reactionSatisfactionPct ?? null
+      : aggregatedAdminMetrics?.avgReactionPct ?? null;
+
+  const l2LearningPct =
+    selectedYear && selectedYear !== "all"
+      ? annualOutcomeRecord?.learningPassPct ?? null
+      : aggregatedAdminMetrics?.avgLearningPct ?? null;
+
+  const l4Highlights =
+    selectedYear && selectedYear !== "all"
+      ? annualOutcomeRecord?.keyAchievements || []
+      : (aggregatedAdminMetrics?.recentHighlights || []).map((h) => `[พ.ศ. ${h.yearBE}] ${h.text}`);
 
   const formatPct = (val: number) =>
     matrixTotals.grandTotal > 0 ? ((val / matrixTotals.grandTotal) * 100).toFixed(1) : "0.0";
@@ -62,13 +101,23 @@ export function ExecutiveBriefingPrintModal({
   }, []);
 
   const totalDuties = useMemo(() => {
-    return trainees.reduce((sum, t) => sum + (t.duties?.length || 0), 0);
-  }, [trainees]);
+    return scopedTrainees.reduce((sum, t) => sum + (t.duties?.length || 0), 0);
+  }, [scopedTrainees]);
 
   const activeTraineesCount = useMemo(() => {
-    const uniquePersons = new Set(trainees.map((t) => t.idCard || t.name));
+    const uniquePersons = new Set(
+      scopedTrainees.map((t) => t.personnelId || t.idCard || t.name)
+    );
     return uniquePersons.size;
-  }, [trainees]);
+  }, [scopedTrainees]);
+
+  const activeRatePercent =
+    scopedStats?.activeRatePercent ??
+    (scopedTrainees.length > 0
+      ? Math.round(
+          (scopedTrainees.filter((t) => t.status === "active").length / scopedTrainees.length) * 100
+        )
+      : 0);
 
   const handlePrint = () => {
     window.print();
@@ -162,12 +211,18 @@ export function ExecutiveBriefingPrintModal({
               <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3">
                 <p className="text-[11px] font-bold text-indigo-900">ค่าเป้าหมายตามแผน</p>
                 <p className="mt-1 text-2xl font-black text-indigo-950">{matrixTotals.grandTarget}</p>
-                <p className="text-[10px] text-gray-500">คน (17 หลักสูตรวิชาชีพ)</p>
+                <p className="text-[10px] text-gray-500">คน ({matrixData.length} หลักสูตรวิชาชีพ)</p>
               </div>
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
                 <p className="text-[11px] font-bold text-emerald-900">% บรรลุเป้าหมาย</p>
                 <p className="mt-1 text-2xl font-black text-emerald-700">{overallAchievementRate.toFixed(1)}%</p>
-                <p className="text-[10px] text-emerald-600 font-semibold">✓ สูงกว่าเป้าหมายยุทธศาสตร์</p>
+                <p className="text-[10px] text-emerald-600 font-semibold">
+                  {overallAchievementRate >= 100
+                    ? "✓ บรรลุเป้าหมายยุทธศาสตร์"
+                    : overallAchievementRate >= 80
+                    ? "✓ ใกล้เคียงเป้าหมาย"
+                    : "อยู่ระหว่างดำเนินการตามแผน"}
+                </p>
               </div>
               <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3">
                 <p className="text-[11px] font-bold text-amber-900">การปฏิบัติหน้าที่จริง</p>
@@ -295,41 +350,77 @@ export function ExecutiveBriefingPrintModal({
                 <div className="rounded-xl border border-gray-200 p-2.5 bg-gray-50/60">
                   <div className="flex items-center justify-between font-bold text-[#16265E]">
                     <span>Level 1: Reaction (ความพึงพอใจ)</span>
-                    <span className="text-emerald-700 font-black">94.8%</span>
+                    <span
+                      className={
+                        l1ReactionPct !== null
+                          ? "text-emerald-700 font-black"
+                          : "text-slate-500 font-semibold"
+                      }
+                    >
+                      {l1ReactionPct !== null ? `${l1ReactionPct}%` : "รอการบันทึกผล"}
+                    </span>
                   </div>
                   <p className="mt-1 text-[11px] text-gray-600 leading-relaxed">
-                    ผู้เข้ารับการอบรมมีความพึงพอใจต่อวิทยากรผู้เชี่ยวชาญ หลักสูตร และการจัดการเรียนรู้อยู่ในระดับดีเลิศ
+                    {l1ReactionPct !== null
+                      ? "ผลประเมินความพึงพอใจต่อวิทยากร หลักสูตร และการจัดการเรียนรู้ที่บันทึกในระบบ"
+                      : "ยังไม่ได้บันทึกผลสำรวจความพึงพอใจรายปีในระบบ (แอดมินสามารถบันทึกเพิ่มเติมได้)"}
                   </p>
                 </div>
 
                 <div className="rounded-xl border border-gray-200 p-2.5 bg-gray-50/60">
                   <div className="flex items-center justify-between font-bold text-[#16265E]">
                     <span>Level 2: Learning (ผลสัมฤทธิ์ความรู้)</span>
-                    <span className="text-emerald-700 font-black">92.4%</span>
+                    <span
+                      className={
+                        l2LearningPct !== null
+                          ? "text-emerald-700 font-black"
+                          : "text-slate-500 font-semibold"
+                      }
+                    >
+                      {l2LearningPct !== null ? `${l2LearningPct}%` : "รอการบันทึกผล"}
+                    </span>
                   </div>
                   <p className="mt-1 text-[11px] text-gray-600 leading-relaxed">
-                    ผู้ผ่านการอบรมผ่านเกณฑ์ทดสอบความรู้และสมรรถนะตามมาตรฐานสากล พร้อมได้รับวุฒิบัตรรับรองจาก กกท.
+                    {l2LearningPct !== null
+                      ? "อัตราผู้ผ่านเกณฑ์ทดสอบความรู้และสมรรถนะตามมาตรฐาน กกท."
+                      : "ผู้ผ่านการอบรมได้รับวุฒิบัตรรับรองจาก กกท. (รอการบันทึกอัตราร้อยละรายปีเพิ่มเติม)"}
                   </p>
                 </div>
 
                 <div className="rounded-xl border border-gray-200 p-2.5 bg-gray-50/60">
                   <div className="flex items-center justify-between font-bold text-[#16265E]">
                     <span>Level 3: Behavior (การปฏิบัติหน้าที่จริง)</span>
-                    <span className="text-emerald-700 font-black">89.5%</span>
+                    <span className="text-emerald-700 font-black">
+                      Active {activeRatePercent}%
+                    </span>
                   </div>
                   <p className="mt-1 text-[11px] text-gray-600 leading-relaxed">
-                    มีบันทึกการปฏิบัติหน้าที่จริงในมหกรรมกีฬาและการแข่งขันระดับชาติและนานาชาติอย่างต่อเนื่อง ({totalDuties} ครั้ง)
+                    มีบันทึกการปฏิบัติหน้าที่จริง {totalDuties} ครั้ง
+                    {scopedStats && scopedStats.totalRatingsCount > 0 && scopedStats.averageImpactRating !== null
+                      ? ` · คะแนนประสิทธิผลเฉลี่ย ${scopedStats.averageImpactRating}/5.0 (${scopedStats.totalRatingsCount} รายงาน)`
+                      : " · (รอเก็บข้อมูลแบบประเมินผลรายบุคคล L3 เพิ่มเติม)"}
                   </p>
                 </div>
 
                 <div className="rounded-xl border border-gray-200 p-2.5 bg-gray-50/60">
                   <div className="flex items-center justify-between font-bold text-[#16265E]">
                     <span>Level 4: Results (ผลลัพธ์ต่อการกีฬาชาติ)</span>
-                    <span className="text-emerald-700 font-black">ดีเยี่ยม</span>
+                    <span className="text-emerald-700 font-black">
+                      {l4Highlights.length > 0 ? `${l4Highlights.length} ผลสัมฤทธิ์` : "ตามฐานข้อมูลจริง"}
+                    </span>
                   </div>
-                  <p className="mt-1 text-[11px] text-gray-600 leading-relaxed">
-                    ยกระดับมาตรฐานผู้ตัดสิน โค้ช และผู้บริหาร สู่การคว้าเหรียญรางวัลในระดับซีเกมส์ เอเชียนเกมส์ และโอลิมปิก
-                  </p>
+                  {l4Highlights.length > 0 ? (
+                    <ul className="mt-1 list-disc list-inside text-[11px] text-gray-700 space-y-0.5 leading-snug">
+                      {l4Highlights.slice(0, 3).map((txt, idx) => (
+                        <li key={idx}>{txt}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-gray-600 leading-relaxed">
+                      สร้างฐานบุคลากรเดี่ยวจริง {cohortSummary.uniquePersons.toLocaleString()} คน
+                      {cohortSummary.newCount > 0 ? ` (บุคลากรหน้าใหม่ ${cohortSummary.newCount} คน)` : ""} และขยายเครือข่ายสมาคมกีฬาในระดับชาติและภูมิภาค
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

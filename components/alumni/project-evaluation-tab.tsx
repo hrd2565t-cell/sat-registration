@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import type { HistoricalTrainee, QualitativeHighlight } from "@/lib/alumni-store";
 import {
   computeEvaluationStats,
+  computeEvaluationStatsForYear,
   computeCourseAffiliationMatrix,
   computeAnnualCohortStats,
   computeYearCohortSummary,
@@ -27,6 +28,11 @@ import {
   computeNationalAssociationCoverage,
   computeProvincialAssociationCoverage,
 } from "@/lib/association-coverage";
+import { useAnnualOutcomesStore } from "@/lib/annual-outcomes-store";
+import {
+  computeAggregatedAdminMetrics,
+  computeAnnualOutcomesMatrix,
+} from "@/lib/annual-outcomes";
 
 interface ProjectEvaluationTabProps {
   trainees: HistoricalTrainee[];
@@ -36,6 +42,7 @@ interface ProjectEvaluationTabProps {
 export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvaluationTabProps) {
   const stats = useMemo(() => computeEvaluationStats(trainees), [trainees]);
   const { associations: masterAssociations } = useNationalAssociationsStore();
+  const { records: annualOutcomeRecords } = useAnnualOutcomesStore();
   const overallNationalCoverage = useMemo(
     () => computeNationalAssociationCoverage(trainees, masterAssociations, "all"),
     [trainees, masterAssociations]
@@ -44,6 +51,11 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
     () => computeProvincialAssociationCoverage(trainees, "all"),
     [trainees]
   );
+  const aggregatedAdminMetrics = useMemo(
+    () => computeAggregatedAdminMetrics(annualOutcomeRecords),
+    [annualOutcomeRecords]
+  );
+  const [briefingYear, setBriefingYear] = useState<string>("all");
 
   const [matrixYearFilter, setMatrixYearFilter] = useState<string>("all");
   const [matrixCategoryFilter, setMatrixCategoryFilter] = useState<string>("all");
@@ -442,7 +454,13 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
       { ตัวชี้วัด: "บุคลากรที่รอตรวจสอบการทำหน้าที่ (Pending)", ค่าสถิติ: stats.pendingCount },
       { ตัวชี้วัด: "บุคลากรที่ยังไม่มีประวัติในรอบปี (Inactive)", ค่าสถิติ: stats.inactiveCount },
       { ตัวชี้วัด: "จำนวนครั้งการลงสนามปฏิบัติหน้าที่สะสม", ค่าสถิติ: stats.totalDutiesReported },
-      { ตัวชี้วัด: "ดัชนีประสิทธิผลการนำความรู้ไปใช้ (คะแนนเต็ม 5)", ค่าสถิติ: stats.averageImpactRating },
+      {
+        ตัวชี้วัด: "ดัชนีประสิทธิผลการนำความรู้ไปใช้ (คะแนนเต็ม 5)",
+        ค่าสถิติ:
+          stats.totalRatingsCount > 0 && stats.averageImpactRating !== null
+            ? stats.averageImpactRating
+            : "รอเก็บข้อมูล (0 รายงาน)",
+      },
     ];
 
     // 2. By Affiliation Group sheet (4 main groups)
@@ -542,6 +560,35 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
           : "ส่งต่อเนื่อง",
     }));
 
+    // 9. Annual Outcomes Comparison (YoY)
+    const annualOutcomeRows = computeAnnualOutcomesMatrix(
+      trainees,
+      masterAssociations,
+      annualOutcomeRecords
+    ).map((row) => ({
+      "ปีงบประมาณ (พ.ศ.)": row.yearBE,
+      จำนวนหลักสูตรที่จัด: row.courseCount,
+      รายชื่อหลักสูตร: row.coursesList.map((c) => `${c.courseTitle} (${c.count})`).join(", "),
+      "ผู้ผ่านอบรม (คน-ครั้ง)": row.totalRecords,
+      "บุคลากรเดี่ยวจริง (คน)": row.uniquePersons,
+      "บุคลากรหน้าใหม่ (คน)": row.newTrainees,
+      "สัดส่วนหน้าใหม่ (%)": `${row.newPercentage}%`,
+      "สมาคมฯ เข้าร่วม (จาก 93)": `${row.nationalParticipated}/${row.nationalTotal} (${row.nationalCoveragePct}%)`,
+      "จังหวัด เข้าร่วม (จาก 77)": `${row.provincialParticipated}/${row.provincialTotal} (${row.provincialCoveragePct}%)`,
+      "Active Rate (%)": `${row.activeRatePercent}%`,
+      "ความพึงพอใจ L1 (%)":
+        row.adminRecord?.reactionSatisfactionPct !== undefined &&
+        row.adminRecord?.reactionSatisfactionPct !== null
+          ? `${row.adminRecord.reactionSatisfactionPct}%`
+          : "-",
+      "อัตราผ่านเกณฑ์ L2 (%)":
+        row.adminRecord?.learningPassPct !== undefined &&
+        row.adminRecord?.learningPassPct !== null
+          ? `${row.adminRecord.learningPassPct}%`
+          : "-",
+      ผลสัมฤทธิ์เด่นประจำปี: row.adminRecord?.keyAchievements?.join(" | ") || "-",
+    }));
+
     const workbook = XLSX.utils.book_new();
     const s1 = XLSX.utils.json_to_sheet(summarySheetData);
     const s2 = XLSX.utils.json_to_sheet(groupSheetData);
@@ -551,6 +598,7 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
     const s6 = XLSX.utils.json_to_sheet(knowledgeSheetData);
     const s7 = XLSX.utils.json_to_sheet(natCoverageRows);
     const s8 = XLSX.utils.json_to_sheet(provCoverageRows);
+    const s9 = XLSX.utils.json_to_sheet(annualOutcomeRows);
 
     XLSX.utils.book_append_sheet(workbook, s1, "สรุปภาพรวมโครงการ");
     XLSX.utils.book_append_sheet(workbook, s2, "จำแนกตามกลุ่มหน่วยงาน");
@@ -560,6 +608,7 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
     XLSX.utils.book_append_sheet(workbook, s6, "การนำความรู้ไปใช้จริง");
     XLSX.utils.book_append_sheet(workbook, s7, "ความครอบคลุมสมาคมฯ");
     XLSX.utils.book_append_sheet(workbook, s8, "ความครอบคลุมจังหวัด");
+    XLSX.utils.book_append_sheet(workbook, s9, "สรุปผลสัมฤทธิ์รายปี");
 
     XLSX.writeFile(
       workbook,
@@ -630,7 +679,7 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
               className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-[#16265E] shadow-sm hover:bg-blue-50 transition-colors cursor-pointer"
             >
               <span>📊</span>
-              <span>ส่งออกรายงานประเมินผล (Excel 8 แผ่น)</span>
+              <span>ส่งออกรายงานประเมินผล (Excel 9 แผ่น)</span>
             </button>
           </div>
         </div>
@@ -683,23 +732,38 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
             <span className="text-xs font-bold text-gray-500">ดัชนีประสิทธิผล (Level 3)</span>
             <span className="rounded-full bg-purple-50 p-2 text-purple-700">⭐</span>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <p className="text-3xl font-black text-purple-800">{stats.averageImpactRating}</p>
-            <span className="text-xs font-semibold text-gray-500">/ 5.0</span>
-          </div>
-          <p className="mt-1 text-xs text-emerald-700 font-semibold">
-            ระดับดีเลิศ (Kirkpatrick Impact)
-          </p>
+          {stats.totalRatingsCount > 0 && stats.averageImpactRating !== null ? (
+            <>
+              <div className="mt-2 flex items-baseline gap-2">
+                <p className="text-3xl font-black text-purple-800">{stats.averageImpactRating}</p>
+                <span className="text-xs font-semibold text-gray-500">/ 5.0</span>
+              </div>
+              <p className="mt-1 text-xs text-emerald-700 font-semibold">
+                จากรายงานประเมินจริง {stats.totalRatingsCount} รายการ
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="mt-2 text-xl font-black text-slate-700">รอเก็บข้อมูล</p>
+              <p className="mt-1 text-xs text-gray-500">
+                ยังไม่มีผลประเมินรายบุคคล (0 รายงาน)
+              </p>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Executive Summary Q1: อบรมแล้วได้อะไร? */}
+      {/* Executive Summary Q1: อบรมแล้วได้อะไร? (ภาพรวม & แยกรายปี + YoY) */}
       <ExecutiveOutcomeSummary
         trainees={trainees}
-        stats={stats}
-        nationalSummary={overallNationalCoverage.summary}
-        provincialSummary={overallProvincialCoverage.summary}
-        onOpenBriefing={() => setIsExecutiveBriefingOpen(true)}
+        overallStats={stats}
+        overallNationalCoverage={overallNationalCoverage}
+        overallProvincialCoverage={overallProvincialCoverage}
+        isAdmin={isAdmin}
+        onOpenBriefingForYear={(yr) => {
+          setBriefingYear(yr);
+          setIsExecutiveBriefingOpen(true);
+        }}
         onJumpToCoverage={() => {
           document.getElementById("association-coverage-section")?.scrollIntoView({
             behavior: "smooth",
@@ -862,7 +926,10 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
               </button>
               <button
                 type="button"
-                onClick={() => setIsExecutiveBriefingOpen(true)}
+                onClick={() => {
+                  setBriefingYear(matrixYearFilter);
+                  setIsExecutiveBriefingOpen(true);
+                }}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-[#16265E] px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-[#111e4a] transition-colors cursor-pointer"
                 title="เปิดเอกสารรายงานสรุปผลสัมฤทธิ์โครงการส่งผู้บริหาร กกท. (Executive Briefing A4)"
               >
@@ -1826,7 +1893,9 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
                 Kirkpatrick Model · Level 3 (Behavior & Application)
               </span>
               <span className="rounded-md bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-900 border border-amber-200">
-                ⭐ ดัชนีประสิทธิผล {stats.averageImpactRating} / 5.0
+                {stats.totalRatingsCount > 0 && stats.averageImpactRating !== null
+                  ? `⭐ ดัชนีประสิทธิผล ${stats.averageImpactRating} / 5.0`
+                  : "⭐ รอเก็บข้อมูลผลประเมิน L3"}
               </span>
             </div>
             <h3 className="mt-2 text-lg font-bold text-[#16265E]">
@@ -1851,30 +1920,55 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
               <span className="text-xs font-bold text-indigo-900">ดัชนีประสิทธิผลการถ่ายทอดความรู้</span>
               <p className="text-[11px] text-gray-500 mt-0.5">Knowledge Transfer Impact Index</p>
 
-              <div className="mt-4 flex items-baseline gap-2">
-                <span className="text-4xl font-black text-[#16265E]">{stats.averageImpactRating}</span>
-                <span className="text-sm font-semibold text-gray-500">/ 5.00</span>
-              </div>
+              {stats.totalRatingsCount > 0 && stats.averageImpactRating !== null ? (
+                <>
+                  <div className="mt-4 flex items-baseline gap-2">
+                    <span className="text-4xl font-black text-[#16265E]">
+                      {stats.averageImpactRating}
+                    </span>
+                    <span className="text-sm font-semibold text-gray-500">/ 5.00</span>
+                  </div>
 
-              <div className="mt-2 flex items-center gap-1 text-amber-500 text-lg">
-                {"★".repeat(Math.round(stats.averageImpactRating))}
-                {"☆".repeat(Math.max(0, 5 - Math.round(stats.averageImpactRating)))}
-              </div>
+                  <div className="mt-2 flex items-center gap-1 text-amber-500 text-lg">
+                    {"★".repeat(Math.round(stats.averageImpactRating))}
+                    {"☆".repeat(Math.max(0, 5 - Math.round(stats.averageImpactRating)))}
+                  </div>
 
-              <div className="mt-4 rounded-xl bg-white/90 p-3.5 border border-indigo-100 text-xs text-gray-700 space-y-1.5 shadow-2xs">
-                <p className="font-bold text-emerald-800 flex items-center gap-1">
-                  <span>✓</span>
-                  <span>ระดับประสิทธิผล: ดีเลิศ (Excellence)</span>
-                </p>
-                <p className="text-[11px] text-gray-600 leading-relaxed">
-                  บุคลากรสามารถนำทักษะเฉพาะทางจากการอบรมไปปฏิบัติหน้าที่ในสมาคมกีฬา กกท. และหน่วยงานภายนอกจนบรรลุผลสัมฤทธิ์
-                </p>
-              </div>
+                  <div className="mt-4 rounded-xl bg-white/90 p-3.5 border border-indigo-100 text-xs text-gray-700 space-y-1.5 shadow-2xs">
+                    <p className="font-bold text-emerald-800 flex items-center gap-1">
+                      <span>✓</span>
+                      <span>
+                        {stats.averageImpactRating >= 4.0
+                          ? "ระดับประสิทธิผล: ดีเลิศ (Excellence)"
+                          : "ระดับประสิทธิผล: ผ่านเกณฑ์มาตรฐาน"}
+                      </span>
+                    </p>
+                    <p className="text-[11px] text-gray-600 leading-relaxed">
+                      บุคลากรสามารถนำทักษะเฉพาะทางจากการอบรมไปปฏิบัติหน้าที่ในสมาคมกีฬา กกท. และหน่วยงานภายนอกจนบรรลุผลสัมฤทธิ์
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <div className="mt-4 rounded-xl bg-white/90 p-4 border border-indigo-100 text-xs text-gray-700 space-y-2 shadow-2xs">
+                  <p className="text-xl font-black text-slate-700">รอเก็บข้อมูล (0 รายงาน)</p>
+                  <p className="text-[11px] text-gray-600 leading-relaxed">
+                    ยังไม่มีรายงานผลการปฏิบัติหน้าที่รายบุคคล (Kirkpatrick L3) ที่ให้คะแนนประเมินในระบบ เมื่อศิษย์เก่าหรือแอดมินบันทึกรายงาน ระบบจะคำนวณค่าเฉลี่ยจริงให้อัตโนมัติ
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="mt-4 pt-3 border-t border-indigo-100/70 text-[11px] text-gray-500 flex justify-between">
               <span>รายงานประเมิน: {stats.totalRatingsCount} รายการ</span>
-              <span className="text-emerald-700 font-semibold">100% บรรลุเกณฑ์ กกท.</span>
+              <span
+                className={
+                  stats.totalRatingsCount > 0
+                    ? "text-emerald-700 font-semibold"
+                    : "text-slate-500 font-medium"
+                }
+              >
+                {stats.totalRatingsCount > 0 ? "คำนวณจากข้อมูลจริง 100%" : "รอผลติดตามรายบุคคล"}
+              </span>
             </div>
           </div>
 
@@ -2392,31 +2486,83 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
       )}
 
       {/* Executive Briefing PDF & Print Modal */}
-      {isExecutiveBriefingOpen && (
-        <ExecutiveBriefingPrintModal
-          onClose={() => setIsExecutiveBriefingOpen(false)}
-          trainees={trainees}
-          matrixData={matrixData}
-          matrixTotals={matrixTotals}
-          cohortSummary={currentCohortSummary}
-          overallAchievementRate={overallAchievementRate}
-          selectedYear={matrixYearFilter}
-          nationalCoverage={
-            matrixYearFilter === "all"
-              ? overallNationalCoverage
-              : computeNationalAssociationCoverage(
-                  trainees,
-                  masterAssociations,
-                  Number(matrixYearFilter)
-                )
-          }
-          provincialCoverage={
-            matrixYearFilter === "all"
-              ? overallProvincialCoverage
-              : computeProvincialAssociationCoverage(trainees, Number(matrixYearFilter))
-          }
-        />
-      )}
+      {isExecutiveBriefingOpen && (() => {
+        const effectiveHistYear: number | "all" =
+          briefingYear === "all" || briefingYear === "2570"
+            ? "all"
+            : Number(briefingYear);
+        const briefingMatrix =
+          briefingYear === matrixYearFilter
+            ? matrixData
+            : computeCourseAffiliationMatrix(trainees, effectiveHistYear);
+        const briefingMatrixTotals =
+          briefingYear === matrixYearFilter
+            ? matrixTotals
+            : briefingMatrix.reduce(
+                (acc, row) => {
+                  acc["การกีฬาแห่งประเทศไทย"] += row.groups["การกีฬาแห่งประเทศไทย"] || 0;
+                  acc["กองทุนพัฒนาการกีฬาแห่งชาติ"] +=
+                    row.groups["กองทุนพัฒนาการกีฬาแห่งชาติ"] || 0;
+                  acc["สมาคมกีฬาแห่งประเทศไทย"] += row.groups["สมาคมกีฬาแห่งประเทศไทย"] || 0;
+                  acc["สมาคมกีฬาแห่งจังหวัด"] += row.groups["สมาคมกีฬาแห่งจังหวัด"] || 0;
+                  acc["หน่วยงานภายนอก"] += row.groups["หน่วยงานภายนอก"] || 0;
+                  acc.grandTotal += row.total;
+                  acc.grandTarget += row.target;
+                  return acc;
+                },
+                {
+                  "การกีฬาแห่งประเทศไทย": 0,
+                  "กองทุนพัฒนาการกีฬาแห่งชาติ": 0,
+                  "สมาคมกีฬาแห่งประเทศไทย": 0,
+                  "สมาคมกีฬาแห่งจังหวัด": 0,
+                  "หน่วยงานภายนอก": 0,
+                  grandTotal: 0,
+                  grandTarget: 0,
+                }
+              );
+        const briefingAchRate =
+          briefingMatrixTotals.grandTarget > 0
+            ? Math.round(
+                (briefingMatrixTotals.grandTotal / briefingMatrixTotals.grandTarget) * 1000
+              ) / 10
+            : 0;
+        const briefingCohort = computeYearCohortSummary(trainees, effectiveHistYear);
+        const briefingEvalStats =
+          effectiveHistYear === "all"
+            ? stats
+            : computeEvaluationStatsForYear(trainees, effectiveHistYear);
+
+        return (
+          <ExecutiveBriefingPrintModal
+            onClose={() => setIsExecutiveBriefingOpen(false)}
+            trainees={trainees}
+            matrixData={briefingMatrix}
+            matrixTotals={briefingMatrixTotals}
+            cohortSummary={briefingCohort}
+            overallAchievementRate={briefingAchRate}
+            selectedYear={briefingYear}
+            scopedStats={briefingEvalStats}
+            annualOutcomeRecord={
+              briefingYear !== "all" ? annualOutcomeRecords[Number(briefingYear)] : undefined
+            }
+            aggregatedAdminMetrics={aggregatedAdminMetrics}
+            nationalCoverage={
+              effectiveHistYear === "all"
+                ? overallNationalCoverage
+                : computeNationalAssociationCoverage(
+                    trainees,
+                    masterAssociations,
+                    effectiveHistYear
+                  )
+            }
+            provincialCoverage={
+              effectiveHistYear === "all"
+                ? overallProvincialCoverage
+                : computeProvincialAssociationCoverage(trainees, effectiveHistYear)
+            }
+          />
+        );
+      })()}
     </div>
   );
 }

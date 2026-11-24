@@ -538,7 +538,7 @@ export function CourseTimelineTab({ trainees, onOpenPassport }: CourseTimelineTa
               <div className="space-y-3">
                 <h4 className="font-bold text-[#16265E] text-sm flex items-center gap-1.5">
                   <span>🏛️</span>
-                  <span>สัดส่วนผู้เข้ารับการอบรมจำแนกตาม 4 กลุ่มหน่วยงาน</span>
+                  <span>สัดส่วนผู้เข้ารับการอบรมจำแนกตาม 5 กลุ่มหน่วยงาน</span>
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
