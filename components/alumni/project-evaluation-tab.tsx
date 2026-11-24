@@ -20,6 +20,13 @@ import * as XLSX from "xlsx";
 import { MatrixReportPrintModal } from "./matrix-report-print-modal";
 import { AnnualCohortPrintModal } from "./annual-cohort-print-modal";
 import { ExecutiveBriefingPrintModal } from "./executive-briefing-print-modal";
+import { ExecutiveOutcomeSummary } from "./executive-outcome-summary";
+import { AssociationCoverageSection } from "./association-coverage-section";
+import { useNationalAssociationsStore } from "@/lib/associations-store";
+import {
+  computeNationalAssociationCoverage,
+  computeProvincialAssociationCoverage,
+} from "@/lib/association-coverage";
 
 interface ProjectEvaluationTabProps {
   trainees: HistoricalTrainee[];
@@ -28,6 +35,15 @@ interface ProjectEvaluationTabProps {
 
 export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvaluationTabProps) {
   const stats = useMemo(() => computeEvaluationStats(trainees), [trainees]);
+  const { associations: masterAssociations } = useNationalAssociationsStore();
+  const overallNationalCoverage = useMemo(
+    () => computeNationalAssociationCoverage(trainees, masterAssociations, "all"),
+    [trainees, masterAssociations]
+  );
+  const overallProvincialCoverage = useMemo(
+    () => computeProvincialAssociationCoverage(trainees, "all"),
+    [trainees]
+  );
 
   const [matrixYearFilter, setMatrixYearFilter] = useState<string>("all");
   const [matrixCategoryFilter, setMatrixCategoryFilter] = useState<string>("all");
@@ -180,7 +196,7 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
       }
       setPendingAction(null);
     } else {
-      setPinError("รหัส PIN ไม่ถูกต้อง (รหัสเริ่มต้น: 336699)");
+      setPinError("รหัส PIN ไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง");
     }
   };
 
@@ -493,6 +509,39 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
       "ระดับประสิทธิผล (1-5 ดาว)": q.rating,
     }));
 
+    // 7. National Sports Associations Coverage Sheet
+    const natCoverageRows = overallNationalCoverage.items.map((item) => ({
+      ลำดับ: item.orderNo,
+      ชื่อสมาคมกีฬาแห่งประเทศไทย: item.officialName,
+      "จำนวนอบรม (คน-ครั้ง)": item.recordCount,
+      "บุคลากรจริง (คน)": item.uniquePeopleCount,
+      ปีล่าสุด: item.latestYearBE ? `พ.ศ. ${item.latestYearBE}` : "-",
+      หลักสูตรที่เคยเข้าอบรม: item.courses.join(", ") || "-",
+      สถานะ:
+        item.status === "none"
+          ? "ยังไม่มีประวัติในระบบ (0 คน)"
+          : item.status === "low"
+          ? "ส่งน้อย (1–5 ครั้ง)"
+          : "ส่งต่อเนื่อง",
+    }));
+
+    // 8. Provincial Sports Associations Coverage Sheet (77 Provinces)
+    const provCoverageRows = overallProvincialCoverage.items.map((item, idx) => ({
+      ลำดับ: idx + 1,
+      สมาคมกีฬาแห่งจังหวัด: item.officialName,
+      ภูมิภาค: item.regionNameTh,
+      "จำนวนอบรม (คน-ครั้ง)": item.recordCount,
+      "บุคลากรจริง (คน)": item.uniquePeopleCount,
+      ปีล่าสุด: item.latestYearBE ? `พ.ศ. ${item.latestYearBE}` : "-",
+      หลักสูตรที่เคยเข้าอบรม: item.courses.join(", ") || "-",
+      สถานะ:
+        item.status === "none"
+          ? "ยังไม่มีประวัติในระบบ (0 คน)"
+          : item.status === "low"
+          ? "ส่งน้อย (1–5 ครั้ง)"
+          : "ส่งต่อเนื่อง",
+    }));
+
     const workbook = XLSX.utils.book_new();
     const s1 = XLSX.utils.json_to_sheet(summarySheetData);
     const s2 = XLSX.utils.json_to_sheet(groupSheetData);
@@ -500,6 +549,8 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
     const s4 = XLSX.utils.json_to_sheet(categorySheetData);
     const s5 = XLSX.utils.json_to_sheet(courseSheetData);
     const s6 = XLSX.utils.json_to_sheet(knowledgeSheetData);
+    const s7 = XLSX.utils.json_to_sheet(natCoverageRows);
+    const s8 = XLSX.utils.json_to_sheet(provCoverageRows);
 
     XLSX.utils.book_append_sheet(workbook, s1, "สรุปภาพรวมโครงการ");
     XLSX.utils.book_append_sheet(workbook, s2, "จำแนกตามกลุ่มหน่วยงาน");
@@ -507,6 +558,8 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
     XLSX.utils.book_append_sheet(workbook, s4, "จำแนกตามประเภทหลักสูตร");
     XLSX.utils.book_append_sheet(workbook, s5, "ประสิทธิผลรายหลักสูตร");
     XLSX.utils.book_append_sheet(workbook, s6, "การนำความรู้ไปใช้จริง");
+    XLSX.utils.book_append_sheet(workbook, s7, "ความครอบคลุมสมาคมฯ");
+    XLSX.utils.book_append_sheet(workbook, s8, "ความครอบคลุมจังหวัด");
 
     XLSX.writeFile(
       workbook,
@@ -577,7 +630,7 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
               className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-[#16265E] shadow-sm hover:bg-blue-50 transition-colors cursor-pointer"
             >
               <span>📊</span>
-              <span>ส่งออกรายงานประเมินผล (Excel 6 แผ่น)</span>
+              <span>ส่งออกรายงานประเมินผล (Excel 8 แผ่น)</span>
             </button>
           </div>
         </div>
@@ -639,6 +692,34 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
           </p>
         </div>
       </div>
+
+      {/* Executive Summary Q1: อบรมแล้วได้อะไร? */}
+      <ExecutiveOutcomeSummary
+        trainees={trainees}
+        stats={stats}
+        nationalSummary={overallNationalCoverage.summary}
+        provincialSummary={overallProvincialCoverage.summary}
+        onOpenBriefing={() => setIsExecutiveBriefingOpen(true)}
+        onJumpToCoverage={() => {
+          document.getElementById("association-coverage-section")?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }}
+        onJumpToKirkpatrick={() => {
+          document.getElementById("kirkpatrick-section")?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }}
+      />
+
+      {/* Executive Summary Q2: Association Coverage Tracker (93 National + 77 Provincial) */}
+      <AssociationCoverageSection
+        id="association-coverage-section"
+        trainees={trainees}
+        isAdmin={isAdmin}
+      />
 
       {/* 23-Year Annual Historical Trend */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6 shadow-xs space-y-4">
@@ -1639,14 +1720,14 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
           <div className="flex items-center justify-between border-b border-gray-100 pb-3">
             <div>
               <h3 className="text-base font-bold text-[#16265E] flex items-center gap-2">
-                <span>🏛️ สัดส่วนตาม 4 กลุ่มหน่วยงาน</span>
+                <span>🏛️ สัดส่วนตาม 5 กลุ่มหน่วยงาน</span>
               </h3>
               <p className="text-xs text-gray-500 mt-0.5">
                 การกระจายตัวของบุคลากรกีฬาตามโครงสร้างองค์กร
               </p>
             </div>
             <span className="rounded-md bg-blue-50 px-2.5 py-1 text-xs font-bold text-[#16265E]">
-              4 กลุ่มหลัก
+              5 กลุ่มหลัก
             </span>
           </div>
 
@@ -1734,7 +1815,10 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
       </div>
 
       {/* Kirkpatrick Level 3 Evaluation: การนำความรู้ไปใช้จริงในการปฏิบัติหน้าที่ */}
-      <div className="rounded-2xl border border-blue-200 bg-white p-5 sm:p-6 shadow-xs space-y-6">
+      <div
+        id="kirkpatrick-section"
+        className="rounded-2xl border border-blue-200 bg-white p-5 sm:p-6 shadow-xs space-y-6"
+      >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -2254,7 +2338,7 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
               <div>
                 <input
                   type="password"
-                  placeholder="รหัส PIN 6 หลัก (มาตรฐาน: 336699)"
+                  placeholder="กรอกรหัส PIN 6 หลักสำหรับผู้ดูแลระบบ"
                   value={pinInput}
                   onChange={(e) => setPinInput(e.target.value)}
                   className="w-full rounded-xl border border-gray-300 p-2.5 text-center text-sm font-mono tracking-widest focus:border-[#16265E] focus:outline-hidden"
@@ -2316,6 +2400,21 @@ export function ProjectEvaluationTab({ trainees, isAdmin = false }: ProjectEvalu
           matrixTotals={matrixTotals}
           cohortSummary={currentCohortSummary}
           overallAchievementRate={overallAchievementRate}
+          selectedYear={matrixYearFilter}
+          nationalCoverage={
+            matrixYearFilter === "all"
+              ? overallNationalCoverage
+              : computeNationalAssociationCoverage(
+                  trainees,
+                  masterAssociations,
+                  Number(matrixYearFilter)
+                )
+          }
+          provincialCoverage={
+            matrixYearFilter === "all"
+              ? overallProvincialCoverage
+              : computeProvincialAssociationCoverage(trainees, Number(matrixYearFilter))
+          }
         />
       )}
     </div>

@@ -612,6 +612,35 @@ async function pushCourseToSupabase(course: Course): Promise<boolean> {
   const supabase = getSupabaseClient();
   if (!supabase) return false;
   const nowIso = new Date().toISOString();
+
+  // อ่าน target_quotas ล่าสุดจาก Cloud ก่อนอัปเดต เพื่อป้องกันการเขียนทับ _globalTimeline / _reviews ที่เครื่องอื่นเพิ่งบันทึก
+  try {
+    const { data: latestRow } = await supabase
+      .from("courses")
+      .select("target_quotas")
+      .eq("id", course.id)
+      .maybeSingle();
+    const latestQuotas =
+      latestRow?.target_quotas && typeof latestRow.target_quotas === "object"
+        ? (latestRow.target_quotas as Record<string, unknown>)
+        : null;
+    if (latestQuotas?._globalTimeline && typeof latestQuotas._globalTimeline === "object") {
+      cachedGlobalTimelineByCourseId.set(
+        course.id,
+        latestQuotas._globalTimeline as Record<string, unknown>
+      );
+    }
+    if (latestQuotas?._reviews && typeof latestQuotas._reviews === "object") {
+      const existingCachedReviews = cachedReviewsByCourseId.get(course.id) || {};
+      cachedReviewsByCourseId.set(course.id, {
+        ...existingCachedReviews,
+        ...(latestQuotas._reviews as Record<string, unknown>),
+      });
+    }
+  } catch {
+    // ใช้ cache เดิมในหน่วยความจำหากอ่านไม่สำเร็จ
+  }
+
   const quotasPayload = buildQuotasPayload(
     course.targetQuotas,
     {

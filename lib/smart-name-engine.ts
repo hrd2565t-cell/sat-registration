@@ -449,11 +449,27 @@ export function smartInferAffiliationGroup(orgName: string): AffiliationMatchRes
     };
   }
 
-  // 4. Provincial Sports Associations
+  const normalized = clean
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/เเ/g, "แ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const compact = normalized.replace(/\s+/g, "");
+
+  // 0. Explicit exclusion: internal SAT clubs are NOT National Sports Associations
+  if (compact === "สมาคมเพาะกายกกท." || compact === "สมาคมเพาะกายกกท") {
+    return {
+      group: "หน่วยงานภายนอก",
+      reason: "ชมรม/สมาคมภายใน กกท. (ไม่ใช่สมาคมกีฬาแห่งประเทศไทย)",
+      confidence: 100,
+    };
+  }
+
+  // 4. Provincial Sports Associations (exclude disability associations per SAT classification)
   if (
-    clean.includes("สมาคมกีฬาแห่งจังหวัด") ||
-    clean.includes("สมาคมกีฬาจังหวัด") ||
-    clean.includes("สมาคมกีฬาคนพิการจังหวัด")
+    !compact.includes("คนพิการ") &&
+    !compact.includes("คนตาบอด") &&
+    (compact.includes("สมาคมกีฬาแห่งจังหวัด") || compact.includes("สมาคมกีฬาจังหวัด"))
   ) {
     return {
       group: "สมาคมกีฬาแห่งจังหวัด",
@@ -464,8 +480,11 @@ export function smartInferAffiliationGroup(orgName: string): AffiliationMatchRes
 
   // 5. National Sports Associations
   if (
-    (clean.includes("สมาคมกีฬา") || clean.includes("ราชยานยนต์สมาคม") || clean.includes("สมาคมปัญจกีฬา")) &&
-    (clean.includes("แห่งประเทศไทย") || clean.includes("แห่งประเทศไทยฯ") || clean.includes("แห่งชาติ"))
+    compact.includes("สมาคมกีฬาสเปเชียลโอลิมปิคไทย") ||
+    ((compact.includes("สมาคมกีฬา") ||
+      compact.includes("ราชยานยนต์สมาคม") ||
+      compact.includes("สมาคมปัญจกีฬา")) &&
+      (compact.includes("แห่งประเทศไทย") || compact.includes("แห่งชาติ")))
   ) {
     return {
       group: "สมาคมกีฬาแห่งประเทศไทย",

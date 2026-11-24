@@ -3,6 +3,10 @@
 import { useMemo, useRef } from "react";
 import Image from "next/image";
 import type { HistoricalTrainee, CourseMatrixRow, YearCohortSummary } from "@/lib/alumni-store";
+import type {
+  NationalCoverageResult,
+  ProvincialCoverageResult,
+} from "@/lib/association-coverage";
 
 interface ExecutiveBriefingPrintModalProps {
   onClose: () => void;
@@ -19,6 +23,9 @@ interface ExecutiveBriefingPrintModalProps {
   };
   cohortSummary: YearCohortSummary;
   overallAchievementRate: number;
+  selectedYear?: string;
+  nationalCoverage?: NationalCoverageResult;
+  provincialCoverage?: ProvincialCoverageResult;
 }
 
 export function ExecutiveBriefingPrintModal({
@@ -28,8 +35,19 @@ export function ExecutiveBriefingPrintModal({
   matrixTotals,
   cohortSummary,
   overallAchievementRate,
+  selectedYear,
+  nationalCoverage,
+  provincialCoverage,
 }: ExecutiveBriefingPrintModalProps) {
   const printDocRef = useRef<HTMLDivElement>(null);
+
+  const yearLabel =
+    selectedYear && selectedYear !== "all"
+      ? `ปีงบประมาณ พ.ศ. ${selectedYear}`
+      : "ปีงบประมาณ พ.ศ. 2547 – 2569";
+
+  const formatPct = (val: number) =>
+    matrixTotals.grandTotal > 0 ? ((val / matrixTotals.grandTotal) * 100).toFixed(1) : "0.0";
 
   const printedDateThai = useMemo(() => {
     const now = new Date();
@@ -130,7 +148,7 @@ export function ExecutiveBriefingPrintModal({
                   เอกสารรายงานผู้บริหาร
                 </span>
                 <p className="mt-1 text-gray-500">วันที่จัดทำ: {printedDateThai}</p>
-                <p className="text-[11px] text-gray-400">ปีงบประมาณ พ.ศ. 2568</p>
+                <p className="text-[11px] text-gray-400">{yearLabel}</p>
               </div>
             </div>
 
@@ -177,15 +195,15 @@ export function ExecutiveBriefingPrintModal({
                     <td className="border border-gray-200 py-1.5 px-2 text-left font-semibold">1. สมาคมกีฬาแห่งประเทศไทย</td>
                     <td className="border border-gray-200 py-1.5 px-2 font-bold font-mono">{matrixTotals["สมาคมกีฬาแห่งประเทศไทย"]}</td>
                     <td className="border border-gray-200 py-1.5 px-2 font-mono">
-                      {((matrixTotals["สมาคมกีฬาแห่งประเทศไทย"] / matrixTotals.grandTotal) * 100).toFixed(1)}%
+                      {formatPct(matrixTotals["สมาคมกีฬาแห่งประเทศไทย"])}%
                     </td>
-                    <td className="border border-gray-200 py-1.5 px-2 text-left text-gray-600">บุคลากรหลักขับเคลื่อนนักกีฬาทีมชาติตู่ระดับสากล</td>
+                    <td className="border border-gray-200 py-1.5 px-2 text-left text-gray-600">บุคลากรหลักขับเคลื่อนนักกีฬาทีมชาติสู่ระดับสากล</td>
                   </tr>
                   <tr>
                     <td className="border border-gray-200 py-1.5 px-2 text-left font-semibold">2. การกีฬาแห่งประเทศไทย (กกท.)</td>
                     <td className="border border-gray-200 py-1.5 px-2 font-bold font-mono">{matrixTotals["การกีฬาแห่งประเทศไทย"]}</td>
                     <td className="border border-gray-200 py-1.5 px-2 font-mono">
-                      {((matrixTotals["การกีฬาแห่งประเทศไทย"] / matrixTotals.grandTotal) * 100).toFixed(1)}%
+                      {formatPct(matrixTotals["การกีฬาแห่งประเทศไทย"])}%
                     </td>
                     <td className="border border-gray-200 py-1.5 px-2 text-left text-gray-600">พนักงานและเจ้าหน้าที่ผู้กำกับนโยบายระดับชาติ</td>
                   </tr>
@@ -193,7 +211,7 @@ export function ExecutiveBriefingPrintModal({
                     <td className="border border-gray-200 py-1.5 px-2 text-left font-semibold">3. สมาคมกีฬาแห่งจังหวัด</td>
                     <td className="border border-gray-200 py-1.5 px-2 font-bold font-mono">{matrixTotals["สมาคมกีฬาแห่งจังหวัด"]}</td>
                     <td className="border border-gray-200 py-1.5 px-2 font-mono">
-                      {((matrixTotals["สมาคมกีฬาแห่งจังหวัด"] / matrixTotals.grandTotal) * 100).toFixed(1)}%
+                      {formatPct(matrixTotals["สมาคมกีฬาแห่งจังหวัด"])}%
                     </td>
                     <td className="border border-gray-200 py-1.5 px-2 text-left text-gray-600">การสร้างฐานนักกีฬาเยาวชนและกีฬาภูมิภาคทั่วประเทศ</td>
                   </tr>
@@ -201,7 +219,7 @@ export function ExecutiveBriefingPrintModal({
                     <td className="border border-gray-200 py-1.5 px-2 text-left font-semibold">4. กองทุนพัฒนาการกีฬาแห่งชาติ</td>
                     <td className="border border-gray-200 py-1.5 px-2 font-bold font-mono">{matrixTotals["กองทุนพัฒนาการกีฬาแห่งชาติ"]}</td>
                     <td className="border border-gray-200 py-1.5 px-2 font-mono">
-                      {((matrixTotals["กองทุนพัฒนาการกีฬาแห่งชาติ"] / matrixTotals.grandTotal) * 100).toFixed(1)}%
+                      {formatPct(matrixTotals["กองทุนพัฒนาการกีฬาแห่งชาติ"])}%
                     </td>
                     <td className="border border-gray-200 py-1.5 px-2 text-left text-gray-600">การบริหารจัดการทุนและสวัสดิการบุคลากรกีฬา</td>
                   </tr>
@@ -209,24 +227,69 @@ export function ExecutiveBriefingPrintModal({
                     <td className="border border-gray-200 py-1.5 px-2 text-left font-semibold">5. หน่วยงานภายนอก / สถาบันการศึกษา</td>
                     <td className="border border-gray-200 py-1.5 px-2 font-bold font-mono">{matrixTotals["หน่วยงานภายนอก"]}</td>
                     <td className="border border-gray-200 py-1.5 px-2 font-mono">
-                      {((matrixTotals["หน่วยงานภายนอก"] / matrixTotals.grandTotal) * 100).toFixed(1)}%
+                      {formatPct(matrixTotals["หน่วยงานภายนอก"])}%
                     </td>
                     <td className="border border-gray-200 py-1.5 px-2 text-left text-gray-600">ภาคีเครือข่ายอุดมศึกษา สื่อมวลชน และสโมสรกีฬาอาชีพ</td>
                   </tr>
                   <tr className="bg-gray-100 font-bold">
                     <td className="border border-gray-300 py-1.5 px-2 text-left text-[#16265E]">รวมทุกสังกัด</td>
                     <td className="border border-gray-300 py-1.5 px-2 text-[#16265E] font-mono">{matrixTotals.grandTotal}</td>
-                    <td className="border border-gray-300 py-1.5 px-2 text-[#16265E] font-mono">100.0%</td>
+                    <td className="border border-gray-300 py-1.5 px-2 text-[#16265E] font-mono">
+                      {matrixTotals.grandTotal > 0 ? "100.0%" : "0.0%"}
+                    </td>
                     <td className="border border-gray-300 py-1.5 px-2 text-left text-emerald-700">ครอบคลุมทั้งระบบนิเวศกีฬาไทย</td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
-            {/* 2. Kirkpatrick 4-Level Evaluation Framework */}
-            <div className="mt-6">
+            {/* 2. Association Coverage Summary (National + Provincial) */}
+            {(nationalCoverage || provincialCoverage) && (
+              <div className="mt-5">
+                <h2 className="text-sm font-bold text-[#16265E] flex items-center gap-1.5 border-b border-gray-200 pb-1.5">
+                  <span>2. ความครอบคลุมสมาคมกีฬาแห่งประเทศไทย และสมาคมกีฬาแห่งจังหวัด</span>
+                </h2>
+                <div className="mt-2.5 grid grid-cols-2 gap-3 text-xs">
+                  {nationalCoverage && (
+                    <div className="rounded-xl border border-blue-200 bg-blue-50/35 p-2.5 space-y-1">
+                      <p className="font-bold text-[#16265E]">
+                        สมาคมกีฬาแห่งประเทศไทย: {nationalCoverage.summary.participatedCount} /{" "}
+                        {nationalCoverage.summary.totalMaster} สมาคม (
+                        {nationalCoverage.summary.coveragePercent}%)
+                      </p>
+                      <p className="text-[11px] text-gray-600">
+                        ยังไม่มีประวัติ ({nationalCoverage.neverSentItems.length} สมาคม):{" "}
+                        {nationalCoverage.neverSentItems.length > 0
+                          ? nationalCoverage.neverSentItems.map((i) => i.officialName).join(", ")
+                          : "ครบ 100%"}
+                      </p>
+                    </div>
+                  )}
+                  {provincialCoverage && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/35 p-2.5 space-y-1">
+                      <p className="font-bold text-emerald-900">
+                        สมาคมกีฬาแห่งจังหวัด: {provincialCoverage.summary.participatedCount} /{" "}
+                        {provincialCoverage.summary.totalMaster} จังหวัด (
+                        {provincialCoverage.summary.coveragePercent}%)
+                      </p>
+                      <p className="text-[11px] text-gray-600">
+                        ยังไม่มีประวัติ ({provincialCoverage.neverSentItems.length} จังหวัด):{" "}
+                        {provincialCoverage.neverSentItems.length > 0
+                          ? provincialCoverage.neverSentItems.map((i) => i.provinceName).join(", ")
+                          : "ครบ 77 จังหวัด"}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 3. Kirkpatrick 4-Level Evaluation Framework */}
+            <div className="mt-5">
               <h2 className="text-sm font-bold text-[#16265E] flex items-center gap-1.5 border-b border-gray-200 pb-1.5">
-                <span>2. การประเมินความคุ้มค่าและผลลัพธ์โครงการตาม Kirkpatrick Model (4 ระดับ)</span>
+                <span>
+                  {nationalCoverage || provincialCoverage ? "3." : "2."} การประเมินความคุ้มค่าและผลลัพธ์โครงการตาม Kirkpatrick Model (4 ระดับ)
+                </span>
               </h2>
               <div className="mt-2.5 grid grid-cols-2 gap-2.5 text-xs">
                 <div className="rounded-xl border border-gray-200 p-2.5 bg-gray-50/60">
@@ -273,7 +336,9 @@ export function ExecutiveBriefingPrintModal({
 
             {/* 3. Executive Recommendations */}
             <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50/30 p-3 text-xs space-y-1.5">
-              <h3 className="font-bold text-[#16265E]">3. ข้อเสนอแนะเชิงนโยบายเพื่อการพัฒนาบุคลากรกีฬาในปีงบประมาณถัดไป</h3>
+              <h3 className="font-bold text-[#16265E]">
+                {nationalCoverage || provincialCoverage ? "4." : "3."} ข้อเสนอแนะเชิงนโยบายเพื่อการพัฒนาบุคลากรกีฬาในปีงบประมาณถัดไป
+              </h3>
               <ul className="list-disc list-inside space-y-1 text-gray-700 text-[11.5px] leading-relaxed">
                 <li>
                   <strong className="text-gray-900">การต่อยอดทักษะอนาคต (Digital & AI in Sports):</strong> พัฒนาหลักสูตรการนำเทคโนโลยีดิจิทัลและการวิเคราะห์ข้อมูล (Sports Analytics & AI) มาเสริมทัพการตัดสินและการบริหาร

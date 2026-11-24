@@ -343,7 +343,7 @@ function AlumniContent() {
             }`}
           >
             <span className="text-base">📊</span>
-            <span>แดชบอร์ดประเมินโครงการ (KPIs)</span>
+            <span>ประเมินผลโครงการ &amp; ความครอบคลุมสมาคม</span>
           </button>
 
           <button
