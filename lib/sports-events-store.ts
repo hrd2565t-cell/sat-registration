@@ -203,7 +203,13 @@ let state: SportsEventsState = {
 
 let hydrateStarted = false;
 let sportsRealtimeSubscribed = false;
+let hasLoadedFromCloud = false;
+let lastEventsFetchAt = 0;
 const listeners = new Set<() => void>();
+
+export function hasSportsEventsLoadedFromCloud(): boolean {
+  return hasLoadedFromCloud;
+}
 
 function emit() {
   listeners.forEach((listener) => listener());
@@ -249,9 +255,19 @@ async function syncSportsEventsToSupabase(eventsToSync: SportsEvent[]) {
 }
 
 export async function refreshSportsEventsFromCloud(): Promise<void> {
-  if (!isSupabaseConfigured()) return;
+  if (!isSupabaseConfigured()) {
+    hasLoadedFromCloud = true;
+    return;
+  }
+  const now = Date.now();
+  if (now - lastEventsFetchAt < 2000) return;
+  lastEventsFetchAt = now;
+
   const supabase = getSupabaseClient();
-  if (!supabase) return;
+  if (!supabase) {
+    hasLoadedFromCloud = true;
+    return;
+  }
   try {
     const { data: row } = await supabase
       .from("courses")
@@ -281,6 +297,11 @@ export async function refreshSportsEventsFromCloud(): Promise<void> {
     }
   } catch (err) {
     console.warn("Failed to refresh sports events from cloud:", err);
+  } finally {
+    if (!hasLoadedFromCloud) {
+      hasLoadedFromCloud = true;
+      emit();
+    }
   }
 }
 
@@ -338,10 +359,19 @@ function hydrate() {
           "postgres_changes",
           { event: "UPDATE", schema: "public", table: "courses" },
           () => {
+            lastEventsFetchAt = 0;
             void refreshSportsEventsFromCloud();
           }
         )
         .subscribe();
+
+      const handleFocusOrVisible = () => {
+        if (document.visibilityState === "visible") {
+          void refreshSportsEventsFromCloud();
+        }
+      };
+      window.addEventListener("focus", handleFocusOrVisible);
+      document.addEventListener("visibilitychange", handleFocusOrVisible);
     }
   }
 }

@@ -17,6 +17,7 @@ import {
   getApplicationByRef,
   getLatestApplication,
   useApplications,
+  useApplicationsCloudLoaded,
 } from "@/lib/applications-store";
 import { getDocumentFromStorage } from "@/lib/document-storage";
 import { resolveSupabaseDocumentUrl } from "@/lib/supabase/sync";
@@ -78,6 +79,14 @@ function ReceiptFallback() {
   return (
     <div className="min-h-screen bg-[#F3F7FA]">
       <Header variant="dark" rightSlot={headerActions} />
+      <main className="mx-auto w-full max-w-[520px] px-5 pb-10 pt-16 text-center">
+        <div className="rounded-lg border border-[#e3e6ea] bg-white px-6 py-10 shadow-2xs">
+          <div className="mx-auto mb-3 h-7 w-7 animate-spin rounded-full border-2 border-[#1e3a8a] border-t-transparent" />
+          <p className="text-[14px] font-semibold text-[#111827]">
+            กำลังโหลดข้อมูลใบสมัคร...
+          </p>
+        </div>
+      </main>
     </div>
   );
 }
@@ -93,6 +102,7 @@ export default function ReceiptPage() {
 function ReceiptContent() {
   const searchParams = useSearchParams();
   const { applications } = useApplications();
+  const cloudLoaded = useApplicationsCloudLoaded();
   const { courses } = useCourses();
   const mounted = useMounted();
   const ref = searchParams.get("ref");
@@ -246,7 +256,7 @@ function ReceiptContent() {
     };
   }, [photoDoc?.id, photoDoc?.name, photoDoc?.dataUrl]);
 
-  if (!record && !mounted) {
+  if (!record && (!mounted || !cloudLoaded)) {
     return <ReceiptFallback />;
   }
 

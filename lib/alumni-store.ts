@@ -221,8 +221,14 @@ const INITIAL_STATE: AlumniState = {
 let state: AlumniState = INITIAL_STATE;
 let hydrateStarted = false;
 let realtimeSubscribed = false;
+let hasLoadedFromCloud = false;
+let lastAlumniCloudFetchAt = 0;
 let cloudSyncStatus: CloudSyncStatus = "idle";
 const listeners = new Set<() => void>();
+
+export function hasAlumniLoadedFromCloud(): boolean {
+  return hasLoadedFromCloud;
+}
 
 function emit() {
   listeners.forEach((listener) => listener());
@@ -324,6 +330,17 @@ function initRealtimeSubscription() {
         }
       )
       .subscribe();
+
+    const handleFocusOrVisible = () => {
+      if (document.visibilityState === "visible") {
+        const now = Date.now();
+        if (now - lastAlumniCloudFetchAt >= 15_000) {
+          void refreshAlumniFromCloud();
+        }
+      }
+    };
+    window.addEventListener("focus", handleFocusOrVisible);
+    document.addEventListener("visibilitychange", handleFocusOrVisible);
   } catch (err) {
     console.warn("Failed to subscribe to alumni realtime changes:", err);
   }
@@ -413,8 +430,14 @@ function hydrate() {
       .catch((err) => {
         console.warn("Supabase alumni initial sync error:", err);
         cloudSyncStatus = "error";
+      })
+      .finally(() => {
+        hasLoadedFromCloud = true;
+        lastAlumniCloudFetchAt = Date.now();
+        emit();
       });
   } else {
+    hasLoadedFromCloud = true;
     cloudSyncStatus = "disconnected";
   }
 }
@@ -468,7 +491,11 @@ export async function syncAllAlumniToCloud(
  * Manually forces a refresh from Supabase Cloud
  */
 export async function refreshAlumniFromCloud(): Promise<number> {
-  if (!isSupabaseConfigured()) return 0;
+  if (!isSupabaseConfigured()) {
+    hasLoadedFromCloud = true;
+    return 0;
+  }
+  lastAlumniCloudFetchAt = Date.now();
   cloudSyncStatus = "syncing";
   emit();
 
@@ -491,6 +518,8 @@ export async function refreshAlumniFromCloud(): Promise<number> {
     cloudSyncStatus = "error";
     emit();
     return 0;
+  } finally {
+    hasLoadedFromCloud = true;
   }
 }
 
@@ -508,6 +537,7 @@ export function useAlumniStore() {
   return {
     trainees: snapshot.trainees,
     cloudStatus: getCloudSyncStatus(),
+    hasLoadedFromCloud,
     isCloudConfigured: isSupabaseConfigured(),
     syncAllAlumniToCloud,
     refreshAlumniFromCloud,

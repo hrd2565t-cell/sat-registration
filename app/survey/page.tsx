@@ -12,6 +12,7 @@ import {
   loadSurveyTopics,
   saveSurveyTopics,
   fetchSurveyTopicsFromCloud,
+  subscribeSurveyTopicsRealtime,
   type SurveySkillTopic,
 } from "@/lib/future-curriculum-store";
 
@@ -92,6 +93,13 @@ function SurveyContent() {
     } catch {
       // ignore
     }
+
+    const unsubscribe = subscribeSurveyTopicsRealtime((cloudTopics) => {
+      setTopics(cloudTopics);
+    });
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // Generate QR code for the current survey URL

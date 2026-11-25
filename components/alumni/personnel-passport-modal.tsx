@@ -126,6 +126,23 @@ export function PersonnelPassportModal({
     }
   };
 
+  // PDPA Protection: Mask phone number for public visitors, reveal full number only to authenticated admins
+  const maskedPhone = useMemo(() => {
+    const phone = primary?.phone;
+    if (!phone) return "";
+    if (isAdmin) return phone;
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length === 10) {
+      return `${digits.slice(0, 3)}-XXX-${digits.slice(6)}`;
+    }
+    if (digits.length === 9) {
+      return `${digits.slice(0, 2)}-XXX-${digits.slice(5)}`;
+    }
+    return phone.length > 5
+      ? `${phone.slice(0, 3)}***${phone.slice(-2)}`
+      : phone;
+  }, [primary?.phone, isAdmin]);
+
   if (!passport) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
@@ -149,22 +166,6 @@ export function PersonnelPassportModal({
     cleanId.length === 13
       ? `${cleanId.slice(0, 1)}-${cleanId.slice(1, 5)}-XXXXX-${cleanId.slice(10, 12)}-${cleanId.slice(12)}`
       : primary.idCard;
-
-  // PDPA Protection: Mask phone number for public visitors, reveal full number only to authenticated admins
-  const maskedPhone = useMemo(() => {
-    if (!primary.phone) return "";
-    if (isAdmin) return primary.phone;
-    const digits = primary.phone.replace(/\D/g, "");
-    if (digits.length === 10) {
-      return `${digits.slice(0, 3)}-XXX-${digits.slice(6)}`;
-    }
-    if (digits.length === 9) {
-      return `${digits.slice(0, 2)}-XXX-${digits.slice(5)}`;
-    }
-    return primary.phone.length > 5
-      ? `${primary.phone.slice(0, 3)}***${primary.phone.slice(-2)}`
-      : primary.phone;
-  }, [primary.phone, isAdmin]);
 
   return (
     <div

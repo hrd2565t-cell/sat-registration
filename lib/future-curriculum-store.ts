@@ -455,6 +455,12 @@ export const PROPOSED_FUTURE_COURSES: ProposedCourseBlueprint[] = [
 
 const LOCAL_STORAGE_KEY_TOPICS = "sat_future_survey_topics_prod_v1";
 
+let hasLoadedFromCloud = false;
+
+export function hasSurveyLoadedFromCloud(): boolean {
+  return hasLoadedFromCloud;
+}
+
 export function loadSurveyTopics(): SurveySkillTopic[] {
   if (typeof window === "undefined") return INITIAL_SKILL_TOPICS;
   try {
@@ -469,9 +475,15 @@ export function loadSurveyTopics(): SurveySkillTopic[] {
 }
 
 export async function fetchSurveyTopicsFromCloud(): Promise<SurveySkillTopic[] | null> {
-  if (!isSupabaseConfigured()) return null;
+  if (!isSupabaseConfigured()) {
+    hasLoadedFromCloud = true;
+    return null;
+  }
   const supabase = getSupabaseClient();
-  if (!supabase) return null;
+  if (!supabase) {
+    hasLoadedFromCloud = true;
+    return null;
+  }
   try {
     const { data: row } = await supabase
       .from("courses")
@@ -500,7 +512,56 @@ export async function fetchSurveyTopicsFromCloud(): Promise<SurveySkillTopic[] |
   } catch (err) {
     console.warn("Failed to fetch survey topics from cloud:", err);
     return null;
+  } finally {
+    hasLoadedFromCloud = true;
   }
+}
+
+export function subscribeSurveyTopicsRealtime(
+  onUpdate: (topics: SurveySkillTopic[]) => void
+): () => void {
+  if (typeof window === "undefined" || !isSupabaseConfigured()) {
+    return () => {};
+  }
+  const supabase = getSupabaseClient();
+  if (!supabase) return () => {};
+
+  let lastFetchAt = 0;
+  const triggerRefresh = (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastFetchAt < 3000) return;
+    lastFetchAt = now;
+    void fetchSurveyTopicsFromCloud().then((cloudTopics) => {
+      if (cloudTopics && cloudTopics.length > 0) {
+        onUpdate(cloudTopics);
+      }
+    });
+  };
+
+  const handleFocusOrVisible = () => {
+    if (document.visibilityState === "visible") {
+      triggerRefresh(false);
+    }
+  };
+  window.addEventListener("focus", handleFocusOrVisible);
+  document.addEventListener("visibilitychange", handleFocusOrVisible);
+
+  const channel = supabase
+    .channel("sat-survey-topics-realtime-channel")
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "courses" },
+      () => {
+        triggerRefresh(true);
+      }
+    )
+    .subscribe();
+
+  return () => {
+    window.removeEventListener("focus", handleFocusOrVisible);
+    document.removeEventListener("visibilitychange", handleFocusOrVisible);
+    void supabase.removeChannel(channel);
+  };
 }
 
 export async function syncSurveyTopicsToCloud(topics: SurveySkillTopic[]): Promise<void> {

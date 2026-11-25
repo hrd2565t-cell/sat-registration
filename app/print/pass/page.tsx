@@ -3,10 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { CopyButton } from "@/components/ui/copy-button";
 import {
   useApplications,
+  useApplicationsCloudLoaded,
   formatThaiDate,
   getLatestApplication,
   getApplicationByRef,
@@ -15,10 +16,22 @@ import { useCourses } from "@/lib/courses-store";
 import { getDocumentFromStorage } from "@/lib/document-storage";
 import { resolveSupabaseDocumentUrl } from "@/lib/supabase/sync";
 
+const emptySubscribe = () => () => {};
+
+function useMounted() {
+  return useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+}
+
 function PassPrintView() {
   const searchParams = useSearchParams();
   const ref = searchParams.get("ref");
   const { applications } = useApplications();
+  const cloudLoaded = useApplicationsCloudLoaded();
+  const mounted = useMounted();
   const { courses } = useCourses();
   const autoPrintTriggeredRef = useRef(false);
 
@@ -92,6 +105,16 @@ function PassPrintView() {
   }, [record, photoDoc, loadedPhotoUrl]);
 
   if (!record) {
+    if (!mounted || !cloudLoaded) {
+      return (
+        <div className="flex min-h-screen items-center justify-center p-6 text-center">
+          <p className="text-[13px] font-medium text-[#4b5563]">
+            กำลังโหลดข้อมูลบัตรเข้าร่วมการอบรม...
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="flex min-h-screen items-center justify-center p-6 text-center">
         <div>

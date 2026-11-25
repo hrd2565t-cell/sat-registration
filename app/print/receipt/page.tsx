@@ -3,11 +3,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import QRCode from "qrcode";
 import { CopyButton } from "@/components/ui/copy-button";
 import {
   useApplications,
+  useApplicationsCloudLoaded,
   formatThaiDate,
   getDocumentLabel,
   getLatestApplication,
@@ -17,10 +18,22 @@ import { useCourses } from "@/lib/courses-store";
 import { getDocumentFromStorage } from "@/lib/document-storage";
 import { resolveSupabaseDocumentUrl } from "@/lib/supabase/sync";
 
+const emptySubscribe = () => () => {};
+
+function useMounted() {
+  return useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+}
+
 function ReceiptPrintView() {
   const searchParams = useSearchParams();
   const ref = searchParams.get("ref");
   const { applications } = useApplications();
+  const cloudLoaded = useApplicationsCloudLoaded();
+  const mounted = useMounted();
   const { courses } = useCourses();
   const autoPrintTriggeredRef = useRef(false);
 
@@ -115,6 +128,16 @@ function ReceiptPrintView() {
   }, [record, photoDoc, loadedPhotoUrl, qrDataUrl]);
 
   if (!record) {
+    if (!mounted || !cloudLoaded) {
+      return (
+        <div className="flex min-h-screen items-center justify-center p-6 text-center">
+          <p className="text-[13px] font-medium text-[#4b5563]">
+            กำลังโหลดข้อมูลใบรับการสมัคร...
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="flex min-h-screen items-center justify-center p-6 text-center">
         <div>
