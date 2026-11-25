@@ -142,6 +142,7 @@ export interface ApplicantRecord {
   reserveOrder?: number;
   candidateOrder?: number;
   reviewReason?: string;
+  requestedDocKinds?: ApplicantDocumentKind[];
   reviewedAt?: string;
   reviewedBy?: string;
   notes: ReviewNote[];
@@ -802,9 +803,16 @@ export function reviewApplication(
   status: Exclude<ApplicantStatus, "pending">,
   reason: string,
   reviewer: string = SEED_REVIEWER,
-  customReserveOrder?: number
+  customReserveOrder?: number,
+  requestedDocKinds?: ApplicantDocumentKind[]
 ) {
   const now = new Date().toISOString();
+  const normalizedRequestedKinds =
+    status === "action_required" &&
+    Array.isArray(requestedDocKinds) &&
+    requestedDocKinds.length > 0
+      ? Array.from(new Set(requestedDocKinds))
+      : undefined;
 
   state = {
     applications: state.applications.map((item) => {
@@ -839,6 +847,7 @@ export function reviewApplication(
           status === "rejected" || status === "action_required"
             ? noteText
             : undefined,
+        requestedDocKinds: normalizedRequestedKinds,
         reviewedAt: now,
         reviewedBy: reviewer,
         updatedAt: now,
@@ -880,23 +889,26 @@ export function reviewApplication(
       notes: updatedApp?.notes,
       reserveOrder: updatedApp?.reserveOrder,
       ai: updatedApp?.ai,
+      requestedDocKinds: updatedApp?.requestedDocKinds,
     });
   }
 }
 
 /**
  * ฟังก์ชันสำหรับผู้สมัครส่งเอกสารเพิ่มเติมกลับเข้ามาในระบบ
- * จะเปลี่ยนสถานะกลับเป็น pending อัตโนมัติเพื่อให้เจ้าหน้าที่ตรวจสอบรอบใหม่
+ * จะอัปโหลดไฟล์แนบขึ้น Cloud ให้เรียบร้อยก่อน แล้วเปลี่ยนสถานะกลับเป็น pending เพื่อรอเจ้าหน้าที่ตรวจรอบใหม่
  */
-export function resubmitApplicantDocuments(
+export async function resubmitApplicantDocuments(
   ref: string,
   updatedDocs: ApplicantDocument[],
   applicantMessage?: string
-) {
+): Promise<{ ok: boolean; failedDocs: number }> {
   const now = new Date().toISOString();
   const noteMsg =
     applicantMessage?.trim() ||
     "ผู้สมัครได้แนบเอกสารเพิ่มเติมและส่งเข้าสู่ระบบเรียบร้อยแล้ว";
+  const nextFileSize = computeTotalFileSizeMB(updatedDocs);
+
   state = {
     applications: state.applications.map((item) => {
       if (item.ref !== ref) return item;
@@ -904,7 +916,9 @@ export function resubmitApplicantDocuments(
         ...item,
         status: "pending" as const,
         documents: updatedDocs,
+        fileSize: nextFileSize ?? item.fileSize,
         reviewReason: undefined,
+        requestedDocKinds: undefined,
         updatedAt: now,
         notes: [
           ...item.notes,
@@ -925,16 +939,23 @@ export function resubmitApplicantDocuments(
 
   if (isSupabaseConfigured()) {
     const app = state.applications.find((a) => a.ref === ref);
-    void syncReviewToSupabase(ref, "pending", noteMsg, "ผู้สมัคร", now, {
-      courseId: app?.courseId,
-      notes: app?.notes,
-      reserveOrder: app?.reserveOrder,
-      ai: app?.ai,
-    });
     if (app) {
-      void syncApplicationToSupabase(app);
+      const uploadRes = await syncApplicationDocumentsToSupabase(
+        app.ref,
+        updatedDocs
+      );
+      await syncReviewToSupabase(ref, "pending", noteMsg, "ผู้สมัคร", now, {
+        courseId: app.courseId,
+        notes: app.notes,
+        reserveOrder: app.reserveOrder,
+        ai: app.ai,
+        requestedDocKinds: [],
+      });
+      return { ok: true, failedDocs: uploadRes.failedCount };
     }
   }
+
+  return { ok: true, failedDocs: 0 };
 }
 
 export function promoteReserveToApproved(

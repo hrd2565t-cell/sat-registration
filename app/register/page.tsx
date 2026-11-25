@@ -802,7 +802,7 @@ function RegistrationContent() {
     }
 
     router.push(
-      `/register/receipt?ref=${encodeURIComponent(record.ref)}&course=${record.courseId}`
+      `/register/receipt?ref=${encodeURIComponent(record.ref)}&course=${record.courseId}&submitted=1`
     );
   };
 

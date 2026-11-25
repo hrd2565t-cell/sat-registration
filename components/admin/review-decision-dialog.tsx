@@ -1,15 +1,48 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ApplicantDocumentKind } from "@/lib/applications-store";
 
 export type ReviewDecision = "approved" | "reserve" | "rejected" | "action_required";
 
-const QUICK_ACTION_REASONS = [
-  "สำเนาบัตรประชาชนไม่ชัดเจน หรือยังไม่ได้ลงนามรับรองสำเนาถูกต้อง",
-  "หนังสือนำส่งไม่สมบูรณ์ หรือขาดตราประทับ/ลายมือชื่อผู้มีอำนาจ",
-  "รูปถ่ายหน้าตรงไม่ตรงตามระเบียบ (กรุณาแนบรูปถ่ายหน้าตรงถ่ายไม่เกิน 6 เดือน)",
-  "ขาดหนังสือรับรองการปฏิบัติหน้าที่ให้กับสมาคม/หน่วยงาน",
-  "ขาดสำเนาใบ ส.ฬ. 8",
+export interface ApplicableDocOption {
+  key: ApplicantDocumentKind;
+  label: string;
+  isAttached?: boolean;
+}
+
+const DEFAULT_DOC_OPTIONS: ApplicableDocOption[] = [
+  { key: "photo", label: "รูปถ่ายหน้าตรง ถ่ายไม่เกิน 6 เดือน" },
+  { key: "cover", label: "หนังสือนำส่งจากต้นสังกัดหรือสมาคมกีฬา" },
+  { key: "idcard", label: "สำเนาบัตรประจำตัวประชาชน พร้อมลงนามรับรองสำเนาถูกต้อง" },
+  { key: "certificate", label: "หนังสือรับรองการปฏิบัติหน้าที่ให้กับสมาคม/หน่วยงาน" },
+  { key: "saka", label: "สำเนาใบ ส.ฬ. 8" },
+];
+
+const QUICK_ACTION_REASONS: {
+  text: string;
+  docKind: ApplicantDocumentKind;
+}[] = [
+  {
+    text: "สำเนาบัตรประชาชนไม่ชัดเจน หรือยังไม่ได้ลงนามรับรองสำเนาถูกต้อง",
+    docKind: "idcard",
+  },
+  {
+    text: "หนังสือนำส่งไม่สมบูรณ์ หรือขาดตราประทับ/ลายมือชื่อผู้มีอำนาจ",
+    docKind: "cover",
+  },
+  {
+    text: "รูปถ่ายหน้าตรงไม่ตรงตามระเบียบ (กรุณาแนบรูปถ่ายหน้าตรงถ่ายไม่เกิน 6 เดือน)",
+    docKind: "photo",
+  },
+  {
+    text: "ขาดหนังสือรับรองการปฏิบัติหน้าที่ให้กับสมาคม/หน่วยงาน",
+    docKind: "certificate",
+  },
+  {
+    text: "ขาดสำเนาใบ ส.ฬ. 8",
+    docKind: "saka",
+  },
 ];
 
 export function ReviewDecisionDialog({
@@ -17,6 +50,8 @@ export function ReviewDecisionDialog({
   decision,
   applicantName,
   defaultReason = "",
+  applicableDocOptions,
+  defaultRequestedDocKinds,
   onClose,
   onConfirm,
 }: {
@@ -24,12 +59,30 @@ export function ReviewDecisionDialog({
   decision: ReviewDecision;
   applicantName: string;
   defaultReason?: string;
+  applicableDocOptions?: ApplicableDocOption[];
+  defaultRequestedDocKinds?: ApplicantDocumentKind[];
   onClose: () => void;
-  onConfirm: (reason: string) => void;
+  onConfirm: (reason: string, requestedDocKinds?: ApplicantDocumentKind[]) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [reason, setReason] = useState(defaultReason);
+  const [selectedDocKinds, setSelectedDocKinds] = useState<
+    ApplicantDocumentKind[]
+  >(defaultRequestedDocKinds ?? []);
   const [error, setError] = useState("");
+
+  const docOptions = useMemo(
+    () =>
+      applicableDocOptions && applicableDocOptions.length > 0
+        ? applicableDocOptions
+        : DEFAULT_DOC_OPTIONS,
+    [applicableDocOptions]
+  );
+
+  const visibleQuickReasons = useMemo(() => {
+    const allowedSet = new Set(docOptions.map((d) => d.key));
+    return QUICK_ACTION_REASONS.filter((q) => allowedSet.has(q.docKind));
+  }, [docOptions]);
 
   useEffect(() => {
     if (!open) return;
@@ -55,17 +108,41 @@ export function ReviewDecisionDialog({
   const rejected = decision === "rejected";
   const actionRequired = decision === "action_required";
 
+  const buildReasonFromDocKinds = (kinds: ApplicantDocumentKind[]): string => {
+    if (kinds.length === 0) return "";
+    const labels = kinds.map(
+      (k) => docOptions.find((opt) => opt.key === k)?.label || k
+    );
+    return `ขอความกรุณาแนบเอกสารเพิ่มเติม: ${labels.join(", ")}`;
+  };
+
+  const toggleDocKind = (kind: ApplicantDocumentKind) => {
+    const next = selectedDocKinds.includes(kind)
+      ? selectedDocKinds.filter((k) => k !== kind)
+      : [...selectedDocKinds, kind];
+    setSelectedDocKinds(next);
+    const trimmed = reason.trim();
+    if (!trimmed || trimmed.startsWith("ขอความกรุณาแนบเอกสารเพิ่มเติม:")) {
+      setReason(buildReasonFromDocKinds(next));
+    }
+    if (error) setError("");
+  };
+
   const handleSubmit = () => {
     const trimmed = reason.trim();
     if (rejected && trimmed.length < 3) {
       setError("กรุณาระบุเหตุผลที่ไม่อนุมัติอย่างน้อย 3 ตัวอักษร");
       return;
     }
-    if (actionRequired && trimmed.length < 3) {
-      setError("กรุณาระบุเอกสารที่ต้องการให้ผู้สมัครแนบเพิ่มเติม");
+    if (actionRequired && trimmed.length < 3 && selectedDocKinds.length === 0) {
+      setError("กรุณาเลือกเอกสารที่ต้องการขอเพิ่ม หรือระบุเหตุผลอย่างน้อย 3 ตัวอักษร");
       return;
     }
-    onConfirm(trimmed);
+    const finalReason =
+      actionRequired && trimmed.length < 3
+        ? buildReasonFromDocKinds(selectedDocKinds)
+        : trimmed;
+    onConfirm(finalReason, actionRequired ? selectedDocKinds : undefined);
   };
 
   return (
@@ -181,21 +258,70 @@ export function ReviewDecisionDialog({
         </div>
 
         {actionRequired && (
-          <div className="mt-3">
-            <p className="text-[11px] font-medium text-[#4b5563]">
-              คลิกเพื่อเลือกข้อความด่วน:
-            </p>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {QUICK_ACTION_REASONS.map((txt) => (
-                <button
-                  key={txt}
-                  type="button"
-                  onClick={() => setReason(txt)}
-                  className="rounded-[4px] border border-[#fed7aa] bg-[#fffaf5] px-2 py-1 text-left text-[10.5px] text-[#9a3412] transition hover:bg-[#ffedd5]"
-                >
-                  {txt}
-                </button>
-              ))}
+          <div className="mt-3 space-y-3">
+            <div className="rounded-lg border border-[#fed7aa] bg-[#fffaf5] p-3">
+              <p className="text-[11.5px] font-semibold text-[#9a3412]">
+                เลือกเอกสารที่ต้องการให้ผู้สมัครส่งเพิ่มเติม (ผู้สมัครจะเห็นเฉพาะช่องที่เลือก):
+              </p>
+              <div className="mt-2 space-y-1.5">
+                {docOptions.map((opt) => {
+                  const checked = selectedDocKinds.includes(opt.key);
+                  return (
+                    <label
+                      key={opt.key}
+                      className={`flex cursor-pointer items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-[11.5px] transition ${
+                        checked
+                          ? "border-[#ea580c] bg-[#ffedd5]/70 font-semibold text-[#9a3412]"
+                          : "border-[#fed7aa]/80 bg-white text-[#374151] hover:bg-[#fff7ed]"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleDocKind(opt.key)}
+                          className="h-3.5 w-3.5 shrink-0 accent-[#ea580c] rounded"
+                        />
+                        <span className="truncate">{opt.label}</span>
+                      </span>
+                      {opt.isAttached === false && (
+                        <span className="shrink-0 rounded bg-[#fee2e2] px-1.5 py-0.5 text-[9.5px] font-semibold text-[#b91c1c]">
+                          ยังไม่ได้แนบ
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+              {selectedDocKinds.length === 0 && (
+                <p className="mt-1.5 text-[10.5px] text-[#b45309]">
+                  * หากไม่ติ๊กเลือกเอกสาร ระบบจะแสดงรายการเอกสารทั้งหมดให้ผู้สมัครเลือกเอง
+                </p>
+              )}
+            </div>
+
+            <div>
+              <p className="text-[11px] font-medium text-[#4b5563]">
+                คลิกเพื่อเลือกข้อความด่วน:
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {visibleQuickReasons.map((item) => (
+                  <button
+                    key={item.text}
+                    type="button"
+                    onClick={() => {
+                      setReason(item.text);
+                      if (!selectedDocKinds.includes(item.docKind)) {
+                        setSelectedDocKinds((prev) => [...prev, item.docKind]);
+                      }
+                      if (error) setError("");
+                    }}
+                    className="rounded-[4px] border border-[#fed7aa] bg-[#fffaf5] px-2 py-1 text-left text-[10.5px] text-[#9a3412] transition hover:bg-[#ffedd5]"
+                  >
+                    {item.text}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}

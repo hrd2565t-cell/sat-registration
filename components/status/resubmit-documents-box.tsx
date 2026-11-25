@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FileUpload, type FileItem } from "@/components/ui/file-upload";
 import {
   resubmitApplicantDocuments,
   type ApplicantDocument,
+  type ApplicantDocumentKind,
   type ApplicantRecord,
 } from "@/lib/applications-store";
 import {
@@ -13,6 +14,7 @@ import {
   SAKA_ASSOCIATION_HINT,
   type Course,
 } from "@/lib/courses";
+import { resolveRequestedDocumentKinds } from "@/lib/document-checklist";
 import { saveDocumentToStorage } from "@/lib/document-storage";
 
 interface ResubmitDocumentsBoxProps {
@@ -21,15 +23,20 @@ interface ResubmitDocumentsBoxProps {
   onSuccess?: () => void;
 }
 
-const DOC_KIND_OPTIONS: {
-  kind: "photo" | "cover" | "certificate" | "idcard" | "saka";
-  label: string;
-}[] = [
-  { kind: "photo", label: "1. รูปถ่ายหน้าตรง (JPG/PNG)" },
-  { kind: "cover", label: "2. หนังสือนำส่งจากต้นสังกัดหรือสมาคมกีฬา (PDF/รูปภาพ)" },
-  { kind: "certificate", label: "3. หนังสือรับรองการปฏิบัติหน้าที่ (PDF/รูปภาพ)" },
-  { kind: "idcard", label: "4. สำเนาบัตรประจำตัวประชาชน พร้อมลงนามรับรอง (PDF/รูปภาพ)" },
-  { kind: "saka", label: "5. สำเนาใบ ส.ฬ. 8 (PDF/รูปภาพ)" },
+const DEFAULT_DOC_LABELS: Record<ApplicantDocumentKind, string> = {
+  photo: "รูปถ่ายหน้าตรง ถ่ายไม่เกิน 6 เดือน (JPG/PNG)",
+  cover: "หนังสือนำส่งจากต้นสังกัดหรือสมาคมกีฬา (PDF/รูปภาพ)",
+  certificate: "หนังสือรับรองการปฏิบัติหน้าที่ (PDF/รูปภาพ)",
+  idcard: "สำเนาบัตรประจำตัวประชาชน พร้อมลงนามรับรองสำเนาถูกต้อง (PDF/รูปภาพ)",
+  saka: "สำเนาใบ ส.ฬ. 8 (PDF/รูปภาพ)",
+};
+
+const DOC_KIND_ORDER: ApplicantDocumentKind[] = [
+  "photo",
+  "cover",
+  "certificate",
+  "idcard",
+  "saka",
 ];
 
 export function ResubmitDocumentsBox({
@@ -38,95 +45,167 @@ export function ResubmitDocumentsBox({
   onSuccess,
 }: ResubmitDocumentsBoxProps) {
   const availableDocOptions = useMemo(() => {
-    if (!course) return DOC_KIND_OPTIONS;
-    const docConfig = getCourseDocumentConfig(course);
-    return DOC_KIND_OPTIONS.filter((opt) =>
-      isDocumentApplicableForAffiliation(docConfig[opt.kind], application.affiliation)
-    );
+    const docConfig = course ? getCourseDocumentConfig(course) : null;
+    return DOC_KIND_ORDER.filter((kind) =>
+      docConfig
+        ? isDocumentApplicableForAffiliation(docConfig[kind], application.affiliation)
+        : true
+    ).map((kind, idx) => ({
+      kind,
+      shortLabel: docConfig?.[kind]?.label || DEFAULT_DOC_LABELS[kind],
+      numberedLabel: `${idx + 1}. ${docConfig?.[kind]?.label || DEFAULT_DOC_LABELS[kind]}`,
+    }));
   }, [course, application.affiliation]);
 
-  const [selectedKind, setSelectedKind] = useState<
-    "photo" | "cover" | "certificate" | "idcard" | "saka"
-  >("idcard");
+  const resolvedRequest = useMemo(() => {
+    return resolveRequestedDocumentKinds({
+      requestedDocKinds: application.requestedDocKinds,
+      reviewReason: application.reviewReason,
+      allowedKinds: availableDocOptions.map((o) => o.kind),
+    });
+  }, [application.requestedDocKinds, application.reviewReason, availableDocOptions]);
+
+  const targetedKinds = resolvedRequest.kinds;
+  const isTargetedMode = targetedKinds.length > 0;
+
+  const [selectedKind, setSelectedKind] =
+    useState<ApplicantDocumentKind>("idcard");
+  const [filesByKind, setFilesByKind] = useState<
+    Partial<Record<ApplicantDocumentKind, FileItem[]>>
+  >({});
+  const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
+  const isSubmittingRef = useRef(false);
 
   useEffect(() => {
     if (
+      !isTargetedMode &&
       availableDocOptions.length > 0 &&
       !availableDocOptions.some((opt) => opt.kind === selectedKind)
     ) {
       setSelectedKind(availableDocOptions[0].kind);
     }
-  }, [availableDocOptions, selectedKind]);
-  const [newFiles, setNewFiles] = useState<FileItem[]>([]);
-  const [message, setMessage] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState("");
+  }, [isTargetedMode, availableDocOptions, selectedKind]);
+
+  const kindsToSubmit: ApplicantDocumentKind[] = isTargetedMode
+    ? targetedKinds
+    : [selectedKind];
+
+  const attachedSlotCount = kindsToSubmit.filter(
+    (k) => (filesByKind[k]?.length ?? 0) > 0
+  ).length;
+  const isReadyToSubmit =
+    kindsToSubmit.length > 0 && attachedSlotCount === kindsToSubmit.length;
+
+  const setFilesForKind = (kind: ApplicantDocumentKind, items: FileItem[]) => {
+    setFilesByKind((prev) => ({
+      ...prev,
+      [kind]: items,
+    }));
+    if (error) setError("");
+  };
 
   const handleUpload = async () => {
-    if (newFiles.length === 0) {
-      setError("กรุณาเลือกไฟล์เอกสารที่ต้องการส่งเพิ่มเติม");
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
+    if (!isReadyToSubmit) {
+      isSubmittingRef.current = false;
+      setError(
+        targetedKinds.length > 1
+          ? "กรุณาแนบไฟล์เอกสารให้ครบทุกรายการที่เจ้าหน้าที่ร้องขอ"
+          : "กรุณาเลือกไฟล์เอกสารที่ต้องการส่งเพิ่มเติม"
+      );
       return;
     }
+
     setError("");
     setIsSubmitting(true);
 
     try {
-      const file = newFiles[0];
-      const kindLabel = DOC_KIND_OPTIONS.find((k) => k.kind === selectedKind)?.label || selectedKind;
+      const submittedKindsSet = new Set<ApplicantDocumentKind>(kindsToSubmit);
+      const newDocs: ApplicantDocument[] = [];
+      const submittedLabels: string[] = [];
 
-      const newDoc: ApplicantDocument = {
-        id: `doc-${Date.now()}-${selectedKind}`,
-        name: `${file.name} (แนบใหม่)`,
-        size: file.size,
-        dataUrl: file.dataUrl,
-        type: file.type,
-        kind: selectedKind,
-      };
+      for (const kind of kindsToSubmit) {
+        const files = filesByKind[kind];
+        const file = files?.[0];
+        if (!file) continue;
 
-      if (file.dataUrl) {
-        try {
-          await saveDocumentToStorage({
-            id: newDoc.id,
-            name: newDoc.name,
-            type: file.type || "application/octet-stream",
-            size: newDoc.size,
-            dataUrl: file.dataUrl,
-            savedAt: new Date().toISOString(),
-          });
-          if (typeof window !== "undefined") {
-            sessionStorage.setItem(`sat-doc-${newDoc.id}`, file.dataUrl);
-            if (selectedKind === "photo") {
-              sessionStorage.setItem("sat-latest-photo", file.dataUrl);
-              if (application.idCard) {
-                sessionStorage.setItem(
-                  `sat-photo-idcard-${application.idCard.replace(/\D/g, "")}`,
-                  file.dataUrl
-                );
+        const opt = availableDocOptions.find((o) => o.kind === kind);
+        submittedLabels.push(opt?.shortLabel || DEFAULT_DOC_LABELS[kind]);
+
+        const newDoc: ApplicantDocument = {
+          id: `doc-${Date.now()}-${kind}`,
+          name: `${file.name} (แนบใหม่)`,
+          size: file.size,
+          dataUrl: file.dataUrl,
+          type: file.type,
+          kind,
+        };
+
+        if (file.dataUrl) {
+          try {
+            await saveDocumentToStorage({
+              id: newDoc.id,
+              name: newDoc.name,
+              type: file.type || "application/octet-stream",
+              size: newDoc.size,
+              dataUrl: file.dataUrl,
+              savedAt: new Date().toISOString(),
+            });
+            if (typeof window !== "undefined") {
+              sessionStorage.setItem(`sat-doc-${newDoc.id}`, file.dataUrl);
+              if (kind === "photo") {
+                sessionStorage.setItem("sat-latest-photo", file.dataUrl);
+                if (application.idCard) {
+                  sessionStorage.setItem(
+                    `sat-photo-idcard-${application.idCard.replace(/\D/g, "")}`,
+                    file.dataUrl
+                  );
+                }
               }
             }
+          } catch {
+            // Ignore local storage errors
           }
-        } catch {
-          // Ignore local storage errors
         }
+
+        newDocs.push(newDoc);
       }
 
-      // Replace or append doc in existing documents
-      const existingDocs = application.documents.filter(
-        (d: ApplicantDocument) => d.kind !== selectedKind
+      // เก็บเอกสารรายการอื่นของผู้สมัครที่ผ่านแล้วไว้ครบถ้วน แทนที่เฉพาะชนิดเอกสารที่ส่งเข้ามาใหม่
+      const preservedDocs = application.documents.filter(
+        (d: ApplicantDocument) => !submittedKindsSet.has(d.kind)
       );
-      const updatedDocs = [...existingDocs, newDoc];
+      const updatedDocs = [...preservedDocs, ...newDocs];
 
+      const joinedLabels = submittedLabels.join(", ");
       const noteText = message.trim()
-        ? `ผู้สมัครส่งเอกสาร ${kindLabel} เพิ่มเติม: ${message.trim()}`
-        : `ผู้สมัครแนบเอกสาร ${kindLabel} เพิ่มเติมเรียบร้อยแล้ว`;
+        ? `ผู้สมัครส่งเอกสาร (${joinedLabels}) เพิ่มเติม: ${message.trim()}`
+        : `ผู้สมัครแนบเอกสาร (${joinedLabels}) เพิ่มเติมเรียบร้อยแล้ว`;
 
-      resubmitApplicantDocuments(application.ref, updatedDocs, noteText);
+      const res = await resubmitApplicantDocuments(
+        application.ref,
+        updatedDocs,
+        noteText
+      );
+
+      if (res.failedDocs > 0) {
+        setError(
+          "อัปโหลดไฟล์ขึ้นระบบกลางไม่สมบูรณ์บางรายการ กรุณาลองกดส่งอีกครั้ง"
+        );
+        return;
+      }
+
       setSubmitted(true);
       if (onSuccess) onSuccess();
     } catch {
       setError("เกิดข้อผิดพลาดในการส่งเอกสาร กรุณาลองใหม่อีกครั้ง");
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -143,7 +222,8 @@ export function ResubmitDocumentsBox({
           ส่งเอกสารเพิ่มเติมเรียบร้อยแล้ว!
         </h4>
         <p className="mt-1 text-[11px] text-[#166534]">
-          ระบบได้ปรับสถานะใบสมัครของท่านกลับเป็น <strong>&ldquo;รอตรวจสอบ&rdquo;</strong> และส่งแจ้งเตือนให้เจ้าหน้าที่ดำเนินการตรวจรอบใหม่แล้ว
+          ระบบได้อัปโหลดเอกสารและปรับสถานะใบสมัครของท่านกลับเป็น{" "}
+          <strong>&ldquo;รอตรวจสอบ&rdquo;</strong> ให้เจ้าหน้าที่ตรวจรอบใหม่แล้ว
         </p>
       </div>
     );
@@ -159,60 +239,127 @@ export function ResubmitDocumentsBox({
         </span>
         <div className="min-w-0 flex-1">
           <h4 className="text-[13px] font-bold text-[#92400e]">
-            กล่องส่งเอกสารเพิ่มเติม / แก้ไขเอกสารตามคำขอ
+            {isTargetedMode
+              ? targetedKinds.length === 1
+                ? "ส่งเอกสารเพิ่มเติมตามรายการที่เจ้าหน้าที่ร้องขอ"
+                : `ส่งเอกสารเพิ่มเติม ${targetedKinds.length} รายการตามคำขอเจ้าหน้าที่`
+              : "กล่องส่งเอกสารเพิ่มเติม / แก้ไขเอกสารตามคำขอ"}
           </h4>
           <p className="mt-0.5 text-[11px] text-[#78350f]">
-            กรุณาเลือกประเภทเอกสารที่ต้องการส่งใหม่ แนบไฟล์ แล้วกดยืนยันส่งข้อมูลกลับให้เจ้าหน้าที่ตรวจสอบ
+            {isTargetedMode
+              ? "ระบบแสดงเฉพาะช่องเอกสารที่เจ้าหน้าที่แจ้งขอเพิ่มเติม กรุณาแนบไฟล์แล้วกดยืนยันส่งข้อมูลกลับ"
+              : "กรุณาเลือกประเภทเอกสารที่ต้องการส่งใหม่ แนบไฟล์ แล้วกดยืนยันส่งข้อมูลกลับให้เจ้าหน้าที่ตรวจสอบ"}
           </p>
         </div>
       </div>
 
       <div className="mt-3 space-y-3">
-        <div>
-          <label className="block text-[11px] font-semibold text-[#78350f]">
-            1. เลือกเอกสารที่ต้องการส่งเพิ่มเติม / แก้ไข
-          </label>
-          <select
-            value={selectedKind}
-            onChange={(e) => {
-              setSelectedKind(
-                e.target.value as "photo" | "cover" | "certificate" | "idcard" | "saka"
+        {isTargetedMode ? (
+          <div className="space-y-3">
+            {targetedKinds.length > 1 && (
+              <div className="flex items-center justify-between rounded-md border border-[#fcd34d] bg-[#fef3c7]/70 px-3 py-1.5 text-[11px] font-semibold text-[#92400e]">
+                <span>แนบเอกสารให้ครบทุกรายการเพื่อส่งในครั้งเดียว</span>
+                <span>
+                  แนบแล้ว {attachedSlotCount}/{targetedKinds.length} รายการ
+                </span>
+              </div>
+            )}
+
+            {targetedKinds.map((kind, idx) => {
+              const opt = availableDocOptions.find((o) => o.kind === kind);
+              const title = opt?.shortLabel || DEFAULT_DOC_LABELS[kind];
+              const currentFiles = filesByKind[kind] || [];
+              const hasFile = currentFiles.length > 0;
+              const isPhotoOnly = kind === "photo";
+
+              return (
+                <div
+                  key={kind}
+                  className="rounded-lg border border-[#fcd34d] bg-white p-3"
+                >
+                  <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                    <label className="text-[11.5px] font-bold text-[#78350f]">
+                      {targetedKinds.length > 1 ? `${idx + 1}. ` : ""}
+                      {title}
+                    </label>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        hasFile
+                          ? "bg-[#dcfce7] text-[#166534] border border-[#86efac]"
+                          : "bg-[#ffedd5] text-[#9a3412] border border-[#fed7aa]"
+                      }`}
+                    >
+                      {hasFile ? "✓ แนบไฟล์แล้ว" : "ต้องแนบไฟล์"}
+                    </span>
+                  </div>
+                  <FileUpload
+                    files={currentFiles}
+                    onAdd={(file) => setFilesForKind(kind, [file])}
+                    onRemove={() => setFilesForKind(kind, [])}
+                    emptyText={`คลิกหรือลากไฟล์ "${title}" มาที่นี่`}
+                    accept={
+                      isPhotoOnly
+                        ? ".jpg,.jpeg,.png,.webp"
+                        : ".pdf,.jpg,.jpeg,.png,.webp"
+                    }
+                  />
+                  {kind === "saka" && (
+                    <p className="mt-1.5 text-[10.5px] text-[#78350f]">
+                      📌 {SAKA_ASSOCIATION_HINT}
+                    </p>
+                  )}
+                </div>
               );
-              setNewFiles([]);
-            }}
-            className="mt-1 block w-full rounded-md border border-[#f59e0b] bg-white px-2.5 py-1.5 text-[12px] text-[#111827] focus:border-[#d97706] focus:outline-none focus:ring-1 focus:ring-[#d97706]"
-          >
-            {availableDocOptions.map((opt) => (
-              <option key={opt.kind} value={opt.kind}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          {selectedKind === "saka" && (
-            <p className="mt-1 text-[10.5px] text-[#78350f]">
-              📌 {SAKA_ASSOCIATION_HINT}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-[11px] font-semibold text-[#78350f]">
-            2. แนบไฟล์เอกสารใหม่ (ไฟล์รูป JPG/PNG หรือเอกสาร PDF)
-          </label>
-          <div className="mt-1">
-            <FileUpload
-              files={newFiles}
-              onAdd={(file) => setNewFiles([file])}
-              onRemove={() => setNewFiles([])}
-              emptyText="คลิกหรือลากไฟล์มาที่นี่เพื่อแนบเอกสารฉบับแก้ไข"
-              accept=".pdf,.jpg,.jpeg,.png,.webp"
-            />
+            })}
           </div>
-        </div>
+        ) : (
+          <>
+            <div>
+              <label className="block text-[11px] font-semibold text-[#78350f]">
+                1. เลือกเอกสารที่ต้องการส่งเพิ่มเติม / แก้ไข
+              </label>
+              <select
+                value={selectedKind}
+                onChange={(e) => {
+                  const nextKind = e.target.value as ApplicantDocumentKind;
+                  setSelectedKind(nextKind);
+                  setFilesByKind({});
+                }}
+                className="mt-1 block w-full rounded-md border border-[#f59e0b] bg-white px-2.5 py-1.5 text-[12px] text-[#111827] focus:border-[#d97706] focus:outline-none focus:ring-1 focus:ring-[#d97706]"
+              >
+                {availableDocOptions.map((opt) => (
+                  <option key={opt.kind} value={opt.kind}>
+                    {opt.numberedLabel}
+                  </option>
+                ))}
+              </select>
+              {selectedKind === "saka" && (
+                <p className="mt-1 text-[10.5px] text-[#78350f]">
+                  📌 {SAKA_ASSOCIATION_HINT}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-[#78350f]">
+                2. แนบไฟล์เอกสารใหม่ (ไฟล์รูป JPG/PNG หรือเอกสาร PDF)
+              </label>
+              <div className="mt-1">
+                <FileUpload
+                  files={filesByKind[selectedKind] || []}
+                  onAdd={(file) => setFilesForKind(selectedKind, [file])}
+                  onRemove={() => setFilesForKind(selectedKind, [])}
+                  emptyText="คลิกหรือลากไฟล์มาที่นี่เพื่อแนบเอกสารฉบับแก้ไข"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                />
+              </div>
+            </div>
+          </>
+        )}
 
         <div>
           <label className="block text-[11px] font-semibold text-[#78350f]">
-            3. ข้อความชี้แจงเพิ่มเติมถึงเจ้าหน้าที่ (ถ้ามี)
+            {isTargetedMode ? "ข้อความชี้แจงเพิ่มเติมถึงเจ้าหน้าที่ (ถ้ามี)" : "3. ข้อความชี้แจงเพิ่มเติมถึงเจ้าหน้าที่ (ถ้ามี)"}
           </label>
           <input
             type="text"
@@ -224,7 +371,7 @@ export function ResubmitDocumentsBox({
         </div>
 
         {error && (
-          <p className="text-[11px] font-medium text-[#b91c1c]">
+          <p role="alert" className="text-[11px] font-medium text-[#b91c1c]">
             {error}
           </p>
         )}
@@ -232,11 +379,11 @@ export function ResubmitDocumentsBox({
         <button
           type="button"
           onClick={handleUpload}
-          disabled={isSubmitting || newFiles.length === 0}
+          disabled={isSubmitting || !isReadyToSubmit}
           className="inline-flex w-full items-center justify-center gap-1.5 rounded-[5px] bg-[#d97706] px-4 py-2 text-[12px] font-bold text-white shadow-sm transition-colors hover:bg-[#b45309] disabled:opacity-50"
         >
           {isSubmitting ? (
-            "กำลังส่งเอกสาร..."
+            "กำลังอัปโหลดเอกสารขึ้นระบบ..."
           ) : (
             <>
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

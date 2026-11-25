@@ -1,9 +1,21 @@
-import type { ApplicantDocument, ApplicantRecord } from "@/lib/applications-store";
+import type {
+  ApplicantDocument,
+  ApplicantDocumentKind,
+  ApplicantRecord,
+} from "@/lib/applications-store";
 import {
   getCourseDocumentConfig,
   isDocumentApplicableForAffiliation,
   type Course,
 } from "@/lib/courses";
+
+export const ALL_DOCUMENT_KINDS: readonly ApplicantDocumentKind[] = [
+  "photo",
+  "cover",
+  "idcard",
+  "certificate",
+  "saka",
+];
 
 export interface DocumentCheckItem {
   key: "photo" | "cover" | "certificate" | "idcard" | "saka";
@@ -20,8 +32,69 @@ export interface DocumentAuditResult {
   attachedRequiredCount: number;
   missingRequiredCount: number;
   missingRequiredLabels: string[];
+  missingRequiredKinds: ApplicantDocumentKind[];
   totalAttachedCount: number;
   status: "complete" | "incomplete" | "none";
+}
+
+/**
+ * เดาชนิดเอกสารที่เจ้าหน้าที่ขอเพิ่มเติมจากข้อความเหตุผล (รองรับใบสมัครเดิมที่ยังไม่เก็บ requestedDocKinds)
+ */
+export function inferRequestedDocumentKindsFromReason(
+  reason: string | null | undefined,
+  allowedKinds?: ApplicantDocumentKind[]
+): ApplicantDocumentKind[] {
+  if (!reason || !reason.trim()) return [];
+  const text = reason.trim();
+  const patterns: { kind: ApplicantDocumentKind; regex: RegExp }[] = [
+    { kind: "photo", regex: /รูปถ่าย|ภาพถ่าย|หน้าตรง/i },
+    { kind: "cover", regex: /หนังสือนำส่ง|หนังสือส่งตัว|ตราประทับ/i },
+    { kind: "certificate", regex: /หนังสือรับรอง|ปฏิบัติหน้าที่/i },
+    { kind: "idcard", regex: /บัตรประชาชน|บัตรประจำตัวประชาชน|บัตรข้าราชการ/i },
+    { kind: "saka", regex: /ส\.?ฬ\.?\s*8/i },
+  ];
+
+  const found: ApplicantDocumentKind[] = [];
+  for (const { kind, regex } of patterns) {
+    if (regex.test(text)) {
+      if (!allowedKinds || allowedKinds.includes(kind)) {
+        if (!found.includes(kind)) found.push(kind);
+      }
+    }
+  }
+  return found;
+}
+
+/**
+ * หาชนิดเอกสารที่ต้องแสดงให้ผู้สมัครแนบเพิ่มเติม (จากรายการที่แอดมินเลือกตรง หรือเดาจากเหตุผล หรือแสดงทั้งหมดเป็น Fallback)
+ */
+export function resolveRequestedDocumentKinds(params: {
+  requestedDocKinds?: ApplicantDocumentKind[] | null;
+  reviewReason?: string | null;
+  allowedKinds: ApplicantDocumentKind[];
+}): {
+  kinds: ApplicantDocumentKind[];
+  source: "explicit" | "inferred" | "fallback_all";
+} {
+  const { requestedDocKinds, reviewReason, allowedKinds } = params;
+  if (Array.isArray(requestedDocKinds) && requestedDocKinds.length > 0) {
+    const filtered = Array.from(
+      new Set(requestedDocKinds.filter((k) => allowedKinds.includes(k)))
+    );
+    if (filtered.length > 0) {
+      return { kinds: filtered, source: "explicit" };
+    }
+  }
+
+  const inferred = inferRequestedDocumentKindsFromReason(
+    reviewReason,
+    allowedKinds
+  );
+  if (inferred.length > 0) {
+    return { kinds: inferred, source: "inferred" };
+  }
+
+  return { kinds: [], source: "fallback_all" };
 }
 
 /**
@@ -38,6 +111,7 @@ export function auditApplicantDocuments(
       attachedRequiredCount: 0,
       missingRequiredCount: 0,
       missingRequiredLabels: [],
+      missingRequiredKinds: [],
       totalAttachedCount: 0,
       status: "none",
     };
@@ -115,6 +189,7 @@ export function auditApplicantDocuments(
   const missingRequired = requiredItems.filter((i) => !i.isAttached);
   const missingRequiredCount = missingRequired.length;
   const missingRequiredLabels = missingRequired.map((i) => i.label);
+  const missingRequiredKinds = missingRequired.map((i) => i.key);
   const totalAttachedCount = items.filter((i) => i.isAttached).length;
 
   let status: "complete" | "incomplete" | "none" = "complete";
@@ -132,6 +207,7 @@ export function auditApplicantDocuments(
     attachedRequiredCount,
     missingRequiredCount,
     missingRequiredLabels,
+    missingRequiredKinds,
     totalAttachedCount,
     status,
   };

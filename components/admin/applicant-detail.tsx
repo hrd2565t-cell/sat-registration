@@ -23,6 +23,7 @@ import {
   useApplication,
   useApplications,
   type ApplicantDocument,
+  type ApplicantDocumentKind,
 } from "@/lib/applications-store";
 import { adminUser } from "@/lib/admin-data";
 import { getDocumentFromStorage } from "@/lib/document-storage";
@@ -384,9 +385,19 @@ export function ApplicantDetail({
     }
   };
 
-  const handleDecision = (reason: string) => {
+  const handleDecision = (
+    reason: string,
+    requestedDocKinds?: ApplicantDocumentKind[]
+  ) => {
     if (!decision) return;
-    reviewApplication(applicant.ref, decision, reason, adminUser.name);
+    reviewApplication(
+      applicant.ref,
+      decision,
+      reason,
+      adminUser.name,
+      undefined,
+      requestedDocKinds
+    );
     setNotice(
       decision === "approved"
         ? "อนุมัติผู้สมัครเรียบร้อยแล้ว"
@@ -1302,6 +1313,14 @@ export function ApplicantDetail({
           open
           decision={decision}
           applicantName={applicant.name}
+          applicableDocOptions={docAudit.items.map((item) => ({
+            key: item.key,
+            label: item.label,
+            isAttached: item.isAttached,
+          }))}
+          defaultRequestedDocKinds={
+            decision === "action_required" ? docAudit.missingRequiredKinds : undefined
+          }
           defaultReason={
             decision === "action_required" && docAudit.missingRequiredLabels.length > 0
               ? `ขอความกรุณาแนบเอกสารเพิ่มเติม: ${docAudit.missingRequiredLabels.join(", ")}`

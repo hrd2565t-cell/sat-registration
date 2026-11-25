@@ -97,6 +97,7 @@ function ReceiptContent() {
   const mounted = useMounted();
   const ref = searchParams.get("ref");
   const courseParam = searchParams.get("course");
+  const justSubmitted = searchParams.get("submitted") === "1";
   const record = (ref
     ? applications.find((item) => item.ref === ref || item.receiptNo === ref) ??
       getApplicationByRef(ref)
@@ -118,6 +119,31 @@ function ReceiptContent() {
   const [resendingEmail, setResendingEmail] = useState(false);
   const [resendStatus, setResendStatus] = useState<"idle" | "sent" | "error">("idle");
   const [cooldownSec, setCooldownSec] = useState(0);
+  const [showSubmitPopup, setShowSubmitPopup] = useState(false);
+
+  useEffect(() => {
+    if (!mounted || !record?.ref || !justSubmitted || typeof window === "undefined") {
+      return;
+    }
+    const seenKey = `sat-receipt-popup-seen-${record.ref}`;
+    try {
+      if (sessionStorage.getItem(seenKey) === "1") return;
+      sessionStorage.setItem(seenKey, "1");
+    } catch {
+      // Ignore sessionStorage restrictions
+    }
+    const timer = window.setTimeout(() => setShowSubmitPopup(true), 0);
+    return () => window.clearTimeout(timer);
+  }, [mounted, record?.ref, justSubmitted]);
+
+  useEffect(() => {
+    if (!showSubmitPopup) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowSubmitPopup(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showSubmitPopup]);
 
   useEffect(() => {
     if (cooldownSec <= 0) return;
@@ -413,18 +439,25 @@ function ReceiptContent() {
         </Card>
 
         {record.email && (
-          <div className="mt-3 flex flex-col items-center justify-between gap-2 rounded-md border border-[#bfdbfe] bg-[#eff6ff] p-2.5 text-[11px] text-[#1e40af] sm:flex-row">
-            <div className="flex items-center gap-2">
-              <span>✉️</span>
-              <span>
-                ระบบส่งอีเมลยืนยันไปยัง <strong>{record.email}</strong> แล้ว
-              </span>
+          <div className="mt-3 flex flex-col items-start justify-between gap-2.5 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] p-3 text-[11px] text-[#1e40af] sm:flex-row sm:items-center">
+            <div className="flex items-start gap-2 min-w-0">
+              <span className="mt-0.5 shrink-0">✉️</span>
+              <div className="space-y-0.5 leading-relaxed">
+                <p className="font-bold text-[#16265E]">
+                  การกีฬาแห่งประเทศไทย ได้รับข้อมูลการสมัครของท่านเรียบร้อยแล้ว
+                </p>
+                <p>
+                  ระบบกำลังส่งสำเนาใบสมัครไปยัง <strong>{record.email}</strong> กรุณารออีเมลตอบกลับประมาณ{" "}
+                  <strong>1–2 นาที</strong> (หากไม่พบในกล่องขาเข้า โปรดตรวจสอบใน{" "}
+                  <strong>กล่องจดหมายขยะ / Spam</strong> หรือ <strong>Junk Mail</strong>)
+                </p>
+              </div>
             </div>
             <button
               type="button"
               onClick={handleResendEmail}
               disabled={resendingEmail || cooldownSec > 0}
-              className="inline-flex h-6 shrink-0 items-center gap-1 rounded bg-[#1e40af] px-2.5 text-[10px] font-medium text-white transition hover:bg-[#1e3a8a] disabled:opacity-50"
+              className="inline-flex h-7 shrink-0 items-center gap-1 rounded bg-[#1e40af] px-2.5 text-[10.5px] font-medium text-white transition hover:bg-[#1e3a8a] disabled:opacity-50"
             >
               {resendingEmail ? (
                 <span>กำลังส่ง...</span>
@@ -516,6 +549,77 @@ function ReceiptContent() {
           ข้อมูลส่วนบุคคลของท่านจะถูกเก็บรักษาความลับตามกฎหมาย PDPA
         </p>
       </main>
+
+      {showSubmitPopup && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="ปิดหน้าต่างแจ้งเตือน"
+            onClick={() => setShowSubmitPopup(false)}
+            className="absolute inset-0 bg-[#0f172a]/60 backdrop-blur-[2px]"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="receipt-submit-popup-title"
+            className="relative w-full max-w-[440px] rounded-2xl border border-[#e2e8f0] bg-white p-5 shadow-2xl animate-in zoom-in-95 sm:p-6"
+          >
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#dcfce7] text-[#16a34a]">
+              <svg
+                className="h-6 w-6"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2.5"
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </div>
+
+            <h2
+              id="receipt-submit-popup-title"
+              className="mt-3.5 text-center text-[16px] font-bold leading-snug text-[#16265E] sm:text-[17px]"
+            >
+              การกีฬาแห่งประเทศไทย ได้รับข้อมูลการสมัครของท่านเรียบร้อยแล้ว
+            </h2>
+
+            <p className="mt-2.5 text-center text-[12.5px] leading-relaxed text-[#334155]">
+              โปรดตรวจสอบสำเนาใบสมัครในอีเมลของท่าน กรุณารออีเมลตอบกลับประมาณ{" "}
+              <strong className="text-[#16265E]">1–2 นาที</strong>
+            </p>
+            <p className="mt-1.5 rounded-lg border border-[#fde68a] bg-[#fffbeb] px-3 py-2 text-center text-[11.5px] font-medium leading-relaxed text-[#92400e]">
+              หากไม่พบในกล่องขาเข้า กรุณาตรวจสอบใน{" "}
+              <strong>กล่องจดหมายขยะ (Spam / Junk Mail)</strong>
+            </p>
+
+            <div className="mt-3.5 space-y-1 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-3.5 py-2.5 text-[11.5px] text-[#475569]">
+              <div className="flex items-center justify-between gap-2">
+                <span>รหัสอ้างอิงการสมัคร</span>
+                <strong className="font-mono text-[#16265E]">{record.receiptNo}</strong>
+              </div>
+              {record.email && (
+                <div className="flex items-center justify-between gap-2">
+                  <span>อีเมลที่ส่งสำเนา</span>
+                  <strong className="truncate text-[#1e3a8a]">{record.email}</strong>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowSubmitPopup(false)}
+              className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-lg bg-[#16265E] px-4 text-[13px] font-bold text-white shadow-sm transition-colors hover:bg-[#1e3a8a]"
+            >
+              รับทราบและดูใบรับการสมัคร
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

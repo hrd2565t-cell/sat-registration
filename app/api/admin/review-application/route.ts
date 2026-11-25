@@ -23,6 +23,7 @@ export async function POST(request: Request) {
       reserveOrder,
       notes,
       courseId,
+      requestedDocKinds,
     } = body as {
       ref: string;
       status: "approved" | "reserve" | "rejected" | "action_required" | "pending";
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
       reserveOrder?: number;
       notes?: Array<{ id: string; at: string; author: string; kind: string; text: string }>;
       courseId?: number;
+      requestedDocKinds?: string[];
     };
 
     if (!ref || !status) {
@@ -50,6 +52,10 @@ export async function POST(request: Request) {
 
     const nowIso = new Date().toISOString();
     const dbStatus = status === "action_required" ? "pending" : status;
+    const normalizedRequestedDocKinds =
+      status === "action_required" && Array.isArray(requestedDocKinds)
+        ? requestedDocKinds.filter((k) => typeof k === "string")
+        : [];
 
     // 1. อัปเดตตาราง applications โดยตรง
     const updatePayload: Database["public"]["Tables"]["applications"]["Update"] = {
@@ -65,6 +71,7 @@ export async function POST(request: Request) {
         _realStatus: status,
         _reserveOrder: reserveOrder ?? null,
         _notes: notes ?? [],
+        _requestedDocKinds: normalizedRequestedDocKinds,
       } as unknown as Json,
     };
 
@@ -144,6 +151,7 @@ export async function POST(request: Request) {
               updatedAt: nowIso,
               reserveOrder: reserveOrder ?? null,
               notes: notes ?? null,
+              requestedDocKinds: normalizedRequestedDocKinds,
             },
           };
 

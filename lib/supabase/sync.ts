@@ -4,6 +4,7 @@ import {
   computeTotalFileSizeMB,
   type ApplicantRecord,
   type ApplicantDocument,
+  type ApplicantDocumentKind,
 } from "@/lib/applications-store";
 import type { HistoricalTrainee, DutyRecord } from "@/lib/alumni-store";
 import { setCachedCourseReviews } from "@/lib/courses-store";
@@ -441,6 +442,7 @@ export async function syncReviewToSupabase(
     notes?: ApplicantRecord["notes"];
     reserveOrder?: number;
     ai?: ApplicantRecord["ai"];
+    requestedDocKinds?: ApplicantDocumentKind[];
   }
 ): Promise<boolean> {
   const supabase = getSupabaseClient();
@@ -448,6 +450,10 @@ export async function syncReviewToSupabase(
 
   try {
     const dbStatus = status === "action_required" ? "pending" : status;
+    const normalizedRequestedDocKinds =
+      status === "action_required" && Array.isArray(extra?.requestedDocKinds)
+        ? extra.requestedDocKinds
+        : [];
     const updatePayload: Database["public"]["Tables"]["applications"]["Update"] = {
       status: dbStatus,
       review_reason:
@@ -467,6 +473,7 @@ export async function syncReviewToSupabase(
         _realStatus: status,
         _reserveOrder: extra.reserveOrder ?? null,
         _notes: extra.notes ?? [],
+        _requestedDocKinds: normalizedRequestedDocKinds,
       } as unknown as Json;
     }
 
@@ -530,6 +537,7 @@ export async function syncReviewToSupabase(
               updatedAt,
               reserveOrder: extra?.reserveOrder ?? null,
               notes: extra?.notes ?? null,
+              requestedDocKinds: normalizedRequestedDocKinds,
             },
           };
 
@@ -574,6 +582,7 @@ export async function syncReviewToSupabase(
                   updatedAt,
                   reserveOrder: extra?.reserveOrder ?? null,
                   notes: extra?.notes ?? null,
+                  requestedDocKinds: normalizedRequestedDocKinds,
                 },
               };
               await supabase
@@ -611,6 +620,7 @@ export async function syncReviewToSupabase(
           reserveOrder: extra?.reserveOrder,
           notes: extra?.notes,
           courseId: targetCourseId,
+          requestedDocKinds: normalizedRequestedDocKinds,
         }),
       }).catch((apiErr) => {
         console.warn("Server review API call warning:", apiErr);
@@ -796,6 +806,7 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
         reserveOrder?: number;
         candidateOrder?: number;
         notes?: ApplicantRecord["notes"];
+        requestedDocKinds?: ApplicantDocumentKind[];
       }
     >();
 
@@ -828,6 +839,9 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
                       : undefined,
                   notes: Array.isArray(rData.notes)
                     ? (rData.notes as ApplicantRecord["notes"])
+                    : undefined,
+                  requestedDocKinds: Array.isArray(rData.requestedDocKinds)
+                    ? (rData.requestedDocKinds as ApplicantDocumentKind[])
                     : undefined,
                 });
               }
@@ -969,6 +983,26 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
           ? app.review_reason ?? undefined
           : undefined);
 
+      const validDocKinds = new Set<ApplicantDocumentKind>([
+        "photo",
+        "cover",
+        "certificate",
+        "idcard",
+        "saka",
+      ]);
+      const rawRequestedKinds =
+        realStatus === "action_required"
+          ? cloudReview?.requestedDocKinds ??
+            (Array.isArray(rawAi._requestedDocKinds)
+              ? (rawAi._requestedDocKinds as ApplicantDocumentKind[])
+              : undefined)
+          : undefined;
+      const realRequestedDocKinds = Array.isArray(rawRequestedKinds)
+        ? Array.from(
+            new Set(rawRequestedKinds.filter((k) => validDocKinds.has(k)))
+          )
+        : [];
+
       return {
         id: Number(app.id),
         ref: app.ref,
@@ -1005,6 +1039,8 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
         reserveOrder: realReserveOrder,
         candidateOrder: realCandidateOrder,
         reviewReason: realReviewReason,
+        requestedDocKinds:
+          realRequestedDocKinds.length > 0 ? realRequestedDocKinds : undefined,
         reviewedAt: realReviewedAt,
         reviewedBy: realReviewedBy,
         notes,
