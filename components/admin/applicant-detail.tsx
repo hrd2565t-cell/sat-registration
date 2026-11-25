@@ -22,6 +22,7 @@ import {
   reviewApplication,
   useApplication,
   useApplications,
+  useApplicationsCloudLoaded,
   type ApplicantDocument,
   type ApplicantDocumentKind,
 } from "@/lib/applications-store";
@@ -209,7 +210,9 @@ export function ApplicantDetail({
 }) {
   const applicant = useApplication(refId);
   const { applications } = useApplications();
+  const cloudLoaded = useApplicationsCloudLoaded();
   const { courses } = useCourses();
+  const { trainees } = useAlumniStore();
   const router = useRouter();
   const mounted = useMounted();
   const [decision, setDecision] = useState<ReviewDecision | null>(null);
@@ -336,8 +339,19 @@ export function ApplicantDetail({
     return () => window.clearTimeout(timer);
   }, [notice]);
 
+  const isAlreadyAlumni = useMemo(() => {
+    if (!applicant) return false;
+    return trainees.some(
+      (t) =>
+        (t.idCard === applicant.idCard || t.name === applicant.name) &&
+        (t.courseId === applicant.courseId ||
+          t.courseTitle === applicant.courseTitle ||
+          t.courseTitle === currentCourse?.title)
+    );
+  }, [trainees, applicant, currentCourse?.title]);
+
   if (!applicant) {
-    if (!mounted) {
+    if (!mounted || !cloudLoaded) {
       return (
         <div className="mx-auto w-full max-w-[1220px] space-y-3">
           <div className="h-24 animate-pulse rounded-lg border border-[#e3e6ea] bg-white" />
@@ -422,18 +436,6 @@ export function ApplicantDetail({
     setNote("");
     setNotice("เพิ่มหมายเหตุเรียบร้อยแล้ว");
   };
-
-  const { trainees } = useAlumniStore();
-  const isAlreadyAlumni = useMemo(() => {
-    if (!applicant) return false;
-    return trainees.some(
-      (t) =>
-        (t.idCard === applicant.idCard || t.name === applicant.name) &&
-        (t.courseId === applicant.courseId ||
-          t.courseTitle === applicant.courseTitle ||
-          t.courseTitle === currentCourse?.title)
-    );
-  }, [trainees, applicant, currentCourse?.title]);
 
   const handlePromoteToAlumni = () => {
     if (!applicant) return;

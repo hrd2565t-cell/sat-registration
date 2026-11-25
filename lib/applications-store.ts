@@ -196,6 +196,7 @@ const INITIAL_STATE: ApplicationsState = {
 
 let state: ApplicationsState = INITIAL_STATE;
 let hydrateStarted = false;
+let hasLoadedFromCloud = false;
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -243,7 +244,13 @@ let appsRealtimeSubscribed = false;
 let lastAppsFetchAt = 0;
 
 export async function refreshApplicationsFromCloud(): Promise<void> {
-  if (!isSupabaseConfigured()) return;
+  if (!isSupabaseConfigured()) {
+    if (!hasLoadedFromCloud) {
+      hasLoadedFromCloud = true;
+      emit();
+    }
+    return;
+  }
   const now = Date.now();
   if (now - lastAppsFetchAt < 1500) return;
   lastAppsFetchAt = now;
@@ -365,6 +372,11 @@ export async function refreshApplicationsFromCloud(): Promise<void> {
     }
   } catch (err) {
     console.warn("Failed to refresh applications from cloud:", err);
+  } finally {
+    if (!hasLoadedFromCloud) {
+      hasLoadedFromCloud = true;
+      emit();
+    }
   }
 }
 
@@ -487,6 +499,22 @@ function getServerSnapshot() {
 
 export function useApplications() {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+
+function getCloudLoadedSnapshot() {
+  return hasLoadedFromCloud;
+}
+
+function getServerCloudLoadedSnapshot() {
+  return false;
+}
+
+export function useApplicationsCloudLoaded(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    getCloudLoadedSnapshot,
+    getServerCloudLoadedSnapshot
+  );
 }
 
 export function useApplication(ref: string | null | undefined) {
