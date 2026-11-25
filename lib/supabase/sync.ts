@@ -125,23 +125,63 @@ export async function uploadDocumentToSupabaseStorage(
   }
 }
 
+/**
+ * คัดเลือกเอกสารฉบับล่าสุด 1 ไฟล์ต่อ 1 ประเภท (kind) โดยถือว่าข้อมูลเข้าเรียงตามเวลาจากเก่าไปใหม่
+ * ให้ความสำคัญกับแถวที่มีข้อมูลไฟล์จริง (dataUrl หรือ Storage URL) เหนือแถวว่างเสมอ
+ * และในกลุ่มที่มีไฟล์จริงเหมือนกัน แถวที่มาทีหลัง (ใหม่กว่า) จะชนะโดยไม่ขึ้นกับขนาดไฟล์
+ */
+export function selectLatestDocumentsByKind(
+  rawDocs: ApplicantDocument[]
+): ApplicantDocument[] {
+  const contentRank = (d: ApplicantDocument) => (d.dataUrl ? 2 : 1);
+  const dedupedMap = new Map<string, ApplicantDocument>();
+  for (const d of rawDocs) {
+    const key =
+      d.kind === "photo" ||
+      d.kind === "cover" ||
+      d.kind === "idcard" ||
+      d.kind === "certificate" ||
+      d.kind === "saka"
+        ? d.kind
+        : `${d.kind}:${d.name}`;
+    const existing = dedupedMap.get(key);
+    if (!existing || contentRank(d) >= contentRank(existing)) {
+      dedupedMap.set(key, d);
+    }
+  }
+  return Array.from(dedupedMap.values());
+}
+
 export async function syncApplicationDocumentsToSupabase(
   targetRef: string,
   documents: ApplicantDocument[],
-  onProgress?: (completed: number, total: number) => void
-): Promise<{ uploadedCount: number; failedCount: number }> {
+  onProgress?: (completed: number, total: number) => void,
+  options?: { forceUploadKinds?: ApplicantDocumentKind[] }
+): Promise<{
+  uploadedCount: number;
+  failedCount: number;
+  insertedIdsByKind: Partial<Record<ApplicantDocumentKind, string>>;
+}> {
   if (!targetRef || !documents || documents.length === 0) {
-    return { uploadedCount: 0, failedCount: 0 };
+    return { uploadedCount: 0, failedCount: 0, insertedIdsByKind: {} };
   }
 
   const supabase = getSupabaseClient();
   if (!supabase) {
-    return { uploadedCount: 0, failedCount: documents.length };
+    return {
+      uploadedCount: 0,
+      failedCount: documents.length,
+      insertedIdsByKind: {},
+    };
   }
 
   let uploadedCount = 0;
   let failedCount = 0;
   const total = documents.length;
+  const forceKinds = new Set<ApplicantDocumentKind>(
+    options?.forceUploadKinds ?? []
+  );
+  const insertedIdsByKind: Partial<Record<ApplicantDocumentKind, string>> = {};
 
   try {
     const { data: existingDocs } = await supabase
@@ -151,6 +191,7 @@ export async function syncApplicationDocumentsToSupabase(
 
     for (let idx = 0; idx < documents.length; idx++) {
       const doc = documents[idx];
+      const isForcedKind = forceKinds.has(doc.kind);
       const matchesDoc = (ed: {
         kind: string;
         name: string;
@@ -172,7 +213,7 @@ export async function syncApplicationDocumentsToSupabase(
       const alreadyHasContent = (existingDocs || []).some(
         (ed) => matchesDoc(ed) && Boolean(ed.data_url || ed.storage_path)
       );
-      if (alreadyHasContent) {
+      if (!isForcedKind && alreadyHasContent) {
         uploadedCount++;
         onProgress?.(idx + 1, total);
         continue;
@@ -187,16 +228,26 @@ export async function syncApplicationDocumentsToSupabase(
       }
 
       const alreadyHasPlaceholder = (existingDocs || []).some(matchesDoc);
-      if (alreadyHasPlaceholder && !effectiveDataUrl) {
+      if (!isForcedKind && alreadyHasPlaceholder && !effectiveDataUrl) {
         onProgress?.(idx + 1, total);
         continue;
       }
 
       let storagePath: string | null = null;
       if (effectiveDataUrl && effectiveDataUrl.startsWith("data:")) {
+        const cleanRawName = doc.name.replace(/\s*\(แนบใหม่\)\s*$/g, "").trim();
+        const rawExt = cleanRawName.includes(".")
+          ? cleanRawName.split(".").pop() || ""
+          : "";
         const extension =
-          (doc.name.split(".").pop() || "bin").replace(/[^a-zA-Z0-9]/g, "") ||
-          "pdf";
+          rawExt.replace(/[^a-zA-Z0-9]/g, "") ||
+          (doc.type?.includes("png")
+            ? "png"
+            : doc.type?.includes("jpeg") || doc.type?.includes("jpg")
+              ? "jpg"
+              : doc.type?.includes("webp")
+                ? "webp"
+                : "pdf");
         const safeId = String(doc.id || doc.kind).replace(/[^a-zA-Z0-9_-]/g, "");
         const path = `${targetRef}/${doc.kind}-${safeId}-${Date.now()}.${extension}`;
         storagePath = await uploadDocumentToSupabaseStorage(
@@ -217,7 +268,7 @@ export async function syncApplicationDocumentsToSupabase(
         !storagePath ||
         Boolean(effectiveDataUrl && effectiveDataUrl.length < 500_000);
 
-      let { error: insertErr } = await supabase
+      let { data: insertedRow, error: insertErr } = await supabase
         .from("application_documents")
         .insert({
           application_ref: targetRef,
@@ -227,19 +278,26 @@ export async function syncApplicationDocumentsToSupabase(
           file_type: dbFileType,
           storage_path: storagePath,
           data_url: shouldKeepInlineDataUrl ? (effectiveDataUrl ?? null) : null,
-        });
+        })
+        .select("id")
+        .single();
 
       // Fallback หากตาราง application_documents บนฐานข้อมูลยังไม่มี 'saka' ใน CHECK constraint
       if (insertErr && doc.kind === "saka") {
-        const retry = await supabase.from("application_documents").insert({
-          application_ref: targetRef,
-          kind: "certificate",
-          name: doc.name,
-          size: doc.size,
-          file_type: `saka:${doc.type || ""}`,
-          storage_path: storagePath,
-          data_url: shouldKeepInlineDataUrl ? (effectiveDataUrl ?? null) : null,
-        });
+        const retry = await supabase
+          .from("application_documents")
+          .insert({
+            application_ref: targetRef,
+            kind: "certificate",
+            name: doc.name,
+            size: doc.size,
+            file_type: `saka:${doc.type || ""}`,
+            storage_path: storagePath,
+            data_url: shouldKeepInlineDataUrl ? (effectiveDataUrl ?? null) : null,
+          })
+          .select("id")
+          .single();
+        insertedRow = retry.data;
         insertErr = retry.error;
       }
 
@@ -247,15 +305,22 @@ export async function syncApplicationDocumentsToSupabase(
         console.warn("Supabase document insert error:", insertErr.message);
         failedCount++;
       } else {
+        if (insertedRow?.id) {
+          insertedIdsByKind[doc.kind] = String(insertedRow.id);
+        }
         uploadedCount++;
       }
       onProgress?.(idx + 1, total);
     }
 
-    return { uploadedCount, failedCount };
+    return { uploadedCount, failedCount, insertedIdsByKind };
   } catch (err) {
     console.warn("Failed to sync documents to Supabase:", err);
-    return { uploadedCount, failedCount: Math.max(failedCount, total - uploadedCount) };
+    return {
+      uploadedCount,
+      failedCount: Math.max(failedCount, total - uploadedCount),
+      insertedIdsByKind,
+    };
   }
 }
 
@@ -886,28 +951,8 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
           };
         });
 
-      // กรองเอกสารซ้ำซ้อนในประเภทเดียวกัน โดยเลือกแถวล่าสุดที่มีข้อมูลไฟล์ (data: หรือ storage URL) ก่อนเสมอ
-      const docScore = (d: ApplicantDocument) => {
-        if (d.dataUrl?.startsWith("data:")) return 3;
-        if (d.dataUrl) return 2;
-        return 1;
-      };
-      const dedupedMap = new Map<string, ApplicantDocument>();
-      for (const d of rawDocs) {
-        const key =
-          d.kind === "photo" ||
-          d.kind === "cover" ||
-          d.kind === "idcard" ||
-          d.kind === "certificate" ||
-          d.kind === "saka"
-            ? d.kind
-            : `${d.kind}:${d.name}`;
-        const existing = dedupedMap.get(key);
-        if (!existing || docScore(d) >= docScore(existing)) {
-          dedupedMap.set(key, d);
-        }
-      }
-      const docs = Array.from(dedupedMap.values());
+      // คัดเลือกเอกสารฉบับล่าสุด 1 ไฟล์ต่อ 1 ประเภท โดยให้แถวที่มีไฟล์จริงที่มาทีหลังชนะเสมอ
+      const docs = selectLatestDocumentsByKind(rawDocs);
 
       const rawAi = (
         app.ai && typeof app.ai === "object" && !Array.isArray(app.ai)

@@ -901,7 +901,8 @@ export function reviewApplication(
 export async function resubmitApplicantDocuments(
   ref: string,
   updatedDocs: ApplicantDocument[],
-  applicantMessage?: string
+  applicantMessage?: string,
+  replacedKinds?: ApplicantDocumentKind[]
 ): Promise<{ ok: boolean; failedDocs: number }> {
   const now = new Date().toISOString();
   const noteMsg =
@@ -942,8 +943,45 @@ export async function resubmitApplicantDocuments(
     if (app) {
       const uploadRes = await syncApplicationDocumentsToSupabase(
         app.ref,
-        updatedDocs
+        updatedDocs,
+        undefined,
+        replacedKinds && replacedKinds.length > 0
+          ? { forceUploadKinds: replacedKinds }
+          : undefined
       );
+
+      // Safe Replace: เมื่ออัปโหลดไฟล์ใหม่ขึ้น Storage/DB สำเร็จแล้ว จึงลบแถวและไฟล์เก่าของ kind นั้นทิ้ง
+      if (
+        uploadRes.failedCount === 0 &&
+        replacedKinds &&
+        replacedKinds.length > 0 &&
+        typeof window !== "undefined"
+      ) {
+        const keepByKind = replacedKinds
+          .map((kind) => ({
+            kind,
+            keepDocId: uploadRes.insertedIdsByKind[kind] || "",
+          }))
+          .filter((item) => Boolean(item.keepDocId));
+
+        if (keepByKind.length > 0) {
+          try {
+            await fetch("/api/applications/replace-documents", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({
+                ref: app.ref,
+                idCard: app.idCard,
+                keepByKind,
+              }),
+            });
+          } catch (replaceErr) {
+            console.warn("Safe replace cleanup warning:", replaceErr);
+          }
+        }
+      }
+
       await syncReviewToSupabase(ref, "pending", noteMsg, "ผู้สมัคร", now, {
         courseId: app.courseId,
         notes: app.notes,

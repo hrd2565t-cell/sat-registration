@@ -136,10 +136,11 @@ export function ResubmitDocumentsBox({
 
         const opt = availableDocOptions.find((o) => o.kind === kind);
         submittedLabels.push(opt?.shortLabel || DEFAULT_DOC_LABELS[kind]);
+        const cleanFileName = file.name.replace(/\s*\(แนบใหม่\)\s*$/g, "").trim();
 
         const newDoc: ApplicantDocument = {
           id: `doc-${Date.now()}-${kind}`,
-          name: `${file.name} (แนบใหม่)`,
+          name: `${cleanFileName} (แนบใหม่)`,
           size: file.size,
           dataUrl: file.dataUrl,
           type: file.type,
@@ -190,7 +191,8 @@ export function ResubmitDocumentsBox({
       const res = await resubmitApplicantDocuments(
         application.ref,
         updatedDocs,
-        noteText
+        noteText,
+        kindsToSubmit
       );
 
       if (res.failedDocs > 0) {
