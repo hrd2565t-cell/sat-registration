@@ -22,14 +22,15 @@ Use this workflow before finishing any code modification in the SAT Registration
    ```powershell
    npm run build
    ```
+4. Scan `app/`, `components/`, and `lib/` to ensure zero hardcoded admin PINs (`336699`, `NEXT_PUBLIC_ADMIN_PIN`, `x-admin-pin`) or PII fields exist in client code or public `courses` payloads.
 
 ## 2. Four-Aspect Quality Review
 
 Before committing, explicitly verify these 4 aspects in the changed files:
-1. **Bugs / Logic Errors**: Confirm edge cases, dialog `useRef` locks reset cleanly (`finally` + open/close), and `!c.isHistorical` / live course titles stay intact.
+1. **Bugs / Logic Errors**: Confirm edge cases, dialog `useRef` locks reset cleanly (`finally` + open/close), `!c.isHistorical` / live course titles stay intact, and Next.js App Router `app/api/**/route.ts` files export only HTTP handlers/route configs (never non-handler helper functions).
 2. **Error Handling**: Confirm offline/Cloud fallback handling, null/empty guards, and user-facing notices.
 3. **Performance & Security**: Confirm `useMemo`/cleanup on effects, no `NEXT_PUBLIC_` secrets, and no exposed 13-digit ID cards or PII on public views/printouts.
-4. **Client-Server Data Integrity**: Confirm Cloud sync uses `hasLoadedFromCloud` / granular sync and never overwrites admin-edited Supabase records with hardcoded defaults.
+4. **Client-Server Data Integrity**: Confirm Cloud sync uses `hasLoadedFromCloud` / granular sync, never overwrites admin-edited Supabase records with hardcoded defaults, `await`s Cloud uploads before redirect, and obeys safe-replace ordering (verify new file in DB before deleting old DB/Storage artifacts).
 
 ## 3. Safe Git Commit & Push on Windows
 
