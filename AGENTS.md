@@ -14,6 +14,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - **Supabase Storage (`sat-documents`) คือ Single Source of Truth สำหรับไฟล์แนบจริง**: ทุกไฟล์ที่ผู้สมัครอัปโหลดต้องขึ้น `sat-documents` และบันทึก `storage_path` หรือ `data_url` ใน `application_documents`
 - **ห้ามพึ่งพาเฉพาะ IndexedDB / LocalStorage**: `IndexedDB` เป็นเพียง Cache ประจำเครื่อง และ `persist()` ตัด `dataUrl` ออกจาก `localStorage` ดังนั้น `syncApplicationToSupabase` ต้องดึงไฟล์จาก `getDocumentFromStorage` ขึ้น Cloud เสมอ และหากพบไฟล์ใน Cloud ยังไม่มีเนื้อไฟล์ให้ทำ `backfillDocumentToSupabase` อัตโนมัติเพื่อให้ทุกเครื่องเห็น "ไฟล์จริง" เหมือนกัน
 - **Safe Replace & Latest-Wins**: การคัดเลือกไฟล์จาก Cloud ต้องใช้ `selectLatestDocumentsByKind` (แถวมีไฟล์จริงทุกขนาดคะแนนเท่ากัน ยึดฉบับล่าสุดเสมอ) และเมื่อผู้สมัครส่งเอกสารแก้ไขซ้ำต้องใช้ `forceUploadKinds` อัปโหลดไฟล์ใหม่ให้สำเร็จก่อนแล้วจึงลบแถว/ไฟล์เก่าเฉพาะ `kind` นั้นผ่าน `/api/applications/replace-documents`
+- **Compression & Zero-Egress Queries**: ภาพที่อัปโหลดต้องผ่าน `compressImageFile` (`photo` / `document`, คง PDF ต้นฉบับ); เมื่อขึ้น `sat-documents` สำเร็จแล้วให้ตั้ง `data_url = null` ใน Postgres และห้าม `.select("*")` ดึง `data_url` ยกตารางใน `fetchApplicationsFromSupabase()` (ใช้ Metadata + `storage_path` คู่ `legacyInlineIds` Fallback)
+- **Shared File Reuse & Reference-Safe Delete**: ใช้รูปถ่าย (`photo`) และสำเนาบัตรฯ (`idcard`) เดิมข้ามหลักสูตรด้วยการอ้างอิง `storage_path` เดิมโดยไม่อัปโหลดซ้ำ และทุกการลบไฟล์ใน `sat-documents` (ลบใบสมัคร, แทนที่เอกสาร, ล้างคลังหลักสูตร `/api/admin/archive-course` หลังสำรอง ZIP ขึ้น Google Drive) ต้องผ่าน `removeUnreferencedStorageObjects` (Fail-Closed) เสมอ
 
 ## 2. การคงอยู่ของข้อมูลหลักสูตรและการตั้งค่า (Course Details Persistence)
 - **ห้าม Reset ข้อมูลหลักสูตรที่แอดมินแก้ไขแล้ว** ทั้ง 8 ส่วน (เป้าหมาย 5 กลุ่ม, วัตถุประสงค์, คุณสมบัติ, กำหนดเอกสารแนบ, เอกสารประกอบการสมัคร, เกณฑ์สำเร็จการอบรม, สิ่งที่ กกท. สนับสนุน และเงื่อนไขค่าใช้จ่าย/เบิกต้นสังกัด)
@@ -57,6 +59,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## 11. กฎกลุ่มเป้าหมายรายหลักสูตร, Autocomplete และแบบ ส.ฬ. 8
 - คัดกรอง/ล็อกตัวเลือกข้อ 3 ใน `/register` จาก `targetQuotas > 0` (`getAllowedTargetGroupsForCourse`), ป้องกัน Auto-fill ข้ามกลุ่มด้วย `isAffiliationAllowedForCourse`, และเมื่อผู้สมัครสลับข้อ 3 ให้ล้างช่อง 3.1 (`subAffiliation`) ทันที
+- **PDPA Cross-Course Autofill**: `/register` ให้กรอกเลขบัตร 13 หลักเป็นข้อ 1 ก่อนชื่อ; เมื่อพบประวัติเดิม (รองรับทั้งรูปแบบติดกันและมีขีดคั่น) ต้องยืนยันเลขท้ายเบอร์โทร 4 หลักผ่าน `POST /api/applications/lookup-profile` (ล็อก brute-force 5/10 นาที) ก่อนเติมข้อมูลและเสนอเฉพาะ `photo`/`idcard` ที่ไม่ติด `requestedDocKinds`, และต้องล้าง `reusedFromRef` + รีเซ็ตสถานะโหลดทันทีเมื่อเปลี่ยน/ลบเลขบัตร
 - ช่อง 3.1 สำหรับ `สมาคมกีฬาแห่งประเทศไทย` / `สมาคมกีฬาแห่งจังหวัด` ใช้ `AssociationAutocompleteInput` (93 สมาคมฯ / 77 จังหวัด) โดยยังพิมพ์เองได้
 - แบบ ส.ฬ. 8 (`saka`, `onlyTargetGroups`) ใช้เฉพาะหลักสูตรที่ 1 (`isExecutiveManagementCourse`) เฉพาะกลุ่ม `สมาคมกีฬาแห่งประเทศไทย` และ `สมาคมกีฬาแห่งจังหวัด` ตรวจตรงกันผ่าน `isDocumentApplicableForAffiliation` ทุกหน้า
 

@@ -22,6 +22,7 @@ Use this workflow before finishing any code modification in the SAT Registration
    node .agents/skills/sat-verify-and-deploy/scripts/check-hooks.cjs
    ```
 3. If course rules, document checklist conditions, province matching, or association coverage logic changed, compile the modified module and run Node `assert` verification checks for both positive cases and fallbacks.
+   - On Windows PowerShell 5.1, avoid escaped `\"` inside double-quoted `node -e "..."` strings (use `\x22` or regex literals), convert cross-realm arrays from `vm.runInNewContext` with `Array.from(...)` before `assert.deepStrictEqual`, and verify ZIP changes by extracting a sample archive with `Expand-Archive`.
 4. Run the Next.js production build and confirm zero compilation/type/route errors (Note: on Windows PowerShell 5.1, chain commands with `; if ($LASTEXITCODE -eq 0) { ... }` instead of `&&`):
    ```powershell
    npm run build
@@ -33,8 +34,9 @@ Use this workflow before finishing any code modification in the SAT Registration
 Before committing, explicitly verify these 4 aspects in the changed files:
 1. **Bugs / Logic Errors**: Confirm edge cases, zero React Hooks after early returns (`check-hooks.cjs`), dialog `useRef` locks reset cleanly (`finally` + open/close), `!c.isHistorical` / live course titles stay intact, and Next.js App Router `app/api/**/route.ts` files export only HTTP handlers/route configs (never non-handler helper functions).
 2. **Error Handling**: Confirm offline/Cloud fallback handling, null/empty guards, and user-facing notices.
-3. **Performance & Security**: Confirm `useMemo`/cleanup on effects, no `NEXT_PUBLIC_` secrets, and no exposed 13-digit ID cards or PII on public views/printouts.
+3. **Performance & Security**: Confirm `useMemo`/cleanup on effects, raster images pass through `compressImageFile`, `fetchApplicationsFromSupabase` avoids bulk `data_url` selects, lookup endpoints require phone verification + rate limits, no `NEXT_PUBLIC_` secrets, and no exposed 13-digit ID cards or PII on public views/printouts.
 4. **Client-Server Data Integrity**: Confirm Cloud sync uses `hasLoadedFromCloud` (plus `mounted && cloudLoaded` loading guards on dynamic/receipt/print views to prevent F5 false not-found flashes) / granular sync, never overwrites admin-edited Supabase records with hardcoded defaults, `await`s Cloud uploads before redirect, and obeys safe-replace ordering (verify new file in DB before deleting old DB/Storage artifacts).
+   - Any endpoint deleting from `sat-documents` MUST guard deletions with `removeUnreferencedStorageObjects` so shared reused documents across courses remain intact.
 
 ## 3. Safe Git Commit & Push on Windows
 
