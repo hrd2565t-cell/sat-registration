@@ -10,6 +10,7 @@ import {
 import { resetCourses } from "@/lib/courses-store";
 import { useAlumniStore } from "@/lib/alumni-store";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { CourseArchiveManager } from "@/components/admin/course-archive-manager";
 
 function Toggle({
   checked,
@@ -178,6 +179,8 @@ export function SettingsAdmin() {
               </button>
             </div>
           </section>
+
+          <CourseArchiveManager />
         </div>
 
         <div className="space-y-3">
