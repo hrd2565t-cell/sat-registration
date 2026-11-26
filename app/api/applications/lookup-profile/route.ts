@@ -89,13 +89,18 @@ export async function POST(request: Request) {
       }
     }
 
+    const formattedId = cleanId.replace(
+      /(\d{1})(\d{4})(\d{5})(\d{2})(\d{1})/,
+      "$1-$2-$3-$4-$5"
+    );
+
     // 1. ค้นหาจากใบสมัครรอบปัจจุบันก่อน (applications)
     const { data: appRows, error: appErr } = await supabase
       .from("applications")
       .select(
         "ref, course_id, course_title, name, email, phone, affiliation, position, status, submitted_at, ai"
       )
-      .eq("id_card", cleanId)
+      .in("id_card", [cleanId, formattedId])
       .order("submitted_at", { ascending: false });
 
     if (appErr) {
@@ -122,7 +127,7 @@ export async function POST(request: Request) {
         .select(
           "id, name, phone, email, affiliation, affiliation_group, course_title, year_be"
         )
-        .eq("id_card", cleanId)
+        .in("id_card", [cleanId, formattedId])
         .order("year_be", { ascending: false });
 
       if (alumniErr) {

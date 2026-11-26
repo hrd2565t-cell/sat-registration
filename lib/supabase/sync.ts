@@ -949,6 +949,7 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
             name: doc.name,
             size: doc.size,
             type: realType,
+            storagePath: doc.storage_path ?? undefined,
             dataUrl: (doc.data_url || doc.storage_path) ?? undefined,
           };
         });

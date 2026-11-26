@@ -231,6 +231,13 @@ function RegistrationContent() {
   const [excludedDocKinds, setExcludedDocKinds] = useState<string[]>([]);
   const lastCheckedIdRef = useRef<string>("");
   const verifiedIdCardRef = useRef<string>("");
+  const applicationsRef = useRef(applications);
+  const traineesRef = useRef(trainees);
+
+  useEffect(() => {
+    applicationsRef.current = applications;
+    traineesRef.current = trainees;
+  }, [applications, trainees]);
 
   // รีเซ็ตข้อความแจ้งเตือนสังกัดไม่ตรงเมื่อเปลี่ยนหลักสูตร (หากยืนยันตัวตนแล้วให้คง Reusable Docs ไว้และตรวจสิทธิ์ใหม่)
   useEffect(() => {
@@ -243,6 +250,7 @@ function RegistrationContent() {
     if (allowedTargetGroups.length === 1) {
       if (affiliation !== allowedTargetGroups[0].label) {
         setAffiliation(allowedTargetGroups[0].label);
+        setSubAffiliation("");
       }
       return;
     }
@@ -251,6 +259,7 @@ function RegistrationContent() {
     );
     if (!isCurrentAllowed) {
       setAffiliation(allowedTargetGroups[0].label);
+      setSubAffiliation("");
     }
   }, [allowedTargetGroups, affiliation]);
 
@@ -319,16 +328,18 @@ function RegistrationContent() {
   useEffect(() => {
     const digits = idCard.replace(/\D/g, "");
     if (digits.length !== 13 || !isValidThaiIdCard(digits)) {
-      if (lastCheckedIdRef.current || verifiedIdCardRef.current) {
-        lastCheckedIdRef.current = "";
-        verifiedIdCardRef.current = "";
-        setLookupStatus("idle");
-        setLookupMeta(null);
-        setVerifyLast4("");
-        setVerifyError("");
-        setReusableDocs([]);
-        setExcludedDocKinds([]);
+      if (verifiedIdCardRef.current) {
+        setPhotoFiles((prev) => prev.filter((f) => !f.reusedFromRef));
+        setIdCardFiles((prev) => prev.filter((f) => !f.reusedFromRef));
       }
+      lastCheckedIdRef.current = "";
+      verifiedIdCardRef.current = "";
+      setLookupStatus("idle");
+      setLookupMeta(null);
+      setVerifyLast4("");
+      setVerifyError("");
+      setReusableDocs([]);
+      setExcludedDocKinds([]);
       return;
     }
 
@@ -336,7 +347,11 @@ function RegistrationContent() {
       return;
     }
 
-    // เปลี่ยนเลขบัตรประชาชนใหม่: ล้างผลยืนยันของคนก่อนหน้าทันที
+    // เปลี่ยนเลขบัตรประชาชนใหม่: ล้างผลยืนยันและไฟล์เดิมที่ดึงไว้ของคนก่อนหน้าทันที
+    if (verifiedIdCardRef.current && verifiedIdCardRef.current !== digits) {
+      setPhotoFiles((prev) => prev.filter((f) => !f.reusedFromRef));
+      setIdCardFiles((prev) => prev.filter((f) => !f.reusedFromRef));
+    }
     verifiedIdCardRef.current = "";
     setVerifyLast4("");
     setVerifyError("");
@@ -389,7 +404,7 @@ function RegistrationContent() {
           // Offline / local fallback without Supabase configured (still enforces 4-digit phone verification)
           lastCheckedIdRef.current = digits;
           const localBest = pickBestPriorApplication(
-            applications.filter((a) => a.idCard === digits)
+            applicationsRef.current.filter((a) => a.idCard === digits)
           );
           if (localBest) {
             const masked = maskPhoneNumber(localBest.record.phone);
@@ -406,7 +421,7 @@ function RegistrationContent() {
             setLookupStatus(hasPhone ? "found_pending" : "found_no_phone");
             return;
           }
-          const localAlumni = trainees.find(
+          const localAlumni = traineesRef.current.find(
             (t) => t.idCard.replace(/\D/g, "") === digits
           );
           if (localAlumni) {
@@ -423,7 +438,11 @@ function RegistrationContent() {
             return;
           }
           setLookupStatus("idle");
+          return;
         }
+
+        // Non-OK, non-503 status: reset spinner so the form never gets stuck in checking
+        setLookupStatus("idle");
       } catch (err) {
         if ((err as { name?: string })?.name !== "AbortError") {
           setLookupStatus("idle");
@@ -435,7 +454,7 @@ function RegistrationContent() {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [idCard, applications, trainees]);
+  }, [idCard]);
 
   const applyVerifiedProfile = (profile: {
     name: string;
