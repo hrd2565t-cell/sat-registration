@@ -16,6 +16,7 @@ import {
 } from "@/lib/courses";
 import { resolveRequestedDocumentKinds } from "@/lib/document-checklist";
 import { saveDocumentToStorage } from "@/lib/document-storage";
+import { compressImageFile } from "@/lib/image-compression";
 
 interface ResubmitDocumentsBoxProps {
   application: ApplicantRecord;
@@ -296,7 +297,13 @@ export function ResubmitDocumentsBox({
                   </div>
                   <FileUpload
                     files={currentFiles}
-                    onAdd={(file) => setFilesForKind(kind, [file])}
+                    onAdd={async (file) => {
+                      const optimized = await compressImageFile(
+                        file,
+                        kind === "photo" ? "photo" : "document"
+                      );
+                      setFilesForKind(kind, [optimized]);
+                    }}
                     onRemove={() => setFilesForKind(kind, [])}
                     emptyText={`คลิกหรือลากไฟล์ "${title}" มาที่นี่`}
                     accept={
@@ -349,7 +356,13 @@ export function ResubmitDocumentsBox({
               <div className="mt-1">
                 <FileUpload
                   files={filesByKind[selectedKind] || []}
-                  onAdd={(file) => setFilesForKind(selectedKind, [file])}
+                  onAdd={async (file) => {
+                    const optimized = await compressImageFile(
+                      file,
+                      selectedKind === "photo" ? "photo" : "document"
+                    );
+                    setFilesForKind(selectedKind, [optimized]);
+                  }}
                   onRemove={() => setFilesForKind(selectedKind, [])}
                   emptyText="คลิกหรือลากไฟล์มาที่นี่เพื่อแนบเอกสารฉบับแก้ไข"
                   accept=".pdf,.jpg,.jpeg,.png,.webp"

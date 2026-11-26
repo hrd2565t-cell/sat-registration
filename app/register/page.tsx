@@ -54,6 +54,7 @@ import {
   useAlumniStore,
 } from "@/lib/alumni-store";
 import { saveDocumentToStorage } from "@/lib/document-storage";
+import { compressImageFile } from "@/lib/image-compression";
 
 const labelClass = "text-[12.5px] font-medium text-[#1f2937]";
 
@@ -693,49 +694,6 @@ function RegistrationContent() {
   const [certFiles, setCertFiles] = useState<FileItem[]>([]);
   const [idCardFiles, setIdCardFiles] = useState<FileItem[]>([]);
   const [sakaFiles, setSakaFiles] = useState<FileItem[]>([]);
-
-  // ฟังก์ชันบีบอัดรูปถ่ายหน้าตรงอัตโนมัติให้ได้สัดส่วนรูปติดบัตร (~100-200KB)
-  const compressPhotoFile = async (file: FileItem): Promise<FileItem> => {
-    if (!file.dataUrl || !file.dataUrl.startsWith("data:image/")) {
-      return file;
-    }
-    return new Promise((resolve) => {
-      const img = new window.Image();
-      img.onload = () => {
-        const maxWidth = 600;
-        const maxHeight = 800;
-        const scale = Math.min(1, maxWidth / img.naturalWidth, maxHeight / img.naturalHeight);
-        const targetW = Math.max(1, Math.round(img.naturalWidth * scale));
-        const targetH = Math.max(1, Math.round(img.naturalHeight * scale));
-
-        const canvas = document.createElement("canvas");
-        canvas.width = targetW;
-        canvas.height = targetH;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          resolve(file);
-          return;
-        }
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, targetW, targetH);
-        ctx.drawImage(img, 0, 0, targetW, targetH);
-        const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.85);
-        const bytes = Math.round((compressedDataUrl.length * 3) / 4);
-        const sizeStr =
-          bytes >= 1024 * 1024
-            ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-            : `${Math.round(bytes / 1024)} KB`;
-        resolve({
-          ...file,
-          dataUrl: compressedDataUrl,
-          size: sizeStr,
-          type: "image/jpeg",
-        });
-      };
-      img.onerror = () => resolve(file);
-      img.src = file.dataUrl || "";
-    });
-  };
 
   const docConfig = useMemo(() => getCourseDocumentConfig(course), [course]);
   const isSakaApplicable = useMemo(
@@ -1571,12 +1529,12 @@ function RegistrationContent() {
                   <span>📎</span>
                   <span>เอกสารและรูปถ่ายผู้สมัคร</span>
                 </h2>
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[#f1f5f9] px-2.5 py-0.5 text-[11px] font-semibold text-[#475569]">
-                    📁 จำกัดไม่เกิน 10 MB / ไฟล์
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#eff6ff] px-2.5 py-0.5 text-[10.5px] font-semibold text-[#1e40af]">
+                    ⚡ บีบอัดรูปภาพอัตโนมัติ (PDF คงต้นฉบับ)
                   </span>
-                  <span className="text-[11px] font-medium text-[#64748b] hidden sm:inline">
-                    (JPG/PNG/PDF)
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#f1f5f9] px-2.5 py-0.5 text-[11px] font-semibold text-[#475569]">
+                    📁 ไม่เกิน 10 MB / ไฟล์
                   </span>
                 </div>
               </div>
@@ -1711,7 +1669,7 @@ function RegistrationContent() {
                               <FileUpload
                                 files={photoFiles}
                                 onAdd={async (file) => {
-                                  const compressed = await compressPhotoFile(file);
+                                  const compressed = await compressImageFile(file, "photo");
                                   setPhotoFiles([compressed]);
                                 }}
                                 onRemove={() => setPhotoFiles([])}
@@ -1739,7 +1697,10 @@ function RegistrationContent() {
                     </p>
                     <FileUpload
                       files={coverFiles}
-                      onAdd={(file) => setCoverFiles([file])}
+                      onAdd={async (file) => {
+                        const compressed = await compressImageFile(file, "document");
+                        setCoverFiles([compressed]);
+                      }}
                       onRemove={() => setCoverFiles([])}
                       emptyText="คลิกเพื่อแนบหนังสือนำส่ง (ไฟล์ PDF หรือรูปภาพ)"
                       accept=".pdf,.jpg,.jpeg,.png,.webp"
@@ -1763,7 +1724,10 @@ function RegistrationContent() {
                     </p>
                     <FileUpload
                       files={certFiles}
-                      onAdd={(file) => setCertFiles([file])}
+                      onAdd={async (file) => {
+                        const compressed = await compressImageFile(file, "document");
+                        setCertFiles([compressed]);
+                      }}
                       onRemove={() => setCertFiles([])}
                       emptyText="คลิกเพื่อแนบหนังสือรับรอง (ไฟล์ PDF หรือรูปภาพ)"
                       accept=".pdf,.jpg,.jpeg,.png,.webp"
@@ -1874,7 +1838,10 @@ function RegistrationContent() {
                           )}
                           <FileUpload
                             files={idCardFiles}
-                            onAdd={(file) => setIdCardFiles([file])}
+                            onAdd={async (file) => {
+                              const compressed = await compressImageFile(file, "document");
+                              setIdCardFiles([compressed]);
+                            }}
                             onRemove={() => setIdCardFiles([])}
                             emptyText="คลิกเพื่อแนบสำเนาบัตรประชาชน (ไฟล์ PDF หรือรูปภาพ)"
                             accept=".pdf,.jpg,.jpeg,.png,.webp"
@@ -1914,7 +1881,10 @@ function RegistrationContent() {
                     </div>
                     <FileUpload
                       files={sakaFiles}
-                      onAdd={(file) => setSakaFiles([file])}
+                      onAdd={async (file) => {
+                        const compressed = await compressImageFile(file, "document");
+                        setSakaFiles([compressed]);
+                      }}
                       onRemove={() => setSakaFiles([])}
                       emptyText="คลิกเพื่อแนบสำเนาใบ ส.ฬ. 8 (ไฟล์ PDF หรือรูปภาพ)"
                       accept=".pdf,.jpg,.jpeg,.png,.webp"

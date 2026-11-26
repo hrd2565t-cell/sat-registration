@@ -262,13 +262,9 @@ export async function syncApplicationDocumentsToSupabase(
       const dbFileType =
         doc.kind === "idcard" ? `idcard:${doc.type || ""}` : (doc.type ?? null);
 
-      // เก็บ Base64 data_url ไว้ในฐานข้อมูลเสมอสำหรับรูปถ่าย (photo) ไฟล์ขนาดเล็ก (< 500KB) หรือเมื่อ Storage ไม่สำเร็จ
+      // เก็บ Base64 data_url เฉพาะกรณีอัปโหลดเข้า Storage ไม่สำเร็จ (ลดขนาด Database และ Egress)
       const hasInlineBase64 = Boolean(effectiveDataUrl && effectiveDataUrl.startsWith("data:"));
-      const shouldKeepInlineDataUrl =
-        hasInlineBase64 &&
-        (doc.kind === "photo" ||
-          !storagePath ||
-          Boolean(effectiveDataUrl && effectiveDataUrl.length < 500_000));
+      const shouldKeepInlineDataUrl = hasInlineBase64 && !storagePath;
 
       let { data: insertedRow, error: insertErr } = await supabase
         .from("application_documents")
@@ -474,8 +470,7 @@ export async function backfillDocumentToSupabase(
     const dbKind = doc.kind === "idcard" ? "certificate" : doc.kind;
     const dbFileType =
       doc.kind === "idcard" ? `idcard:${doc.type || "application/pdf"}` : (doc.type ?? null);
-    const shouldKeepInlineDataUrl =
-      doc.kind === "photo" || !storagePath || dataUrl.length < 500_000;
+    const shouldKeepInlineDataUrl = !storagePath;
 
     await supabase.from("application_documents").insert({
       application_ref: applicationRef,
@@ -843,10 +838,27 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
       activeRefs.length > 0
         ? await supabase
             .from("application_documents")
-            .select("*")
+            .select("id, application_ref, kind, name, size, file_type, storage_path, created_at")
             .in("application_ref", activeRefs)
             .order("created_at", { ascending: true })
         : { data: [] };
+
+    const legacyInlineIds = (allDocs || [])
+      .filter((doc) => !doc.storage_path)
+      .map((doc) => doc.id);
+
+    const legacyDataUrlMap = new Map<string, string>();
+    if (legacyInlineIds.length > 0) {
+      const { data: legacyRows } = await supabase
+        .from("application_documents")
+        .select("id, data_url")
+        .in("id", legacyInlineIds);
+      for (const lr of legacyRows || []) {
+        if (lr.data_url) {
+          legacyDataUrlMap.set(lr.id, lr.data_url);
+        }
+      }
+    }
 
     const { data: allNotes } =
       activeRefs.length > 0
@@ -942,7 +954,6 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
                 ? doc.file_type.replace("saka:", "")
                 : (doc.file_type ?? undefined);
 
-          // ให้ความสำคัญกับ data_url (Base64) ก่อน storage_path เพราะถัง sat-documents อาจเป็น Private Bucket
           return {
             id: doc.id,
             kind: realKind,
@@ -950,7 +961,7 @@ export async function fetchApplicationsFromSupabase(): Promise<ApplicantRecord[]
             size: doc.size,
             type: realType,
             storagePath: doc.storage_path ?? undefined,
-            dataUrl: (doc.data_url || doc.storage_path) ?? undefined,
+            dataUrl: (doc.storage_path || legacyDataUrlMap.get(doc.id)) ?? undefined,
           };
         });
 

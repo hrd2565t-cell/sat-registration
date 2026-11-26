@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AiVerdictBadge } from "@/components/admin/ai-verdict-badge";
 import { DocumentPreviewDialog } from "@/components/admin/document-preview-dialog";
 import { Pagination } from "@/components/ui/pagination";
@@ -10,6 +10,8 @@ import { Select } from "@/components/ui/select";
 import { getCourseKeyword, sortCoursesChronologically } from "@/lib/courses";
 import { useCourses } from "@/lib/courses-store";
 import { auditApplicantDocuments } from "@/lib/document-checklist";
+import { getDocumentFromStorage } from "@/lib/document-storage";
+import { resolveSupabaseDocumentUrl } from "@/lib/supabase/sync";
 import {
   formatThaiDateTime,
   getDocumentLabel,
@@ -18,6 +20,68 @@ import {
   type ApplicantRecord,
 } from "@/lib/applications-store";
 import { exportApplicantsToExcel } from "@/lib/export-excel";
+
+function QueuePhotoThumb({ doc }: { doc?: ApplicantDocument }) {
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(
+    doc?.dataUrl?.startsWith("data:") ? doc.dataUrl : null
+  );
+  const syncKey = `${doc?.id ?? ""}|${doc?.dataUrl ?? ""}`;
+  const [prevKey, setPrevKey] = useState(syncKey);
+  if (syncKey !== prevKey) {
+    setPrevKey(syncKey);
+    setResolvedUrl(doc?.dataUrl?.startsWith("data:") ? doc.dataUrl : null);
+  }
+
+  useEffect(() => {
+    let active = true;
+    if (!doc || doc.dataUrl?.startsWith("data:")) {
+      return;
+    }
+    if (typeof window !== "undefined") {
+      const cached = sessionStorage.getItem(`sat-doc-${doc.id}`);
+      if (cached) {
+        queueMicrotask(() => {
+          if (active) setResolvedUrl(cached);
+        });
+        return () => {
+          active = false;
+        };
+      }
+    }
+    (async () => {
+      if (doc.id) {
+        const localDoc = await getDocumentFromStorage(doc.id, doc.name);
+        if (active && localDoc?.dataUrl) {
+          setResolvedUrl(localDoc.dataUrl);
+          return;
+        }
+      }
+      if (doc.dataUrl) {
+        const remote = await resolveSupabaseDocumentUrl(doc.dataUrl);
+        if (active && remote) {
+          setResolvedUrl(remote);
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [doc]);
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={resolvedUrl || "/assets/avatar-placeholder.svg"}
+      alt=""
+      onError={(e) => {
+        if (e.currentTarget.src.indexOf("avatar-placeholder.svg") === -1) {
+          e.currentTarget.src = "/assets/avatar-placeholder.svg";
+        }
+      }}
+      className="h-14 w-11 shrink-0 rounded-[4px] border border-[#cbd5e1] object-cover shadow-xs"
+    />
+  );
+}
 
 const PAGE_SIZE = 8;
 
@@ -448,15 +512,7 @@ export function ReviewQueue() {
               >
                 {/* Left side: Photo & Applicant Details */}
                 <div className="flex min-w-0 flex-1 items-start gap-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={
-                      item.documents?.find((d) => d.kind === "photo")?.dataUrl ||
-                      "/assets/avatar-placeholder.svg"
-                    }
-                    alt=""
-                    className="h-14 w-11 shrink-0 rounded-[4px] border border-[#cbd5e1] object-cover shadow-xs"
-                  />
+                  <QueuePhotoThumb doc={item.documents?.find((d) => d.kind === "photo")} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                       <Link
