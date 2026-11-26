@@ -219,8 +219,8 @@ export async function syncApplicationDocumentsToSupabase(
         continue;
       }
 
-      let effectiveDataUrl = doc.dataUrl;
-      if (!effectiveDataUrl && typeof window !== "undefined") {
+      let effectiveDataUrl = doc.dataUrl?.startsWith("data:") ? doc.dataUrl : undefined;
+      if (!effectiveDataUrl && !doc.storagePath && typeof window !== "undefined") {
         const stored = await getDocumentFromStorage(doc.id, doc.name);
         if (stored?.dataUrl) {
           effectiveDataUrl = stored.dataUrl;
@@ -228,13 +228,13 @@ export async function syncApplicationDocumentsToSupabase(
       }
 
       const alreadyHasPlaceholder = (existingDocs || []).some(matchesDoc);
-      if (!isForcedKind && alreadyHasPlaceholder && !effectiveDataUrl) {
+      if (!isForcedKind && alreadyHasPlaceholder && !effectiveDataUrl && !doc.storagePath) {
         onProgress?.(idx + 1, total);
         continue;
       }
 
-      let storagePath: string | null = null;
-      if (effectiveDataUrl && effectiveDataUrl.startsWith("data:")) {
+      let storagePath: string | null = doc.storagePath?.trim() || null;
+      if (!storagePath && effectiveDataUrl && effectiveDataUrl.startsWith("data:")) {
         const cleanRawName = doc.name.replace(/\s*\(แนบใหม่\)\s*$/g, "").trim();
         const rawExt = cleanRawName.includes(".")
           ? cleanRawName.split(".").pop() || ""
@@ -263,10 +263,12 @@ export async function syncApplicationDocumentsToSupabase(
         doc.kind === "idcard" ? `idcard:${doc.type || ""}` : (doc.type ?? null);
 
       // เก็บ Base64 data_url ไว้ในฐานข้อมูลเสมอสำหรับรูปถ่าย (photo) ไฟล์ขนาดเล็ก (< 500KB) หรือเมื่อ Storage ไม่สำเร็จ
+      const hasInlineBase64 = Boolean(effectiveDataUrl && effectiveDataUrl.startsWith("data:"));
       const shouldKeepInlineDataUrl =
-        doc.kind === "photo" ||
-        !storagePath ||
-        Boolean(effectiveDataUrl && effectiveDataUrl.length < 500_000);
+        hasInlineBase64 &&
+        (doc.kind === "photo" ||
+          !storagePath ||
+          Boolean(effectiveDataUrl && effectiveDataUrl.length < 500_000));
 
       let { data: insertedRow, error: insertErr } = await supabase
         .from("application_documents")

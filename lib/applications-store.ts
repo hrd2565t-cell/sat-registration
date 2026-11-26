@@ -43,6 +43,7 @@ export interface ApplicantDocument {
   size: string;
   dataUrl?: string;
   type?: string;
+  storagePath?: string;
 }
 
 /**
@@ -216,6 +217,7 @@ function persist() {
           name: doc.name,
           size: doc.size,
           type: doc.type,
+          storagePath: doc.storagePath,
           // เก็บ dataUrl ของรูปถ่ายหน้าตรง (ขนาดบีบอัด ~10-50KB) ไว้ใน localStorage ด้วยเพื่อแสดงผลทันที
           dataUrl:
             doc.kind === "photo" && doc.dataUrl && doc.dataUrl.length < 300_000

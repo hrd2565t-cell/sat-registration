@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/service";
 import { isAdminRequestAuthorized } from "@/lib/server-auth";
+import { extractStorageObjectPath } from "@/lib/profile-lookup";
+import { removeUnreferencedStorageObjects } from "@/lib/server-storage-cleanup";
 
 const VALID_DOC_KINDS = new Set([
   "photo",
@@ -35,22 +37,6 @@ function resolveRealDocKind(row: {
     return "saka";
   }
   return row.kind;
-}
-
-function extractStorageObjectPath(
-  storagePath: string | null | undefined
-): string | null {
-  if (!storagePath || typeof storagePath !== "string") return null;
-  const marker = "/sat-documents/";
-  const idx = storagePath.indexOf(marker);
-  if (idx === -1) return null;
-  const raw = storagePath.slice(idx + marker.length).split("?")[0];
-  if (!raw) return null;
-  try {
-    return decodeURIComponent(raw);
-  } catch {
-    return raw;
-  }
 }
 
 export async function POST(request: Request) {
@@ -174,14 +160,11 @@ export async function POST(request: Request) {
     const pathsList = Array.from(pathsToDelete);
     let deletedFileCount = 0;
     if (pathsList.length > 0) {
-      const { error: storageErr } = await supabase.storage
-        .from("sat-documents")
-        .remove(pathsList);
-      if (storageErr) {
-        console.warn("Failed to remove stale storage objects:", storageErr.message);
-      } else {
-        deletedFileCount = pathsList.length;
-      }
+      const { deletedCount } = await removeUnreferencedStorageObjects(
+        supabase,
+        pathsList
+      );
+      deletedFileCount = deletedCount;
     }
 
     return NextResponse.json({

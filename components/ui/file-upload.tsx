@@ -7,6 +7,9 @@ export interface FileItem {
   size: string;
   dataUrl?: string;
   type?: string;
+  storagePath?: string;
+  previewUrl?: string;
+  reusedFromRef?: string;
 }
 
 interface FileUploadProps {

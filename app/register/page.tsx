@@ -32,11 +32,19 @@ import { useCourses } from "@/lib/courses-store";
 import {
   checkRegistrationEligibility,
   createAndSyncApplication,
+  formatThaiDate,
   useApplications,
   type ApplicantDocument,
   type ApplicantDocumentKind,
   type RegistrationEligibility,
 } from "@/lib/applications-store";
+import {
+  maskPhoneNumber,
+  matchesPhoneLast4,
+  pickBestPriorApplication,
+  selectReusableDocsFromRows,
+  type ReusableDocumentPayload,
+} from "@/lib/profile-lookup";
 import { ConflictDialog } from "@/components/register/conflict-dialog";
 import { PdpaModal } from "@/components/register/pdpa-modal";
 import { isValidThaiIdCard } from "@/lib/validation";
@@ -48,6 +56,15 @@ import {
 import { saveDocumentToStorage } from "@/lib/document-storage";
 
 const labelClass = "text-[12.5px] font-medium text-[#1f2937]";
+
+const DROPDOWN_PREFIXES = new Set([
+  "นาย",
+  "นาง",
+  "นางสาว",
+  "ว่าที่ ร.ต.",
+  "ดร.",
+  "ผศ.ดร.",
+]);
 
 const KNOWN_PREFIXES = [
   "นาย",
@@ -88,7 +105,8 @@ function toDocument(
   index: number
 ): ApplicantDocument {
   const docId = `${kind}-${Date.now()}-${index}`;
-  if (file.dataUrl) {
+  const hasInlineBase64 = Boolean(file.dataUrl && file.dataUrl.startsWith("data:"));
+  if (hasInlineBase64 && file.dataUrl) {
     if (typeof window !== "undefined") {
       try {
         sessionStorage.setItem(`sat-doc-${docId}`, file.dataUrl);
@@ -111,7 +129,8 @@ function toDocument(
     kind,
     name: file.name,
     size: file.size,
-    dataUrl: file.dataUrl,
+    storagePath: file.storagePath,
+    dataUrl: hasInlineBase64 ? file.dataUrl : file.storagePath,
     type: file.type,
   };
 }
@@ -191,11 +210,30 @@ function RegistrationContent() {
   const [conflictModal, setConflictModal] =
     useState<RegistrationEligibility | null>(null);
   const [showPdpaModal, setShowPdpaModal] = useState(false);
-  const hasAutofilledRef = useRef(false);
 
-  // รีเซ็ตสถานะการเติมข้อมูลอัตโนมัติและข้อความแจ้งเตือนเมื่อเปลี่ยนหลักสูตร
+  // PDPA-safe Cross-Course Profile Lookup (13-digit ID card + last 4 digits of phone)
+  const [lookupStatus, setLookupStatus] = useState<
+    "idle" | "checking" | "found_pending" | "found_no_phone" | "verified" | "dismissed"
+  >("idle");
+  const [lookupMeta, setLookupMeta] = useState<{
+    source: "application" | "alumni";
+    sourceRef?: string;
+    courseTitle?: string;
+    submittedAt?: string;
+    maskedPhone: string;
+    hasPhone: boolean;
+    isOfflineFallback?: boolean;
+  } | null>(null);
+  const [verifyLast4, setVerifyLast4] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState("");
+  const [reusableDocs, setReusableDocs] = useState<ReusableDocumentPayload[]>([]);
+  const [excludedDocKinds, setExcludedDocKinds] = useState<string[]>([]);
+  const lastCheckedIdRef = useRef<string>("");
+  const verifiedIdCardRef = useRef<string>("");
+
+  // รีเซ็ตข้อความแจ้งเตือนสังกัดไม่ตรงเมื่อเปลี่ยนหลักสูตร (หากยืนยันตัวตนแล้วให้คง Reusable Docs ไว้และตรวจสิทธิ์ใหม่)
   useEffect(() => {
-    hasAutofilledRef.current = false;
     setAutofillMismatchNotice(null);
   }, [course.id]);
 
@@ -277,121 +315,317 @@ function RegistrationContent() {
     );
   }, [idCard, course.id, applications, courses]);
 
-  // ดึงข้อมูลส่วนตัวจากการสมัครก่อนหน้าหรือทำเนียบรุ่นมาเติมให้อัตโนมัติ เพื่ออำนวยความสะดวก
+  // ตรวจสอบประวัติเดิมแบบปลอดภัยตาม PDPA เมื่อกรอกเลขบัตรประชาชนครบ 13 หลักและถูกต้อง
   useEffect(() => {
     const digits = idCard.replace(/\D/g, "");
-    if (!hasAutofilledRef.current) {
-      if (digits.length === 13) {
-        const prior = applications.find(
-          (a) => a.idCard === digits && a.status !== "rejected"
-        );
-        if (prior) {
-          hasAutofilledRef.current = true;
-          const timer = setTimeout(() => {
-            if (prior.name) {
-              const parsed = splitPrefixAndName(prior.name);
-              setPrefix(parsed.prefix);
-              setName(parsed.name);
-            }
-            if (prior.phone) setPhone(prior.phone);
-            if (prior.email) setEmail(prior.email);
-            if (prior.affiliation) {
-              const match = prior.affiliation.match(/^(.*?)\s*\((.*?)\)$/);
-              const priorPrimary = match
-                ? match[1].trim()
-                : prior.affiliation.trim();
-              const priorSub = match ? match[2].trim() : "";
-              const resolvedKey =
-                resolveTargetGroupKeyFromAffiliation(priorPrimary);
-              const canonicalGroup = resolvedKey
-                ? allowedTargetGroups.find((tg) => tg.key === resolvedKey)
-                : allowedTargetGroups.find((tg) => tg.label === priorPrimary);
+    if (digits.length !== 13 || !isValidThaiIdCard(digits)) {
+      if (lastCheckedIdRef.current || verifiedIdCardRef.current) {
+        lastCheckedIdRef.current = "";
+        verifiedIdCardRef.current = "";
+        setLookupStatus("idle");
+        setLookupMeta(null);
+        setVerifyLast4("");
+        setVerifyError("");
+        setReusableDocs([]);
+        setExcludedDocKinds([]);
+      }
+      return;
+    }
 
-              if (
-                canonicalGroup &&
-                isAffiliationAllowedForCourse(priorPrimary, course)
-              ) {
-                setAffiliation(canonicalGroup.label);
-                if (priorSub) {
-                  setSubAffiliation(priorSub);
-                } else if (priorPrimary !== canonicalGroup.label) {
-                  setSubAffiliation(priorPrimary);
-                }
-                setAutofillMismatchNotice(null);
-              } else {
-                setAutofillMismatchNotice(
-                  `ข้อมูลการสมัครก่อนหน้าของคุณระบุสังกัด "${priorPrimary}" ซึ่งไม่อยู่ในกลุ่มเป้าหมายที่หลักสูตรนี้เปิดรับ กรุณาตรวจสอบกลุ่มเป้าหมายและระบุหน่วยงาน/สมาคมกีฬาใหม่ในข้อ 3.1`
-                );
-              }
-            }
-            if (prior.position) setPosition(prior.position);
-          }, 0);
-          return () => clearTimeout(timer);
+    if (digits === lastCheckedIdRef.current) {
+      return;
+    }
+
+    // เปลี่ยนเลขบัตรประชาชนใหม่: ล้างผลยืนยันของคนก่อนหน้าทันที
+    verifiedIdCardRef.current = "";
+    setVerifyLast4("");
+    setVerifyError("");
+    setReusableDocs([]);
+    setExcludedDocKinds([]);
+    setLookupMeta(null);
+    setLookupStatus("checking");
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/applications/lookup-profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({ action: "check", idCard: digits }),
+        });
+
+        if (controller.signal.aborted) return;
+
+        if (res.ok) {
+          const data = (await res.json()) as {
+            ok?: boolean;
+            found?: boolean;
+            source?: "application" | "alumni";
+            sourceRef?: string;
+            courseTitle?: string;
+            submittedAt?: string;
+            maskedPhone?: string;
+            hasPhone?: boolean;
+          };
+          lastCheckedIdRef.current = digits;
+          if (data.found && data.source) {
+            setLookupMeta({
+              source: data.source,
+              sourceRef: data.sourceRef,
+              courseTitle: data.courseTitle,
+              submittedAt: data.submittedAt,
+              maskedPhone: data.maskedPhone || "",
+              hasPhone: Boolean(data.hasPhone),
+            });
+            setLookupStatus(data.hasPhone ? "found_pending" : "found_no_phone");
+          } else {
+            setLookupStatus("idle");
+          }
+          return;
+        }
+
+        if (res.status === 503) {
+          // Offline / local fallback without Supabase configured (still enforces 4-digit phone verification)
+          lastCheckedIdRef.current = digits;
+          const localBest = pickBestPriorApplication(
+            applications.filter((a) => a.idCard === digits)
+          );
+          if (localBest) {
+            const masked = maskPhoneNumber(localBest.record.phone);
+            const hasPhone = Boolean(masked);
+            setLookupMeta({
+              source: "application",
+              sourceRef: localBest.record.ref,
+              courseTitle: localBest.record.courseTitle,
+              submittedAt: localBest.record.submittedAt,
+              maskedPhone: masked,
+              hasPhone,
+              isOfflineFallback: true,
+            });
+            setLookupStatus(hasPhone ? "found_pending" : "found_no_phone");
+            return;
+          }
+          const localAlumni = trainees.find(
+            (t) => t.idCard.replace(/\D/g, "") === digits
+          );
+          if (localAlumni) {
+            const masked = maskPhoneNumber(localAlumni.phone);
+            const hasPhone = Boolean(masked);
+            setLookupMeta({
+              source: "alumni",
+              courseTitle: localAlumni.courseTitle,
+              maskedPhone: masked,
+              hasPhone,
+              isOfflineFallback: true,
+            });
+            setLookupStatus(hasPhone ? "found_pending" : "found_no_phone");
+            return;
+          }
+          setLookupStatus("idle");
+        }
+      } catch (err) {
+        if ((err as { name?: string })?.name !== "AbortError") {
+          setLookupStatus("idle");
         }
       }
+    }, 350);
 
-      if (priorTraineeRecords.length > 0) {
-        const alumni = priorTraineeRecords[0];
-        hasAutofilledRef.current = true;
-        const timer = setTimeout(() => {
-          if (alumni.name && !name.trim()) {
-            const parsed = splitPrefixAndName(alumni.name);
-            setPrefix(parsed.prefix);
-            setName(parsed.name);
-          }
-          if (alumni.affiliationGroup) {
-            const resolvedKey = resolveTargetGroupKeyFromAffiliation(
-              alumni.affiliationGroup
-            );
-            const canonicalGroup = resolvedKey
-              ? allowedTargetGroups.find((tg) => tg.key === resolvedKey)
-              : allowedTargetGroups.find(
-                  (tg) => tg.label === alumni.affiliationGroup
-                );
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [idCard, applications, trainees]);
 
-            if (
-              canonicalGroup &&
-              isAffiliationAllowedForCourse(alumni.affiliationGroup, course)
-            ) {
-              setAffiliation(canonicalGroup.label);
-              if (
-                alumni.affiliation &&
-                alumni.affiliation !== alumni.affiliationGroup &&
-                !subAffiliation.trim()
-              ) {
-                setSubAffiliation(alumni.affiliation);
-              }
-              setAutofillMismatchNotice(null);
-            } else {
-              setAutofillMismatchNotice(
-                `ข้อมูลประวัติผู้ผ่านการอบรมเดิมระบุสังกัด "${alumni.affiliationGroup}" ซึ่งไม่อยู่ในกลุ่มเป้าหมายที่หลักสูตรนี้เปิดรับ กรุณาตรวจสอบกลุ่มเป้าหมายและระบุหน่วยงาน/สมาคมกีฬาใหม่ในข้อ 3.1`
-              );
-            }
-          }
-          if (alumni.phone && !phone.trim()) setPhone(alumni.phone);
-          if (alumni.email && !email.trim()) setEmail(alumni.email);
-          if (
-            alumni.idCard &&
-            alumni.idCard.replace(/\D/g, "").length === 13 &&
-            digits.length !== 13
-          ) {
-            setIdCard(alumni.idCard.replace(/\D/g, ""));
-          }
-        }, 0);
-        return () => clearTimeout(timer);
+  const applyVerifiedProfile = (profile: {
+    name: string;
+    affiliation: string;
+    position: string;
+    phone: string;
+    email: string;
+  }) => {
+    if (profile.name) {
+      const parsed = splitPrefixAndName(profile.name);
+      if (DROPDOWN_PREFIXES.has(parsed.prefix)) {
+        setPrefix(parsed.prefix);
+        setName(parsed.name);
+      } else {
+        setPrefix("อื่นๆ");
+        setName(profile.name.trim());
       }
     }
-  }, [
-    idCard,
-    name,
-    phone,
-    email,
-    subAffiliation,
-    applications,
-    priorTraineeRecords,
-    allowedTargetGroups,
-    course,
-  ]);
+    if (profile.phone) setPhone(profile.phone);
+    if (profile.email) setEmail(profile.email);
+    if (profile.position) setPosition(profile.position);
+
+    if (profile.affiliation) {
+      const match = profile.affiliation.match(/^(.*?)\s*\((.*?)\)$/);
+      const priorPrimary = match ? match[1].trim() : profile.affiliation.trim();
+      const priorSub = match ? match[2].trim() : "";
+      const resolvedKey = resolveTargetGroupKeyFromAffiliation(priorPrimary);
+      const canonicalGroup = resolvedKey
+        ? allowedTargetGroups.find((tg) => tg.key === resolvedKey)
+        : allowedTargetGroups.find((tg) => tg.label === priorPrimary);
+
+      if (canonicalGroup && isAffiliationAllowedForCourse(priorPrimary, course)) {
+        setAffiliation(canonicalGroup.label);
+        if (priorSub) {
+          setSubAffiliation(priorSub);
+        } else if (priorPrimary !== canonicalGroup.label) {
+          setSubAffiliation(priorPrimary);
+        } else {
+          setSubAffiliation("");
+        }
+        setAutofillMismatchNotice(null);
+      } else {
+        setSubAffiliation("");
+        setAutofillMismatchNotice(
+          `ข้อมูลการสมัครก่อนหน้าของท่านระบุสังกัด "${priorPrimary}" ซึ่งไม่อยู่ในกลุ่มเป้าหมายที่หลักสูตรนี้เปิดรับ กรุณาเลือกกลุ่มเป้าหมายและระบุหน่วยงาน/สมาคมกีฬาใหม่ในข้อ 3.1`
+        );
+      }
+    }
+  };
+
+  const handleVerifyPhoneLast4 = async () => {
+    const cleanId = idCard.replace(/\D/g, "");
+    const cleanLast4 = verifyLast4.replace(/\D/g, "");
+    if (cleanId.length !== 13 || verifying) return;
+    if (cleanLast4.length !== 4) {
+      setVerifyError("กรุณากรอกเลขท้ายเบอร์โทรศัพท์ให้ครบ 4 หลัก");
+      return;
+    }
+
+    setVerifying(true);
+    setVerifyError("");
+    try {
+      if (lookupMeta?.isOfflineFallback) {
+        const localBest = pickBestPriorApplication(
+          applications.filter((a) => a.idCard === cleanId)
+        );
+        const localAlumni = trainees.find(
+          (t) => t.idCard.replace(/\D/g, "") === cleanId
+        );
+        const storedPhone = localBest
+          ? localBest.record.phone
+          : localAlumni?.phone || "";
+        if (!matchesPhoneLast4(storedPhone, cleanLast4)) {
+          setVerifyError("เลขท้ายเบอร์โทรศัพท์ 4 หลักไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง");
+          return;
+        }
+        if (localBest) {
+          applyVerifiedProfile({
+            name: localBest.record.name,
+            affiliation: localBest.record.affiliation,
+            position: localBest.record.position,
+            phone: localBest.record.phone,
+            email: localBest.record.email,
+          });
+          const excluded = localBest.record.requestedDocKinds || [];
+          setExcludedDocKinds(excluded);
+          if (!localBest.isRejectedOnly) {
+            setReusableDocs(
+              selectReusableDocsFromRows(
+                localBest.record.documents.map((d) => ({
+                  id: d.id,
+                  kind: d.kind,
+                  name: d.name,
+                  size: d.size,
+                  file_type: d.type ?? null,
+                  storage_path: d.storagePath ?? null,
+                  data_url: d.dataUrl?.startsWith("data:") ? d.dataUrl : null,
+                })),
+                localBest.record.ref,
+                excluded
+              )
+            );
+          }
+        } else if (localAlumni) {
+          applyVerifiedProfile({
+            name: localAlumni.name,
+            affiliation:
+              localAlumni.affiliation &&
+              localAlumni.affiliationGroup &&
+              localAlumni.affiliation !== localAlumni.affiliationGroup
+                ? `${localAlumni.affiliationGroup} (${localAlumni.affiliation})`
+                : localAlumni.affiliationGroup || localAlumni.affiliation || "",
+            position: "",
+            phone: localAlumni.phone || "",
+            email: localAlumni.email || "",
+          });
+        }
+        verifiedIdCardRef.current = cleanId;
+        setLookupStatus("verified");
+        return;
+      }
+
+      const res = await fetch("/api/applications/lookup-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "verify",
+          idCard: cleanId,
+          last4: cleanLast4,
+        }),
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        verified?: boolean;
+        error?: string;
+        profile?: {
+          name: string;
+          affiliation: string;
+          position: string;
+          phone: string;
+          email: string;
+        };
+        reusableDocs?: ReusableDocumentPayload[];
+        excludedDocKinds?: string[];
+      };
+
+      if (!res.ok || !data.verified || !data.profile) {
+        setVerifyError(
+          data.error || "ไม่สามารถยืนยันตัวตนได้ กรุณาตรวจสอบเลขท้าย 4 หลักอีกครั้ง"
+        );
+        return;
+      }
+
+      applyVerifiedProfile(data.profile);
+      setReusableDocs(data.reusableDocs || []);
+      setExcludedDocKinds(data.excludedDocKinds || []);
+      verifiedIdCardRef.current = cleanId;
+      setLookupStatus("verified");
+    } catch {
+      setVerifyError("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้งหรือกรอกข้อมูลด้วยตนเอง");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleResetApplicantForm = () => {
+    lastCheckedIdRef.current = "";
+    verifiedIdCardRef.current = "";
+    setIdCard("");
+    setPrefix("นาย");
+    setName("");
+    setAffiliation(allowedTargetGroups[0]?.label ?? TARGET_GROUPS[0].label);
+    setSubAffiliation("");
+    setPosition("");
+    setPhone("");
+    setEmail("");
+    setPhotoFiles([]);
+    setCoverFiles([]);
+    setCertFiles([]);
+    setIdCardFiles([]);
+    setSakaFiles([]);
+    setAutofillMismatchNotice(null);
+    setLookupStatus("idle");
+    setLookupMeta(null);
+    setVerifyLast4("");
+    setVerifyError("");
+    setReusableDocs([]);
+    setExcludedDocKinds([]);
+    setFormError("");
+  };
 
   // การตั้งค่าช่อง 3.1 ตามกลุ่มสังกัดที่เลือก
   const subAffiliationConfig = useMemo(() => {
@@ -678,7 +912,7 @@ function RegistrationContent() {
       ...(isSakaApplicable ? sakaFiles : []),
     ];
     for (const f of allFiles) {
-      if (f.dataUrl) {
+      if (f.dataUrl && f.dataUrl.startsWith("data:")) {
         const base64Content = f.dataUrl.split(",")[1] || "";
         const byteLength = (base64Content.length * 3) / 4;
         if (byteLength > MAX_FILE_SIZE_BYTES) {
@@ -908,62 +1142,33 @@ function RegistrationContent() {
           <div className="grid grid-cols-1 gap-x-6 gap-y-8 lg:grid-cols-2">
             {/* ข้อมูลผู้สมัคร */}
             <section className="min-w-0 rounded-xl border border-[#e2e8f0] bg-white p-4 shadow-2xs sm:p-5">
-              <div className="mb-4 flex items-center justify-between border-b border-[#f1f5f9] pb-3">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f5f9] pb-3">
                 <h2 className="flex items-center gap-2 text-[15px] font-bold text-[#16265E]">
                   <span>👤</span>
                   <span>ข้อมูลผู้สมัคร</span>
                 </h2>
-                <span className="text-[11px] font-medium text-[#64748b]">
-                  <span className="text-red-500">*</span> จำเป็นต้องกรอก
-                </span>
+                <div className="flex items-center gap-2.5">
+                  {(lookupStatus !== "idle" || idCard || name) && (
+                    <button
+                      type="button"
+                      onClick={handleResetApplicantForm}
+                      className="inline-flex items-center gap-1 rounded-[5px] border border-[#cbd5e1] bg-[#f8fafc] px-2.5 py-1 text-[11px] font-medium text-[#334155] transition-colors hover:border-[#94a3b8] hover:bg-[#f1f5f9]"
+                    >
+                      <span>ล้างข้อมูล / กรอกให้ผู้อื่น</span>
+                    </button>
+                  )}
+                  <span className="text-[11px] font-medium text-[#64748b]">
+                    <span className="text-red-500">*</span> จำเป็นต้องกรอก
+                  </span>
+                </div>
               </div>
 
               <div className="space-y-4">
-                {/* 1. คำนำหน้า + ชื่อ-นามสกุล */}
-                <div className="flex flex-col gap-1.5">
-                  <label className={labelClass}>
-                    1. ชื่อ - นามสกุล (พร้อมคำนำหน้าชื่อ) <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex gap-2">
-                    <div className="w-[105px] shrink-0">
-                      <select
-                        value={prefix}
-                        onChange={(e) => setPrefix(e.target.value)}
-                        className="block h-9 w-full rounded-[4px] border border-[#d1d5db] bg-white px-2.5 text-[13px] font-medium text-[#1f2937] transition-all focus:border-[#1e3a8a] focus:outline-none focus:ring-2 focus:ring-[#1e3a8a]/20"
-                        title="เลือกคำนำหน้าชื่อ"
-                      >
-                        <option value="นาย">นาย</option>
-                        <option value="นาง">นาง</option>
-                        <option value="นางสาว">นางสาว</option>
-                        <option value="ว่าที่ ร.ต.">ว่าที่ ร.ต.</option>
-                        <option value="ดร.">ดร.</option>
-                        <option value="ผศ.ดร.">ผศ.ดร.</option>
-                        <option value="อื่นๆ">อื่นๆ (ระบุ)</option>
-                      </select>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <Input
-                        fullWidth
-                        placeholder={
-                          prefix === "อื่นๆ"
-                            ? "ระบุคำนำหน้า และชื่อ-นามสกุล"
-                            : "ชื่อ - นามสกุล (เช่น สมศักดิ์ รักกีฬา)"
-                        }
-                        value={name}
-                        onChange={(event) => handleNameInput(event.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <p className="text-[10.5px] text-[#64748b]">
-                    * ข้อมูลนี้ใช้พิมพ์ในวุฒิบัตรและบัตรประจำตัว กรุณาตรวจสอบตัวสะกดให้ถูกต้อง
-                  </p>
-                </div>
-
-                {/* 2. หมายเลขบัตรประชาชน 13 หลัก (1-4-5-2-1) */}
+                {/* 1. หมายเลขบัตรประชาชน 13 หลัก (1-4-5-2-1) */}
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between">
                     <label className={labelClass}>
-                      2. หมายเลขบัตรประจำตัวประชาชน (13 หลัก) <span className="text-red-500">*</span>
+                      1. หมายเลขบัตรประจำตัวประชาชน (13 หลัก) <span className="text-red-500">*</span>
                     </label>
                     <span className="text-[10.5px] text-[#64748b]">
                       รูปแบบ: 1-4-5-2-1
@@ -972,6 +1177,9 @@ function RegistrationContent() {
                   <div className="w-fit max-w-full overflow-x-auto">
                     <IdCardInput value={idCard} onChange={setIdCard} showActions={true} />
                   </div>
+                  <p className="text-[10.5px] text-[#64748b]">
+                    * หากเคยสมัครหลักสูตรอื่นกับ กกท. แล้ว กรอกเลขบัตรประชาชนเพื่อดึงข้อมูลเดิมมาเติมอัตโนมัติ
+                  </p>
 
                   {idCard.replace(/\D/g, "").length === 13 && !isValidThaiIdCard(idCard) && (
                     <p className="mt-1 text-[11px] font-medium text-[#dc2626]">
@@ -979,37 +1187,125 @@ function RegistrationContent() {
                     </p>
                   )}
 
-                  {priorTraineeRecords.length > 0 && (
-                    <div className="mt-2 rounded-xl border border-emerald-300 bg-gradient-to-r from-emerald-50/90 via-teal-50/60 to-white p-3 text-xs text-emerald-950 shadow-2xs animate-in fade-in">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="flex items-center gap-1.5 font-bold text-emerald-800 text-[12.5px]">
-                          <span>🎉</span>
-                          <span>
-                            ยินดีต้อนรับกลับสู่ระบบ กกท.! พบข้อมูลในทำเนียบบุคลากรกีฬา
-                          </span>
+                  {lookupStatus === "checking" && (
+                    <div className="mt-1 flex items-center gap-2 rounded-lg border border-[#dbeafe] bg-[#eff6ff] px-3 py-2 text-[11.5px] text-[#1e40af]">
+                      <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#1e40af] border-t-transparent" />
+                      <span>กำลังตรวจสอบประวัติการสมัครเดิมจากระบบกลาง...</span>
+                    </div>
+                  )}
+
+                  {lookupStatus === "found_pending" && lookupMeta && (
+                    <div className="mt-1.5 rounded-xl border border-[#93c5fd] bg-gradient-to-r from-[#eff6ff] via-[#f8fafc] to-white p-3.5 text-[12px] text-[#1e3a8a] shadow-2xs">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-[#16265E]">
+                            พบประวัติการสมัครเดิมของเลขบัตรนี้
+                          </p>
+                          <p className="mt-0.5 text-[11px] leading-relaxed text-[#334155]">
+                            {lookupMeta.source === "application" ? (
+                              <>
+                                อ้างอิงล่าสุด: <strong>{lookupMeta.sourceRef}</strong>
+                                {lookupMeta.courseTitle ? ` (${lookupMeta.courseTitle})` : ""}
+                                {lookupMeta.submittedAt
+                                  ? ` · สมัครเมื่อ ${formatThaiDate(lookupMeta.submittedAt)}`
+                                  : ""}
+                              </>
+                            ) : (
+                              <>พบข้อมูลในทำเนียบบุคลากรกีฬา กกท.</>
+                            )}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-full border border-[#bfdbfe] bg-white px-2 py-0.5 text-[10px] font-semibold text-[#1d4ed8]">
+                          PDPA Protected
+                        </span>
+                      </div>
+
+                      <div className="mt-2.5 rounded-lg border border-[#dbeafe] bg-white p-2.5">
+                        <p className="text-[11.5px] font-medium text-[#1e293b]">
+                          กรุณายืนยันตัวตนด้วย <strong>เลขท้ายเบอร์โทรศัพท์ 4 หลัก</strong>{" "}
+                          {lookupMeta.maskedPhone ? (
+                            <span className="font-mono text-[#1e3a8a]">
+                              ({lookupMeta.maskedPhone})
+                            </span>
+                          ) : null}{" "}
+                          เพื่อดึงข้อมูลส่วนตัวและรูปถ่าย/สำเนาบัตรเดิม:
                         </p>
-                        {priorTraineeRecords[0].personnelId && (
-                          <span className="shrink-0 rounded-full border border-emerald-300 bg-white px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-800">
-                            {priorTraineeRecords[0].personnelId}
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={4}
+                            value={verifyLast4}
+                            onChange={(e) => {
+                              setVerifyLast4(e.target.value.replace(/\D/g, "").slice(0, 4));
+                              if (verifyError) setVerifyError("");
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                void handleVerifyPhoneLast4();
+                              }
+                            }}
+                            placeholder="XXXX"
+                            aria-label="เลขท้ายเบอร์โทรศัพท์ 4 หลัก"
+                            className="h-9 w-24 rounded-[5px] border border-[#93c5fd] bg-[#f8fafc] px-2.5 text-center font-mono text-[14px] font-bold tracking-[0.25em] text-[#16265E] outline-none focus:border-[#1e3a8a] focus:bg-white focus:ring-2 focus:ring-[#1e3a8a]/20"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void handleVerifyPhoneLast4()}
+                            disabled={verifying || verifyLast4.length !== 4}
+                            className="inline-flex h-9 items-center justify-center rounded-[5px] bg-[#16265E] px-3.5 text-[11.5px] font-semibold text-white transition hover:bg-[#1e3a8a] disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {verifying ? "กำลังตรวจสอบ..." : "ยืนยันและดึงข้อมูลเดิม"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLookupStatus("dismissed");
+                              setVerifyError("");
+                            }}
+                            className="inline-flex h-9 items-center justify-center rounded-[5px] border border-[#cbd5e1] bg-white px-3 text-[11.5px] font-medium text-[#475569] transition hover:bg-[#f1f5f9]"
+                          >
+                            กรอกข้อมูลด้วยตนเอง
+                          </button>
+                        </div>
+                        {verifyError && (
+                          <p className="mt-1.5 text-[11px] font-medium text-[#dc2626]">
+                            ⚠️ {verifyError}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {lookupStatus === "found_no_phone" && (
+                    <div className="mt-1.5 rounded-lg border border-[#fde68a] bg-[#fffbeb] px-3 py-2 text-[11px] text-[#92400e]">
+                      พบประวัติเดิมในระบบ แต่ไม่มีเบอร์โทรศัพท์สำหรับยืนยันตัวตน (PDPA) กรุณากรอกข้อมูลส่วนตัวด้านล่างด้วยตนเองครับ
+                    </div>
+                  )}
+
+                  {lookupStatus === "verified" && lookupMeta && (
+                    <div className="mt-1.5 rounded-xl border border-[#86efac] bg-gradient-to-r from-[#f0fdf4] via-[#ecfdf5] to-white p-3 text-[11.5px] text-[#14532d] shadow-2xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-bold text-[#166534]">
+                          ✓ ยืนยันตัวตนสำเร็จ — ดึงข้อมูลจาก
+                          {lookupMeta.source === "application" && lookupMeta.sourceRef
+                            ? `ใบสมัคร ${lookupMeta.sourceRef}`
+                            : "ทำเนียบบุคลากร กกท."}
+                          แล้ว
+                        </p>
+                        {lookupMeta.courseTitle && (
+                          <span className="max-w-full truncate rounded-full border border-[#bbf7d0] bg-white px-2 py-0.5 text-[10px] font-medium text-[#15803d]">
+                            {lookupMeta.courseTitle}
                           </span>
                         )}
                       </div>
-                      <p className="mt-1 text-[11px] leading-relaxed text-emerald-800">
-                        ระบบได้ดึงข้อมูลพื้นฐานของท่านมาเติมให้อัตโนมัติแล้ว ท่านสามารถตรวจสอบและแก้ไขข้อมูลให้เป็นปัจจุบันได้ทันที (เมื่อกดยื่นสมัคร ระบบจะอัปเดตข้อมูลล่าสุดของท่านกลับไปยังฐานข้อมูลทำเนียบโดยอัตโนมัติ)
+                      <p className="mt-1 text-[11px] leading-relaxed text-[#15803d]">
+                        กรุณาตรวจสอบข้อมูลให้เป็นปัจจุบัน (หากหลักสูตรนี้เปิดรับเฉพาะกลุ่มเป้าหมายที่ต่างจากเดิม ระบบจะแจ้งให้ระบุสังกัดใหม่ด้านล่าง)
+                        {reusableDocs.length > 0
+                          ? " · ท่านสามารถกดใช้รูปถ่าย/สำเนาบัตรเดิมในฝั่งขวามือได้ทันทีโดยไม่ต้องอัปโหลดซ้ำ"
+                          : ""}
                       </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                        <span className="text-[10.5px] font-semibold text-emerald-700">
-                          ประวัติการอบรม ({priorTraineeRecords.length} หลักสูตร):
-                        </span>
-                        {priorTraineeRecords.map((rec) => (
-                          <span
-                            key={rec.id}
-                            className="rounded-md border border-emerald-200 bg-white px-2 py-0.5 text-[10.5px] font-semibold text-emerald-800 shadow-2xs"
-                          >
-                            ✓ {rec.courseTitle} ({rec.yearBE})
-                          </span>
-                        ))}
-                      </div>
                     </div>
                   )}
 
@@ -1045,6 +1341,46 @@ function RegistrationContent() {
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* 2. คำนำหน้า + ชื่อ-นามสกุล */}
+                <div className="flex flex-col gap-1.5">
+                  <label className={labelClass}>
+                    2. ชื่อ - นามสกุล (พร้อมคำนำหน้าชื่อ) <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="w-[105px] shrink-0">
+                      <select
+                        value={prefix}
+                        onChange={(e) => setPrefix(e.target.value)}
+                        className="block h-9 w-full rounded-[4px] border border-[#d1d5db] bg-white px-2.5 text-[13px] font-medium text-[#1f2937] transition-all focus:border-[#1e3a8a] focus:outline-none focus:ring-2 focus:ring-[#1e3a8a]/20"
+                        title="เลือกคำนำหน้าชื่อ"
+                      >
+                        <option value="นาย">นาย</option>
+                        <option value="นาง">นาง</option>
+                        <option value="นางสาว">นางสาว</option>
+                        <option value="ว่าที่ ร.ต.">ว่าที่ ร.ต.</option>
+                        <option value="ดร.">ดร.</option>
+                        <option value="ผศ.ดร.">ผศ.ดร.</option>
+                        <option value="อื่นๆ">อื่นๆ (ระบุ)</option>
+                      </select>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <Input
+                        fullWidth
+                        placeholder={
+                          prefix === "อื่นๆ"
+                            ? "ระบุคำนำหน้า และชื่อ-นามสกุล"
+                            : "ชื่อ - นามสกุล (เช่น สมศักดิ์ รักกีฬา)"
+                        }
+                        value={name}
+                        onChange={(event) => handleNameInput(event.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10.5px] text-[#64748b]">
+                    * ข้อมูลนี้ใช้พิมพ์ในวุฒิบัตรและบัตรประจำตัว กรุณาตรวจสอบตัวสะกดให้ถูกต้อง
+                  </p>
                 </div>
 
                 {/* 3. กลุ่มเป้าหมาย / สังกัดหลัก */}
@@ -1228,54 +1564,148 @@ function RegistrationContent() {
 
               <div className="space-y-4">
                 {/* 1. รูปถ่ายหน้าตรง */}
-                {docConfig.photo.enabled && (
-                  <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc]/50 p-3">
-                    <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
-                      <p className={labelClass}>
-                        {docItems.find((i) => i.key === "photo")?.num}. รูปถ่ายหน้าตรง ถ่ายไม่เกิน 6 เดือน{" "}
-                        {docConfig.photo.required ? (
-                          <span className="font-bold text-[#b91c1c]">(บังคับ)</span>
-                        ) : (
-                          <span className="font-normal text-[#6b7280]">(ไม่บังคับ)</span>
-                        )}
-                      </p>
-                      <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-[#1e40af]">
-                        ระบบบีบอัดภาพให้อัตโนมัติ
-                      </span>
-                    </div>
+                {docConfig.photo.enabled && (() => {
+                  const reusablePhoto =
+                    lookupStatus === "verified"
+                      ? reusableDocs.find((d) => d.kind === "photo")
+                      : undefined;
+                  const photoFlagged =
+                    lookupStatus === "verified" && excludedDocKinds.includes("photo");
+                  const activePhoto = photoFiles[0];
+                  const avatarSrc =
+                    activePhoto?.previewUrl ||
+                    (activePhoto?.dataUrl?.startsWith("data:") ? activePhoto.dataUrl : null) ||
+                    "/assets/avatar-placeholder.svg";
 
-                    <div className="mb-2.5 rounded-md bg-[#eff6ff]/70 p-2 text-[10.5px] text-[#1e40af] border border-blue-100">
-                      <span>📸 <strong>คำแนะนำ:</strong> รูปถ่ายไม่เกิน 6 เดือน สวมชุดสุภาพ ไม่สวมหมวก/แว่นตาดำ</span>
-                    </div>
+                  return (
+                    <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc]/50 p-3">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
+                        <p className={labelClass}>
+                          {docItems.find((i) => i.key === "photo")?.num}. รูปถ่ายหน้าตรง ถ่ายไม่เกิน 6 เดือน{" "}
+                          {docConfig.photo.required ? (
+                            <span className="font-bold text-[#b91c1c]">(บังคับ)</span>
+                          ) : (
+                            <span className="font-normal text-[#6b7280]">(ไม่บังคับ)</span>
+                          )}
+                        </p>
+                        <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-[#1e40af]">
+                          ระบบบีบอัดภาพให้อัตโนมัติ
+                        </span>
+                      </div>
 
-                    <div className="flex items-start gap-3">
-                      <div className="relative shrink-0">
-                        <Avatar
-                          src={photoFiles[0]?.dataUrl || "/assets/avatar-placeholder.svg"}
-                          alt="รูปถ่ายผู้สมัคร"
-                          size="portrait"
-                        />
-                        {photoFiles.length > 0 && (
-                          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] text-white shadow-xs">
-                            ✓
-                          </span>
-                        )}
+                      <div className="mb-2.5 rounded-md bg-[#eff6ff]/70 p-2 text-[10.5px] text-[#1e40af] border border-blue-100">
+                        <span>📸 <strong>คำแนะนำ:</strong> รูปถ่ายไม่เกิน 6 เดือน สวมชุดสุภาพ ไม่สวมหมวก/แว่นตาดำ</span>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <FileUpload
-                          files={photoFiles}
-                          onAdd={async (file) => {
-                            const compressed = await compressPhotoFile(file);
-                            setPhotoFiles([compressed]);
-                          }}
-                          onRemove={() => setPhotoFiles([])}
-                          emptyText="คลิกเพื่อแนบรูปถ่ายหน้าตรง (JPG, PNG, WEBP)"
-                          accept=".jpg,.jpeg,.png,.webp"
-                        />
+
+                      {photoFlagged && !activePhoto && (
+                        <div className="mb-2 rounded-md border border-[#fde68a] bg-[#fffbeb] px-2.5 py-1.5 text-[11px] text-[#92400e]">
+                          ⚠️ รูปถ่ายในใบสมัครเดิมเคยได้รับแจ้งให้แก้ไข กรุณาอัปโหลดรูปถ่ายฉบับใหม่
+                        </div>
+                      )}
+
+                      <div className="flex items-start gap-3">
+                        <div className="relative shrink-0">
+                          <Avatar
+                            src={avatarSrc}
+                            alt="รูปถ่ายผู้สมัคร"
+                            size="portrait"
+                          />
+                          {photoFiles.length > 0 && (
+                            <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] text-white shadow-xs">
+                              ✓
+                            </span>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-2">
+                          {activePhoto?.reusedFromRef ? (
+                            <div className="rounded-[5px] border border-[#86efac] bg-[#f0fdf4] p-2.5 text-[11.5px]">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="truncate font-semibold text-[#166534]">
+                                    ✓ {activePhoto.name} ({activePhoto.size})
+                                  </p>
+                                  <p className="text-[10.5px] text-[#15803d]">
+                                    ใช้ไฟล์เดิมจาก {activePhoto.reusedFromRef} (ไม่สร้างไฟล์ซ้ำบนเซิร์ฟเวอร์)
+                                  </p>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-1.5">
+                                  {activePhoto.previewUrl && (
+                                    <a
+                                      href={activePhoto.previewUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex h-7 items-center rounded border border-[#bbf7d0] bg-white px-2 text-[10.5px] font-medium text-[#166534] hover:bg-[#dcfce7]"
+                                    >
+                                      ดูรูปเดิม
+                                    </a>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setPhotoFiles([])}
+                                    className="inline-flex h-7 items-center rounded border border-[#fca5a5] bg-white px-2 text-[10.5px] font-semibold text-[#dc2626] hover:bg-[#fee2e2]"
+                                  >
+                                    เปลี่ยนไฟล์ใหม่
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              {reusablePhoto && (
+                                <div className="flex flex-wrap items-center justify-between gap-2 rounded-[5px] border border-[#bfdbfe] bg-[#eff6ff] px-2.5 py-2 text-[11px]">
+                                  <span className="min-w-0 truncate text-[#1e3a8a]">
+                                    พบไฟล์รูปถ่ายเดิม ({reusablePhoto.size})
+                                  </span>
+                                  <div className="flex shrink-0 items-center gap-1.5">
+                                    {reusablePhoto.previewUrl && (
+                                      <a
+                                        href={reusablePhoto.previewUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex h-7 items-center rounded border border-[#93c5fd] bg-white px-2 text-[10.5px] font-medium text-[#1e40af] hover:bg-[#dbeafe]"
+                                      >
+                                        ดูตัวอย่าง
+                                      </a>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setPhotoFiles([
+                                          {
+                                            name: reusablePhoto.name,
+                                            size: reusablePhoto.size,
+                                            type: reusablePhoto.type,
+                                            storagePath: reusablePhoto.storagePath,
+                                            dataUrl: reusablePhoto.dataUrl,
+                                            previewUrl: reusablePhoto.previewUrl,
+                                            reusedFromRef: reusablePhoto.sourceRef,
+                                          },
+                                        ])
+                                      }
+                                      className="inline-flex h-7 items-center rounded bg-[#1e3a8a] px-2.5 text-[10.5px] font-semibold text-white hover:bg-[#1e40af]"
+                                    >
+                                      ใช้รูปถ่ายเดิมจาก {reusablePhoto.sourceRef}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              <FileUpload
+                                files={photoFiles}
+                                onAdd={async (file) => {
+                                  const compressed = await compressPhotoFile(file);
+                                  setPhotoFiles([compressed]);
+                                }}
+                                onRemove={() => setPhotoFiles([])}
+                                emptyText="คลิกเพื่อแนบรูปถ่ายหน้าตรง (JPG, PNG, WEBP)"
+                                accept=".jpg,.jpeg,.png,.webp"
+                              />
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* 2. หนังสือนำส่ง */}
                 {docConfig.cover.enabled && (
@@ -1323,33 +1753,125 @@ function RegistrationContent() {
                 )}
 
                 {/* 4. สำเนาบัตรประชาชน */}
-                {docConfig.idcard?.enabled && (
-                  <div>
-                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                      <p className={labelClass}>
-                        {docItems.find((i) => i.key === "idcard")?.num}. สำเนาบัตรประจำตัวประชาชน พร้อมลงนามรับรองสำเนาถูกต้อง{" "}
-                        {docConfig.idcard.required ? (
-                          <span className="font-bold text-[#b91c1c]">(บังคับ)</span>
-                        ) : (
-                          <span className="font-normal text-[#6b7280]">(ไม่บังคับ)</span>
-                        )}
+                {docConfig.idcard?.enabled && (() => {
+                  const reusableIdCard =
+                    lookupStatus === "verified"
+                      ? reusableDocs.find((d) => d.kind === "idcard")
+                      : undefined;
+                  const idCardFlagged =
+                    lookupStatus === "verified" && excludedDocKinds.includes("idcard");
+                  const activeIdCard = idCardFiles[0];
+
+                  return (
+                    <div>
+                      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                        <p className={labelClass}>
+                          {docItems.find((i) => i.key === "idcard")?.num}. สำเนาบัตรประจำตัวประชาชน พร้อมลงนามรับรองสำเนาถูกต้อง{" "}
+                          {docConfig.idcard.required ? (
+                            <span className="font-bold text-[#b91c1c]">(บังคับ)</span>
+                          ) : (
+                            <span className="font-normal text-[#6b7280]">(ไม่บังคับ)</span>
+                          )}
+                        </p>
+                      </div>
+
+                      {idCardFlagged && !activeIdCard && (
+                        <div className="mb-2 rounded-md border border-[#fde68a] bg-[#fffbeb] px-2.5 py-1.5 text-[11px] text-[#92400e]">
+                          ⚠️ สำเนาบัตรประชาชนในใบสมัครเดิมเคยได้รับแจ้งให้แก้ไข กรุณาอัปโหลดไฟล์ฉบับใหม่
+                        </div>
+                      )}
+
+                      {activeIdCard?.reusedFromRef ? (
+                        <div className="rounded-[5px] border border-[#86efac] bg-[#f0fdf4] p-2.5 text-[11.5px]">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold text-[#166534]">
+                                ✓ {activeIdCard.name} ({activeIdCard.size})
+                              </p>
+                              <p className="text-[10.5px] text-[#15803d]">
+                                ใช้ไฟล์เดิมจาก {activeIdCard.reusedFromRef} (ไม่สร้างไฟล์ซ้ำบนเซิร์ฟเวอร์)
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1.5">
+                              {activeIdCard.previewUrl && (
+                                <a
+                                  href={activeIdCard.previewUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex h-7 items-center rounded border border-[#bbf7d0] bg-white px-2 text-[10.5px] font-medium text-[#166534] hover:bg-[#dcfce7]"
+                                >
+                                  ดูไฟล์เดิม
+                                </a>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setIdCardFiles([])}
+                                className="inline-flex h-7 items-center rounded border border-[#fca5a5] bg-white px-2 text-[10.5px] font-semibold text-[#dc2626] hover:bg-[#fee2e2]"
+                              >
+                                เปลี่ยนไฟล์ใหม่
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {reusableIdCard && (
+                            <div className="flex flex-wrap items-center justify-between gap-2 rounded-[5px] border border-[#bfdbfe] bg-[#eff6ff] px-2.5 py-2 text-[11px]">
+                              <span className="min-w-0 truncate text-[#1e3a8a]">
+                                พบสำเนาบัตรเดิม: {reusableIdCard.name} ({reusableIdCard.size})
+                              </span>
+                              <div className="flex shrink-0 items-center gap-1.5">
+                                {reusableIdCard.previewUrl && (
+                                  <a
+                                    href={reusableIdCard.previewUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex h-7 items-center rounded border border-[#93c5fd] bg-white px-2 text-[10.5px] font-medium text-[#1e40af] hover:bg-[#dbeafe]"
+                                  >
+                                    ดูตัวอย่างไฟล์เดิม
+                                  </a>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setIdCardFiles([
+                                      {
+                                        name: reusableIdCard.name,
+                                        size: reusableIdCard.size,
+                                        type: reusableIdCard.type,
+                                        storagePath: reusableIdCard.storagePath,
+                                        dataUrl: reusableIdCard.dataUrl,
+                                        previewUrl: reusableIdCard.previewUrl,
+                                        reusedFromRef: reusableIdCard.sourceRef,
+                                      },
+                                    ])
+                                  }
+                                  className="inline-flex h-7 items-center rounded bg-[#1e3a8a] px-2.5 text-[10.5px] font-semibold text-white hover:bg-[#1e40af]"
+                                >
+                                  ใช้สำเนาบัตรเดิมจาก {reusableIdCard.sourceRef}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          <FileUpload
+                            files={idCardFiles}
+                            onAdd={(file) => setIdCardFiles([file])}
+                            onRemove={() => setIdCardFiles([])}
+                            emptyText="คลิกเพื่อแนบสำเนาบัตรประชาชน (ไฟล์ PDF หรือรูปภาพ)"
+                            accept=".pdf,.jpg,.jpeg,.png,.webp"
+                          />
+                        </div>
+                      )}
+
+                      <p className="mt-1 text-[11px] text-[#475569] flex items-center gap-1">
+                        <span>🔒</span>
+                        <span>
+                          <strong>ความปลอดภัยตาม PDPA:</strong> สามารถขีดคร่อมข้อความ &quot;ใช้สำหรับการสมัครเข้ารับการอบรม กกท. เท่านั้น&quot; และลงลายมือชื่อรับรองสำเนาถูกต้อง
+                        </span>
                       </p>
                     </div>
-                    <FileUpload
-                      files={idCardFiles}
-                      onAdd={(file) => setIdCardFiles([file])}
-                      onRemove={() => setIdCardFiles([])}
-                      emptyText="คลิกเพื่อแนบสำเนาบัตรประชาชน (ไฟล์ PDF หรือรูปภาพ)"
-                      accept=".pdf,.jpg,.jpeg,.png,.webp"
-                    />
-                    <p className="mt-1 text-[11px] text-[#475569] flex items-center gap-1">
-                      <span>🔒</span>
-                      <span>
-                        <strong>ความปลอดภัยตาม PDPA:</strong> สามารถขีดคร่อมข้อความ &quot;ใช้สำหรับการสมัครเข้ารับการอบรม กกท. เท่านั้น&quot; และลงลายมือชื่อรับรองสำเนาถูกต้อง
-                      </span>
-                    </p>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* 5. สำเนาใบ ส.ฬ. 8 (แสดงเฉพาะกลุ่มเป้าหมายที่ตรงเงื่อนไข) */}
                 {isSakaApplicable && (

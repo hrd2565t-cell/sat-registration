@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/service";
 import { isAdminRequestAuthorized } from "@/lib/server-auth";
+import { removeUnreferencedStorageObjects } from "@/lib/server-storage-cleanup";
 import type { Json } from "@/lib/supabase/types";
 
 export async function POST(request: Request) {
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
       console.warn("Delete review_notes warning:", e);
     }
 
-    // 4. ลบไฟล์จริงใน Supabase Storage (ถัง sat-documents) เพื่อคืนพื้นที่จัดเก็บ
+    // 4. ลบไฟล์จริงใน Supabase Storage (ถัง sat-documents) เฉพาะไฟล์ที่ไม่มีใบสมัครอื่นใช้งานร่วมอยู่แล้ว
     try {
       const { data: fileList } = await supabase.storage
         .from("sat-documents")
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
 
       if (Array.isArray(fileList) && fileList.length > 0) {
         const filePaths = fileList.map((f) => `${ref}/${f.name}`);
-        await supabase.storage.from("sat-documents").remove(filePaths);
+        await removeUnreferencedStorageObjects(supabase, filePaths);
       }
     } catch (storageErr) {
       console.warn("Storage files delete warning:", storageErr);
