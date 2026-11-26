@@ -43,6 +43,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - **Cloud-First**: ทุกฟีเจอร์/Store ใหม่ต้องซิงก์ Supabase ตั้งแต่วันแรก (ห้ามเก็บเฉพาะ LocalStorage/JSON), ดึงล่าสุดเมื่อเปิดหน้าและ `focus`/`visibilitychange`, เปิด `postgres_changes` Realtime และใช้ `hasLoadedFromCloud` Guard
 - **Anti-Overwrite**: แยก `saveToLocalStorage()` ออกจาก `persist(syncToServer)` ให้การคำนวณอัตโนมัติใช้เฉพาะ Local และบันทึกสถานะหลักสูตรประวัติศาสตร์ `"completed"` ใน `_metadata.status` คู่กับคอลัมน์ `status: "closed"`
 - **Granular Sync & Atomic Registration**: การบันทึกหลักสูตรใช้ Granular Cloud Sync พร้อม edit lock รายหลักสูตรและรีเซ็ต `useRef` lock (`finally` + open/close Dialog); การสมัครใหม่ต้องออกเลข `SAT-XXXXX` ผ่าน `POST /api/applications/register` (ส่งเฉพาะ metadata < 4.5 MB, retry `23505`) และ `await syncApplicationDocumentsToSupabase` ก่อนส่งอีเมลและเปลี่ยนหน้า
+- **F5 Safe Hooks & Cloud Loading Guard**: ห้ามเรียก React Hooks (`use*`) หลัง `if (...) return` หรือในเงื่อนไข/ลูปเด็ดขาด; หน้าแสดงรายละเอียด/ใบเสร็จ/พิมพ์เอกสารจาก Cloud Store ต้องเช็ก `!mounted || !cloudLoaded` (`useApplicationsCloudLoaded` หรือ `hasLoadedFromCloud`) แสดงสถานะรอโหลดก่อนขึ้นข้อความ "ไม่พบข้อมูล"
+- **Store Snapshot Stability**: ติดตาม `hasLoadedFromCloud` ในตัวแปรระดับโมดูลแบบ Primitive แยกจาก Snapshot หลัก (ไม่ `persist` ลง `localStorage` และไม่คืน Reference ใหม่ทุกเรนเดอร์ใน `useSyncExternalStore`)
 
 ## 9. การแยกหลักสูตรปัจจุบันกับประวัติย้อนหลังและการซิงก์จังหวัด
 - กรอง `!c.isHistorical` เสมอในหน้าเปิดรับสมัคร, Timeline, `GlobalScheduleCard`, `/admin/courses`, กราฟ และตารางผู้สมัคร

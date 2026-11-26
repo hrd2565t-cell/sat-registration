@@ -17,20 +17,24 @@ Use this workflow before finishing any code modification in the SAT Registration
    ```powershell
    npx tsc --noEmit
    ```
-2. If course rules, document checklist conditions, province matching, or association coverage logic changed, compile the modified module and run Node `assert` verification checks for both positive cases and fallbacks.
-3. Run the Next.js production build and confirm zero compilation/type/route errors:
+2. Scan all TSX components for React Rules-of-Hooks violations (hooks after early return or inside conditionals/loops) using the bundled AST checker:
+   ```powershell
+   node .agents/skills/sat-verify-and-deploy/scripts/check-hooks.cjs
+   ```
+3. If course rules, document checklist conditions, province matching, or association coverage logic changed, compile the modified module and run Node `assert` verification checks for both positive cases and fallbacks.
+4. Run the Next.js production build and confirm zero compilation/type/route errors (Note: on Windows PowerShell 5.1, chain commands with `; if ($LASTEXITCODE -eq 0) { ... }` instead of `&&`):
    ```powershell
    npm run build
    ```
-4. Scan `app/`, `components/`, and `lib/` to ensure zero hardcoded admin PINs (`336699`, `NEXT_PUBLIC_ADMIN_PIN`, `x-admin-pin`) or PII fields exist in client code or public `courses` payloads.
+5. Scan `app/`, `components/`, and `lib/` to ensure zero hardcoded admin PINs (`336699`, `NEXT_PUBLIC_ADMIN_PIN`, `x-admin-pin`) or PII fields exist in client code or public `courses` payloads.
 
 ## 2. Four-Aspect Quality Review
 
 Before committing, explicitly verify these 4 aspects in the changed files:
-1. **Bugs / Logic Errors**: Confirm edge cases, dialog `useRef` locks reset cleanly (`finally` + open/close), `!c.isHistorical` / live course titles stay intact, and Next.js App Router `app/api/**/route.ts` files export only HTTP handlers/route configs (never non-handler helper functions).
+1. **Bugs / Logic Errors**: Confirm edge cases, zero React Hooks after early returns (`check-hooks.cjs`), dialog `useRef` locks reset cleanly (`finally` + open/close), `!c.isHistorical` / live course titles stay intact, and Next.js App Router `app/api/**/route.ts` files export only HTTP handlers/route configs (never non-handler helper functions).
 2. **Error Handling**: Confirm offline/Cloud fallback handling, null/empty guards, and user-facing notices.
 3. **Performance & Security**: Confirm `useMemo`/cleanup on effects, no `NEXT_PUBLIC_` secrets, and no exposed 13-digit ID cards or PII on public views/printouts.
-4. **Client-Server Data Integrity**: Confirm Cloud sync uses `hasLoadedFromCloud` / granular sync, never overwrites admin-edited Supabase records with hardcoded defaults, `await`s Cloud uploads before redirect, and obeys safe-replace ordering (verify new file in DB before deleting old DB/Storage artifacts).
+4. **Client-Server Data Integrity**: Confirm Cloud sync uses `hasLoadedFromCloud` (plus `mounted && cloudLoaded` loading guards on dynamic/receipt/print views to prevent F5 false not-found flashes) / granular sync, never overwrites admin-edited Supabase records with hardcoded defaults, `await`s Cloud uploads before redirect, and obeys safe-replace ordering (verify new file in DB before deleting old DB/Storage artifacts).
 
 ## 3. Safe Git Commit & Push on Windows
 
