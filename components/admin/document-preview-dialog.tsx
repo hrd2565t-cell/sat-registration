@@ -6,7 +6,7 @@ import type {
   ApplicantDocument,
   ApplicantRecord,
 } from "@/lib/applications-store";
-import { getDocumentLabel } from "@/lib/applications-store";
+import { getDocumentLabel, isArchivedDocument } from "@/lib/applications-store";
 import { getDocumentFromStorage } from "@/lib/document-storage";
 import {
   backfillDocumentToSupabase,
@@ -45,18 +45,28 @@ export function DocumentPreviewDialog({
   const [actualDataUrl, setActualDataUrl] = useState<string | null>(
     file?.dataUrl?.startsWith("data:") ? file.dataUrl : null
   );
-  const [loading, setLoading] = useState<boolean>(!file?.dataUrl?.startsWith("data:"));
+  const [loading, setLoading] = useState<boolean>(
+    Boolean(file) && !isArchivedDocument(file) && !file?.dataUrl?.startsWith("data:")
+  );
 
-  const fileSyncKey = `${file?.id ?? ""}|${file?.dataUrl ?? ""}`;
+  const fileSyncKey = `${file?.id ?? ""}|${file?.dataUrl ?? ""}|${file?.size ?? ""}`;
   const [prevFileKey, setPrevFileKey] = useState(fileSyncKey);
   if (fileSyncKey !== prevFileKey) {
     setPrevFileKey(fileSyncKey);
     setActualDataUrl(file?.dataUrl?.startsWith("data:") ? file.dataUrl : null);
-    setLoading(!file?.dataUrl?.startsWith("data:"));
+    setLoading(
+      Boolean(file) && !isArchivedDocument(file) && !file?.dataUrl?.startsWith("data:")
+    );
   }
 
   useEffect(() => {
     if (!file) return;
+
+    if (isArchivedDocument(file)) {
+      setActualDataUrl(null);
+      setLoading(false);
+      return;
+    }
 
     let isMounted = true;
     (async () => {
@@ -152,6 +162,7 @@ export function DocumentPreviewDialog({
 
   if (!file) return null;
 
+  const isArchived = isArchivedDocument(file);
   const label = getDocumentLabel(file.kind);
   const isPdf =
     file.name.toLowerCase().endsWith(".pdf") ||
@@ -217,6 +228,10 @@ export function DocumentPreviewDialog({
               {hasRealFile ? (
                 <span className="inline-flex items-center rounded-full bg-[#dcfce7] px-2 py-0.5 text-[10px] font-medium text-[#15803d]">
                   ไฟล์จริง
+                </span>
+              ) : isArchived ? (
+                <span className="inline-flex items-center rounded-full bg-[#e0f2fe] px-2 py-0.5 text-[10px] font-medium text-[#0369a1]">
+                  เก็บถาวร (Google Drive)
                 </span>
               ) : (
                 <span className="inline-flex items-center rounded-full bg-[#fef3c7] px-2 py-0.5 text-[10px] font-medium text-[#b45309]">
@@ -347,6 +362,22 @@ export function DocumentPreviewDialog({
                 </div>
               )}
             </div>
+          ) : isArchived ? (
+            <div className="mx-auto flex min-h-[320px] w-full max-w-[560px] flex-col items-center justify-center rounded-lg border border-[#bae6fd] bg-white p-6 text-center shadow-sm">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#e0f2fe] text-[#0284c7]">
+                <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                </svg>
+              </div>
+              <h3 className="mt-3 text-[14px] font-semibold text-[#0c4a6e]">
+                เอกสารถูกสำรองเก็บถาวรไว้บน Google Drive แล้ว
+              </h3>
+              <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#475569]">
+                ไฟล์ <strong>{file.name}</strong> ของผู้สมัคร <strong>{applicant.name}</strong> ({applicant.ref}) ได้ถูกดาวน์โหลดสำรองและล้างออกจากพื้นที่ชั่วคราวบน Supabase Storage แล้ว
+                <br />
+                กรุณาเปิดดูไฟล์ต้นฉบับได้จากโฟลเดอร์สำรองของหลักสูตรบน Google Drive
+              </p>
+            </div>
           ) : (
             /* Fallback: Template sample for demo seed records */
             <div className="mx-auto min-h-[440px] w-full max-w-[560px] rounded-lg border border-[#e2e8f0] bg-white p-5 shadow-[0_2px_12px_rgba(15,23,42,0.12)] sm:p-8">
@@ -435,7 +466,9 @@ export function DocumentPreviewDialog({
           <span className="text-[11px] text-[#6b7280]">
             {hasRealFile
               ? "ไฟล์นี้ถูกจัดเก็บในระบบและพร้อมนำไปตรวจสอบ"
-              : "ข้อมูลจำลองสำหรับทดสอบระบบ"}
+              : isArchived
+                ? "เอกสารถูกจัดเก็บถาวรบน Google Drive แล้ว"
+                : "ข้อมูลจำลองสำหรับทดสอบระบบ"}
           </span>
           <button
             type="button"

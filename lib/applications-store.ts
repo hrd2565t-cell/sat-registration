@@ -46,6 +46,12 @@ export interface ApplicantDocument {
   storagePath?: string;
 }
 
+export function isArchivedDocument(
+  doc: Pick<ApplicantDocument, "size"> | null | undefined
+): boolean {
+  return Boolean(doc?.size && doc.size.includes("เก็บถาวรแล้ว"));
+}
+
 /**
  * แปลงข้อความขนาดไฟล์ (เช่น "40 KB", "1.5 MB", "500 Bytes") ให้เป็นจำนวน Bytes
  */
@@ -270,12 +276,15 @@ export async function refreshApplicationsFromCloud(): Promise<void> {
           );
           if (!matchingLocal) return cloudApp;
 
-          // หากเครื่องของผู้สมัครมีไฟล์รูปภาพหรือเอกสารแบบ Base64 (data:) อยู่แล้ว ให้คงไว้ไม่ให้ถูกทับด้วยค่าว่าง
+          // ยึดฐานข้อมูลกลาง Cloud เป็นหลักเมื่อมี storagePath/dataUrl หรือถูกเก็บถาวรแล้ว (ห้ามแคชเก่าในเครื่องมาทับ)
           const mergedDocs = cloudApp.documents.map((cDoc) => {
-            if (cDoc.dataUrl?.startsWith("data:")) return cDoc;
+            if (cDoc.dataUrl || cDoc.storagePath || isArchivedDocument(cDoc)) {
+              return cDoc;
+            }
             const localDoc = matchingLocal.documents.find(
               (lDoc) =>
-                (lDoc.kind === cDoc.kind || lDoc.name === cDoc.name) &&
+                lDoc.kind === cDoc.kind &&
+                lDoc.name === cDoc.name &&
                 lDoc.dataUrl?.startsWith("data:")
             );
             return localDoc
@@ -356,12 +365,12 @@ export async function refreshApplicationsFromCloud(): Promise<void> {
       emit();
       syncCourseSeats();
 
-      // หากบน Cloud มีเอกสารที่ยังไม่มีไฟล์จริงแนบ (dataUrl เป็น undefined) แต่เครื่องปัจจุบันมีไฟล์อยู่ใน IndexedDB
-      // ให้อัปโหลดไฟล์จาก IndexedDB ขึ้น Supabase Storage อัตโนมัติทันทีเพื่อให้ทุกเครื่องเห็นไฟล์จริงตรงกัน
+      // หากบน Cloud มีเอกสารที่ยังไม่มีไฟล์จริงแนบ (และไม่ได้ถูกเก็บถาวรลง Google Drive แล้ว)
+      // แต่เครื่องปัจจุบันมีไฟล์อยู่ใน IndexedDB ให้อัปโหลดขึ้น Supabase Storage อัตโนมัติ
       if (typeof window !== "undefined") {
         for (const app of validCloudApps) {
           for (const doc of app.documents) {
-            if (!doc.dataUrl) {
+            if (!doc.dataUrl && !isArchivedDocument(doc)) {
               void getDocumentFromStorage(doc.id, doc.name).then((stored) => {
                 if (stored?.dataUrl) {
                   void backfillDocumentToSupabase(app.ref, doc, stored.dataUrl);

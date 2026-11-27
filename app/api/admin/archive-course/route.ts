@@ -130,6 +130,10 @@ export async function POST(request: Request) {
           continue;
         }
 
+        if (!doc.storage_path && bytes <= 0) {
+          continue;
+        }
+
         activeFilesByCourse.set(cId, (activeFilesByCourse.get(cId) || 0) + 1);
         bytesByCourse.set(cId, (bytesByCourse.get(cId) || 0) + bytes);
 

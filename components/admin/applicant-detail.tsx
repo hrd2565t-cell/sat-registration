@@ -18,6 +18,7 @@ import {
   formatThaiDate,
   formatThaiDateTime,
   getDocumentLabel,
+  isArchivedDocument,
   promoteReserveToApproved,
   reviewApplication,
   useApplication,
@@ -890,7 +891,8 @@ export function ApplicantDetail({
                   const isPdf =
                     file.name.toLowerCase().endsWith(".pdf") ||
                     file.dataUrl?.startsWith("data:application/pdf");
-                  const hasRealFile = Boolean(file.dataUrl);
+                  const isArchived = isArchivedDocument(file);
+                  const hasRealFile = !isArchived && Boolean(file.dataUrl);
 
                   return (
                     <div
@@ -926,10 +928,12 @@ export function ApplicantDetail({
                               className={`inline-flex rounded-full px-1.5 py-0.2 text-[9px] font-medium ${
                                 hasRealFile
                                   ? "bg-[#dcfce7] text-[#15803d]"
-                                  : "bg-[#fef3c7] text-[#b45309]"
+                                  : isArchived
+                                    ? "bg-[#e0f2fe] text-[#0369a1]"
+                                    : "bg-[#fef3c7] text-[#b45309]"
                               }`}
                             >
-                              {hasRealFile ? "ไฟล์จริง" : "ตัวอย่าง"}
+                              {hasRealFile ? "ไฟล์จริง" : isArchived ? "เก็บถาวร (Drive)" : "ตัวอย่าง"}
                             </span>
                           </div>
                           <p className="mt-0.5 truncate text-[10px] text-[#64748b]" title={file.name}>
