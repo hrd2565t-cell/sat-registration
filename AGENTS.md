@@ -16,6 +16,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - **Safe Replace & Latest-Wins**: การคัดเลือกไฟล์จาก Cloud ต้องใช้ `selectLatestDocumentsByKind` (แถวมีไฟล์จริงทุกขนาดคะแนนเท่ากัน ยึดฉบับล่าสุดเสมอ) และเมื่อผู้สมัครส่งเอกสารแก้ไขซ้ำต้องใช้ `forceUploadKinds` อัปโหลดไฟล์ใหม่ให้สำเร็จก่อนแล้วจึงลบแถว/ไฟล์เก่าเฉพาะ `kind` นั้นผ่าน `/api/applications/replace-documents`
 - **Compression & Zero-Egress Queries**: ภาพที่อัปโหลดต้องผ่าน `compressImageFile` (`photo` / `document`, คง PDF ต้นฉบับ); เมื่อขึ้น `sat-documents` สำเร็จแล้วให้ตั้ง `data_url = null` ใน Postgres และห้าม `.select("*")` ดึง `data_url` ยกตารางใน `fetchApplicationsFromSupabase()` (ใช้ Metadata + `storage_path` คู่ `legacyInlineIds` Fallback)
 - **Shared File Reuse & Reference-Safe Delete**: ใช้รูปถ่าย (`photo`) และสำเนาบัตรฯ (`idcard`) เดิมข้ามหลักสูตรด้วยการอ้างอิง `storage_path` เดิมโดยไม่อัปโหลดซ้ำ และทุกการลบไฟล์ใน `sat-documents` (ลบใบสมัคร, แทนที่เอกสาร, ล้างคลังหลักสูตร `/api/admin/archive-course` หลังสำรอง ZIP ขึ้น Google Drive) ต้องผ่าน `removeUnreferencedStorageObjects` (Fail-Closed) เสมอ
+- **Archive-Aware Sync**: ใช้ `isArchivedDocument(doc)` ข้าม `backfillDocumentToSupabase` และคงสถานะ `"เก็บถาวรแล้ว"` เมื่อผสานข้อมูล Cloud (ห้ามให้ `localStorage` แคชกลับมาเขียนทับหรืออัปโหลดไฟล์ที่สำรองลง Google Drive แล้ว)
 
 ## 2. การคงอยู่ของข้อมูลหลักสูตรและการตั้งค่า (Course Details Persistence)
 - **ห้าม Reset ข้อมูลหลักสูตรที่แอดมินแก้ไขแล้ว** ทั้ง 8 ส่วน (เป้าหมาย 5 กลุ่ม, วัตถุประสงค์, คุณสมบัติ, กำหนดเอกสารแนบ, เอกสารประกอบการสมัคร, เกณฑ์สำเร็จการอบรม, สิ่งที่ กกท. สนับสนุน และเงื่อนไขค่าใช้จ่าย/เบิกต้นสังกัด)
@@ -26,7 +27,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - ห้ามใช้คำว่า "สถาบันพัฒนากีฬาแห่งประเทศไทย" ในทุกหน้าจอ, PDF และ Dialog
 
 ## 4. มาตรฐานการพัฒนาและการตรวจสอบคุณภาพ (Verification & Quality Control)
-- ก่อน Commit ต้องรัน `npx tsc --noEmit`, `npm run build` และรัน Node assertion สำหรับลอจิกที่แก้ พร้อมตรวจครบ 4 ด้าน: (1) Bugs/Logic Errors (2) Error Handling/Offline Fallback (3) Performance & Security (4) Client-Server Data Integrity
+- ก่อน Commit ต้องรัน `node .agents/skills/sat-verify-and-deploy/scripts/check-hooks.cjs`, `npx eslint --max-warnings=0` (เฉพาะไฟล์ที่แก้/สร้าง), `npx tsc --noEmit`, `npm run build` และรัน Node assertion สำหรับลอจิกที่แก้ พร้อมตรวจครบ 4 ด้าน: (1) Bugs/Logic Errors (2) Error Handling/Offline Fallback (3) Performance & Security (4) Client-Server Data Integrity
+- **React 19 ESLint Compliance**: ห้ามเรียก `setState` แบบ Synchronous ใน `useEffect` (ใช้ `key` remount หรือคำนวณค่าแทน) และประกาศ `useState` ก่อน `useEffect` ที่อ้างถึง setter เสมอ
 - ตรวจ `git status --short` แล้ว `git add` เฉพาะไฟล์โค้ดที่แก้ (ห้าม `git add .` จนติดไฟล์อ้างอิงเช่น `.xlsx`), Push ขึ้น `main` และสรุปรายละเอียดให้ผู้ใช้ชัดเจน
 
 ## 5. การส่งอีเมลแจ้งเตือนอัตโนมัติและการแจ้งเตือนบนใบเสร็จ
@@ -66,3 +68,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## 12. มาตรฐานชื่อสมาคม, รายงานผู้บริหาร และ PDPA หน้าสาธารณะ
 - คงชื่อ `"สมาคมเพาะกาย กกท."` และ `"สมาคมกีฬาคนพิการจังหวัด..."` ตามจริง ห้าม normalize เข้าฐาน 93 สมาคมกีฬาแห่งประเทศไทย / 77 สมาคมกีฬาแห่งจังหวัด
 - รายงาน `/alumni` ต้องรองรับภาพรวมและรายปี/YoY จาก Cloud Store (`annual-outcomes-store.ts`) ห้ามสร้างตัวเลขสมมติ และห้ามแสดงเลขบัตร 13 หลักเต็มหรือ PII บนหน้า/เอกสารพิมพ์สาธารณะ
+
+## 13. ผังขั้นตอนการดำเนินงานแยกส่วน (Isolated Admin Workflow & Private Attachments)
+- **Zero-Impact Separation**: โมดูล `/admin/workflow` (`app/admin/workflow/*`, `components/admin/workflow/*`, `lib/workflow*.ts`, `app/api/admin/workflow/*`) ต้อง **Read-only** ต่อตารางหลัก (`courses`, `applications`, `alumni`) ห้ามเขียนทับข้อมูลหลักสูตร/ผู้สมัคร และทุกการเพิ่มฟีเจอร์ใหม่ (เช่น `attachments`, `connections`) ต้องเป็นฟิลด์ Optional แบบ Backward-Compatible 100% เพื่อไม่ให้ข้อมูลปีงบประมาณที่แอดมินกรอกไว้หาย
+- **Private Encrypted Storage & File Cleanup**: เก็บผังงานเข้ารหัส `AES-256-GCM` ที่ `sat-documents/_private/operational-workflow.enc.json` และไฟล์แนบส่วนตัวที่ `_private/workflow-files/` (≤ 4 MB, รูปภาพผ่าน `compressImageFile(..., "document")`, เปิดดูผ่าน Admin API เท่านั้น) พร้อมรองรับลิงก์ Google Drive (0 KB), กรองด้วย `isSafeWorkflowStoragePath` / `isSafeWorkflowAttachmentUrl` และลบไฟล์ตกค้างทันทีเมื่อยกเลิก/ลบ/รีเซ็ต
