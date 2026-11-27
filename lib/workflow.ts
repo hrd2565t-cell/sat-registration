@@ -44,6 +44,13 @@ export interface WorkflowChecklistItem {
   attachments?: WorkflowAttachment[];
 }
 
+export interface WorkflowConnection {
+  id: string;
+  targetStepId: string;
+  label?: string;
+  style?: "solid" | "dashed";
+}
+
 export interface WorkflowStep {
   id: string;
   phase: WorkflowPhaseId;
@@ -56,6 +63,7 @@ export interface WorkflowStep {
   completedAt: string; // ISO string or ""
   notes: string;
   checklist: WorkflowChecklistItem[];
+  connections?: WorkflowConnection[];
   liveMetricKey?: WorkflowLiveMetricKey;
   actionHref?: string;
   actionLabel?: string;
@@ -229,6 +237,35 @@ const VALID_METRIC_KEYS = new Set<WorkflowLiveMetricKey>([
 const MAX_STEPS_PER_YEAR = 40;
 const MAX_CHECKLIST_ITEMS = 25;
 const MAX_ATTACHMENTS_PER_ITEM = 10;
+const MAX_CUSTOM_CONNECTIONS = 6;
+
+function normalizeConnections(
+  raw: unknown,
+  ownStepId: string
+): WorkflowConnection[] {
+  if (!Array.isArray(raw)) return [];
+  const result: WorkflowConnection[] = [];
+  const seenTargets = new Set<string>();
+  for (let i = 0; i < Math.min(raw.length, MAX_CUSTOM_CONNECTIONS); i++) {
+    const item = raw[i];
+    if (!item || typeof item !== "object") continue;
+    const c = item as Partial<WorkflowConnection>;
+    const targetStepId = String(c.targetStepId ?? "").trim().slice(0, 80);
+    if (!targetStepId || targetStepId === ownStepId) continue;
+    if (seenTargets.has(targetStepId)) continue;
+    seenTargets.add(targetStepId);
+    const label =
+      typeof c.label === "string" ? c.label.trim().slice(0, 60) : "";
+    const style = c.style === "solid" ? "solid" : "dashed";
+    result.push({
+      id: String(c.id || `conn-${i + 1}`).slice(0, 64),
+      targetStepId,
+      ...(label ? { label } : {}),
+      style,
+    });
+  }
+  return result;
+}
 
 export function isSafeWorkflowAttachmentUrl(value: unknown): boolean {
   if (typeof value !== "string") return false;
@@ -724,11 +761,14 @@ function normalizeStep(raw: unknown, fallbackIndex: number): WorkflowStep | null
       ? src.actionLabel.trim().slice(0, 60)
       : undefined;
 
+  const stepId =
+    String(src.id || `step-${fallbackIndex + 1}`)
+      .trim()
+      .slice(0, 80) || `step-${fallbackIndex + 1}`;
+  const connections = normalizeConnections(src.connections, stepId);
+
   return {
-    id:
-      String(src.id || `step-${fallbackIndex + 1}`)
-        .trim()
-        .slice(0, 80) || `step-${fallbackIndex + 1}`,
+    id: stepId,
     phase,
     order:
       typeof src.order === "number" && Number.isFinite(src.order)
@@ -745,6 +785,7 @@ function normalizeStep(raw: unknown, fallbackIndex: number): WorkflowStep | null
         : "",
     notes: String(src.notes ?? "").trim().slice(0, 1200),
     checklist,
+    ...(connections.length > 0 ? { connections } : {}),
     ...(liveMetricKey ? { liveMetricKey } : {}),
     ...(actionHref ? { actionHref, actionLabel: actionLabel || "เปิดหน้าจัดการ" } : {}),
     updatedAt:

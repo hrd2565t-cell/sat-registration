@@ -44,9 +44,10 @@ import {
   useWorkflowSyncState,
 } from "@/lib/workflow-store";
 import { WorkflowAddDialog } from "./workflow-add-dialog";
+import { WorkflowDiagram } from "./workflow-diagram";
 import { WorkflowStepDrawer } from "./workflow-step-drawer";
 
-type ViewMode = "flowchart" | "table";
+type ViewMode = "diagram" | "flowchart" | "table";
 type StatusFilter = "all" | WorkflowStepStatus;
 
 export function WorkflowBoard() {
@@ -57,7 +58,7 @@ export function WorkflowBoard() {
   const { applications } = useApplications();
   const { trainees } = useAlumniStore();
 
-  const [viewMode, setViewMode] = useState<ViewMode>("flowchart");
+  const [viewMode, setViewMode] = useState<ViewMode>("diagram");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
@@ -191,6 +192,27 @@ export function WorkflowBoard() {
         ...step,
         status: nextStatus,
         completedAt: nextStatus === "completed" ? nowIso : "",
+        updatedAt: nowIso,
+      });
+    } finally {
+      mutationLockRef.current = false;
+    }
+  };
+
+  const handleToggleChecklistDone = async (
+    step: WorkflowStep,
+    checkItemId: string
+  ) => {
+    if (mutationLockRef.current) return;
+    mutationLockRef.current = true;
+    try {
+      const nowIso = new Date().toISOString();
+      const nextChecklist = step.checklist.map((item) =>
+        item.id === checkItemId ? { ...item, done: !item.done } : item
+      );
+      await handleSaveStep({
+        ...step,
+        checklist: nextChecklist,
         updatedAt: nowIso,
       });
     } finally {
@@ -365,6 +387,17 @@ export function WorkflowBoard() {
             <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5">
               <button
                 type="button"
+                onClick={() => setViewMode("diagram")}
+                className={`rounded-md px-3 py-1 text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === "diagram"
+                    ? "bg-white text-[#16265E] shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                แผนผังเส้นโยง
+              </button>
+              <button
+                type="button"
                 onClick={() => setViewMode("flowchart")}
                 className={`rounded-md px-3 py-1 text-xs font-bold transition-all cursor-pointer ${
                   viewMode === "flowchart"
@@ -372,7 +405,7 @@ export function WorkflowBoard() {
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                ผัง Flowchart
+                การ์ด 4 ระยะ
               </button>
               <button
                 type="button"
@@ -553,7 +586,19 @@ export function WorkflowBoard() {
         </div>
       </div>
 
-      {/* View 1: Flowchart */}
+      {/* View 0: Visual Flowchart SVG Diagram */}
+      {viewMode === "diagram" && (
+        <WorkflowDiagram
+          steps={orderedSteps}
+          fiscalYearBE={activeYearBE}
+          liveMetricMap={liveMetricMap}
+          onSelectStep={(stepId) => setSelectedStepId(stepId)}
+          onQuickStatusCycle={handleQuickStatusCycle}
+          onToggleChecklistDone={handleToggleChecklistDone}
+        />
+      )}
+
+      {/* View 1: Flowchart Cards */}
       {viewMode === "flowchart" && (
         <div className="space-y-2 print:hidden">
           {WORKFLOW_PHASES.map((phaseMeta, phaseIdx) => {
@@ -1113,6 +1158,7 @@ export function WorkflowBoard() {
         <WorkflowStepDrawer
           key={`${selectedStep.id}-${selectedStep.updatedAt}`}
           step={selectedStep}
+          allSteps={orderedSteps}
           fiscalYearBE={activeYearBE}
           liveMetric={liveMetricMap.get(selectedStep.id) ?? null}
           canMoveUp={selectedPhasePosition.canMoveUp}

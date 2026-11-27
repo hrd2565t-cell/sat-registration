@@ -11,6 +11,7 @@ import {
   isStepOverdue,
   type WorkflowAttachment,
   type WorkflowChecklistItem,
+  type WorkflowConnection,
   type WorkflowLiveMetricDisplay,
   type WorkflowPhaseId,
   type WorkflowStep,
@@ -19,6 +20,7 @@ import {
 
 interface WorkflowStepDrawerProps {
   step: WorkflowStep;
+  allSteps: WorkflowStep[];
   fiscalYearBE: string;
   liveMetric?: WorkflowLiveMetricDisplay | null;
   canMoveUp: boolean;
@@ -74,6 +76,7 @@ const STATUS_OPTIONS: WorkflowStepStatus[] = [
 
 export function WorkflowStepDrawer({
   step,
+  allSteps,
   fiscalYearBE,
   liveMetric,
   canMoveUp,
@@ -109,6 +112,13 @@ export function WorkflowStepDrawer({
   const [uploadLabel, setUploadLabel] = useState("");
   const [attachError, setAttachError] = useState<string | null>(null);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
+
+  const [connections, setConnections] = useState<WorkflowConnection[]>(
+    step.connections || []
+  );
+  const [newConnTargetId, setNewConnTargetId] = useState("");
+  const [newConnLabel, setNewConnLabel] = useState("");
+  const [newConnStyle, setNewConnStyle] = useState<"dashed" | "solid">("dashed");
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -466,6 +476,7 @@ export function WorkflowStepDrawer({
         completedAt: nextCompletedAt,
         notes: notes.trim(),
         checklist: finalChecklist,
+        connections: connections.length > 0 ? connections : undefined,
         updatedAt: nowIso,
       });
       newlyUploadedPathsRef.current = [];
@@ -1156,6 +1167,131 @@ export function WorkflowStepDrawer({
                 placeholder="บันทึกความคืบหน้า เลขที่หนังสือขออนุมัติ หรือสาเหตุที่ติดขัด..."
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:border-[#2386D3] focus:outline-none"
               />
+            </div>
+          </div>
+
+          {/* Custom Cross-Step Flow Connections */}
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="font-bold text-slate-800">
+                เส้นโยงข้ามขั้นตอน / ย้อนกลับ (แสดงบนแผนผัง)
+              </h3>
+              <span className="text-[10.5px] font-semibold text-indigo-700">
+                {connections.length}/6 เส้น
+              </span>
+            </div>
+
+            {connections.length > 0 && (
+              <div className="space-y-1.5">
+                {connections.map((conn) => {
+                  const target = allSteps.find(
+                    (s) => s.id === conn.targetStepId
+                  );
+                  return (
+                    <div
+                      key={conn.id}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-[11px]"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <span className="font-bold text-[#16265E]">
+                          →{" "}
+                          {target
+                            ? `#${target.order} ${target.title}`
+                            : "(ขั้นตอนที่ถูกลบ)"}
+                        </span>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px]">
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-600">
+                            {conn.style === "solid" ? "เส้นทึบ" : "เส้นประ"}
+                          </span>
+                          {conn.label && (
+                            <span className="rounded bg-indigo-50 px-1.5 py-0.5 font-bold text-indigo-700">
+                              {conn.label}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setConnections((prev) =>
+                            prev.filter((c) => c.id !== conn.id)
+                          )
+                        }
+                        aria-label="ลบเส้นโยง"
+                        className="px-1 text-slate-400 hover:text-red-600 cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="space-y-2 pt-1">
+              <select
+                value={newConnTargetId}
+                onChange={(e) => setNewConnTargetId(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs focus:border-[#2386D3] focus:outline-none"
+              >
+                <option value="">-- เลือกขั้นตอนปลายทางที่จะโยงเส้นไป --</option>
+                {allSteps
+                  .filter(
+                    (s) =>
+                      s.id !== step.id &&
+                      !connections.some((c) => c.targetStepId === s.id)
+                  )
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      #{s.order} {s.title}
+                    </option>
+                  ))}
+              </select>
+
+              <div className="flex flex-wrap gap-1.5">
+                <input
+                  type="text"
+                  value={newConnLabel}
+                  onChange={(e) => setNewConnLabel(e.target.value)}
+                  maxLength={60}
+                  placeholder="ป้ายบนเส้น (เช่น ทำคู่ขนาน / ส่งกลับแก้ไข)"
+                  className="flex-1 min-w-[160px] rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs focus:border-[#2386D3] focus:outline-none"
+                />
+                <select
+                  value={newConnStyle}
+                  onChange={(e) =>
+                    setNewConnStyle(e.target.value as "dashed" | "solid")
+                  }
+                  className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs"
+                >
+                  <option value="dashed">เส้นประ</option>
+                  <option value="solid">เส้นทึบ</option>
+                </select>
+                <button
+                  type="button"
+                  disabled={!newConnTargetId || connections.length >= 6}
+                  onClick={() => {
+                    if (!newConnTargetId || connections.length >= 6) return;
+                    const trimmedLabel = newConnLabel.trim();
+                    setConnections((prev) => [
+                      ...prev,
+                      {
+                        id: `conn-${Date.now()}-${Math.random()
+                          .toString(36)
+                          .slice(2, 6)}`,
+                        targetStepId: newConnTargetId,
+                        ...(trimmedLabel ? { label: trimmedLabel } : {}),
+                        style: newConnStyle,
+                      },
+                    ]);
+                    setNewConnTargetId("");
+                    setNewConnLabel("");
+                  }}
+                  className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-40 cursor-pointer"
+                >
+                  + เพิ่มเส้นโยง
+                </button>
+              </div>
             </div>
           </div>
 
