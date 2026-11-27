@@ -6,7 +6,14 @@ import Link from "next/link";
 import { usePendingCount } from "@/lib/applications-store";
 import { usePendingClaimsCount } from "@/lib/claims-store";
 
-export type AdminNavKey = "dashboard" | "courses" | "review" | "claims" | "alumni" | "settings";
+export type AdminNavKey =
+  | "dashboard"
+  | "workflow"
+  | "courses"
+  | "review"
+  | "claims"
+  | "alumni"
+  | "settings";
 
 const navItems: {
   key: AdminNavKey;
@@ -14,6 +21,7 @@ const navItems: {
   href: string;
 }[] = [
   { key: "dashboard", label: "แดชบอร์ด", href: "/admin" },
+  { key: "workflow", label: "ผังการดำเนินงาน", href: "/admin/workflow" },
   { key: "courses", label: "จัดการหลักสูตร", href: "/admin/courses" },
   { key: "review", label: "ตรวจสอบคุณสมบัติ", href: "/admin/review" },
   { key: "claims", label: "ยืนยันตัวตน", href: "/admin/claims" },
@@ -136,7 +144,30 @@ function ClaimIcon() {
   );
 }
 
+function WorkflowIcon() {
+  return (
+    <svg
+      className="h-3.5 w-3.5 shrink-0"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      <rect x="3" y="3.5" width="6.5" height="5" rx="1" strokeWidth="1.8" />
+      <rect x="14.5" y="3.5" width="6.5" height="5" rx="1" strokeWidth="1.8" />
+      <rect x="8.75" y="15.5" width="6.5" height="5" rx="1" strokeWidth="1.8" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+        d="M9.5 6h5M6.25 8.5V12h11.5V8.5M12 12v3.5"
+      />
+    </svg>
+  );
+}
+
 function NavIcon({ itemKey }: { itemKey: (typeof navItems)[number]["key"] }) {
+  if (itemKey === "workflow") return <WorkflowIcon />;
   if (itemKey === "courses") return <CalendarIcon />;
   if (itemKey === "review") return <DocumentIcon />;
   if (itemKey === "claims") return <ClaimIcon />;
