@@ -53,14 +53,30 @@ export function WorkflowStepDrawer({
     step.checklist
   );
   const [newCheckItem, setNewCheckItem] = useState("");
+  const [editingCheckId, setEditingCheckId] = useState<string | null>(null);
+  const [editingCheckText, setEditingCheckText] = useState("");
+  const [draggedCheckIndex, setDraggedCheckIndex] = useState<number | null>(
+    null
+  );
+  const [dragOverCheckIndex, setDragOverCheckIndex] = useState<number | null>(
+    null
+  );
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const saveLockRef = useRef(false);
+  const editingCheckIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !saveLockRef.current) {
+      if (e.key !== "Escape") return;
+      if (editingCheckIdRef.current) {
+        editingCheckIdRef.current = null;
+        setEditingCheckId(null);
+        setEditingCheckText("");
+        return;
+      }
+      if (!saveLockRef.current) {
         onClose();
       }
     };
@@ -94,7 +110,73 @@ export function WorkflowStepDrawer({
   };
 
   const handleRemoveChecklistItem = (itemId: string) => {
+    if (editingCheckIdRef.current === itemId) {
+      editingCheckIdRef.current = null;
+      setEditingCheckId(null);
+      setEditingCheckText("");
+    }
     setChecklist((prev) => prev.filter((item) => item.id !== itemId));
+  };
+
+  const handleStartEditChecklistItem = (item: WorkflowChecklistItem) => {
+    editingCheckIdRef.current = item.id;
+    setEditingCheckId(item.id);
+    setEditingCheckText(item.text);
+  };
+
+  const handleCancelEditChecklistItem = () => {
+    editingCheckIdRef.current = null;
+    setEditingCheckId(null);
+    setEditingCheckText("");
+  };
+
+  const handleCommitEditChecklistItem = () => {
+    const targetId = editingCheckIdRef.current;
+    if (!targetId) return;
+    const trimmed = editingCheckText.trim();
+    if (trimmed) {
+      setChecklist((prev) =>
+        prev.map((item) =>
+          item.id === targetId ? { ...item, text: trimmed } : item
+        )
+      );
+    }
+    editingCheckIdRef.current = null;
+    setEditingCheckId(null);
+    setEditingCheckText("");
+  };
+
+  const handleMoveChecklistItem = (
+    index: number,
+    direction: "up" | "down"
+  ) => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    setChecklist((prev) => {
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const next = [...prev];
+      const temp = next[index];
+      next[index] = next[targetIndex];
+      next[targetIndex] = temp;
+      return next;
+    });
+  };
+
+  const handleReorderChecklist = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    setChecklist((prev) => {
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= prev.length ||
+        toIndex >= prev.length
+      ) {
+        return prev;
+      }
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
   };
 
   const handleSave = async () => {
@@ -104,6 +186,17 @@ export function WorkflowStepDrawer({
       setErrorMsg("กรุณาระบุชื่อขั้นตอน");
       return;
     }
+
+    const pendingEditId = editingCheckIdRef.current;
+    const pendingEditTrimmed = editingCheckText.trim();
+    const finalChecklist =
+      pendingEditId && pendingEditTrimmed
+        ? checklist.map((item) =>
+            item.id === pendingEditId
+              ? { ...item, text: pendingEditTrimmed }
+              : item
+          )
+        : checklist;
 
     saveLockRef.current = true;
     setIsSaving(true);
@@ -122,7 +215,7 @@ export function WorkflowStepDrawer({
         dueDate,
         completedAt: nextCompletedAt,
         notes: notes.trim(),
-        checklist,
+        checklist: finalChecklist,
         updatedAt: nowIso,
       });
       onClose();
@@ -330,37 +423,165 @@ export function WorkflowStepDrawer({
                   ยังไม่มีรายการย่อย — สามารถเพิ่มด้านล่างได้
                 </p>
               ) : (
-                checklist.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={item.done}
-                      onChange={() => handleToggleChecklistItem(item.id)}
-                      className="h-3.5 w-3.5 accent-emerald-600 cursor-pointer"
-                    />
-                    <span
-                      onClick={() => handleToggleChecklistItem(item.id)}
-                      className={`flex-1 cursor-pointer ${
-                        item.done
-                          ? "line-through text-slate-400"
-                          : "text-slate-800"
+                checklist.map((item, idx) => {
+                  const isEditingThis = editingCheckId === item.id;
+                  const isDropTarget =
+                    dragOverCheckIndex === idx &&
+                    draggedCheckIndex !== null &&
+                    draggedCheckIndex !== idx;
+
+                  return (
+                    <div
+                      key={item.id}
+                      draggable={!isEditingThis}
+                      onDragStart={(e) => {
+                        setDraggedCheckIndex(idx);
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        if (draggedCheckIndex !== null && dragOverCheckIndex !== idx) {
+                          setDragOverCheckIndex(idx);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (draggedCheckIndex !== null) {
+                          handleReorderChecklist(draggedCheckIndex, idx);
+                        }
+                        setDraggedCheckIndex(null);
+                        setDragOverCheckIndex(null);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedCheckIndex(null);
+                        setDragOverCheckIndex(null);
+                      }}
+                      className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 transition-colors ${
+                        isDropTarget
+                          ? "border-[#2386D3] bg-blue-50/70 ring-1 ring-[#2386D3]"
+                          : draggedCheckIndex === idx
+                            ? "border-slate-300 bg-slate-100 opacity-60"
+                            : "border-slate-200 bg-white"
                       }`}
                     >
-                      {item.text}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveChecklistItem(item.id)}
-                      aria-label={`ลบรายการ ${item.text}`}
-                      className="text-slate-400 hover:text-red-600 px-1"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))
+                      <span
+                        title="ลากเพื่อสลับลำดับ"
+                        aria-hidden="true"
+                        className={`select-none px-0.5 text-slate-400 ${
+                          isEditingThis ? "opacity-30" : "cursor-grab hover:text-slate-600"
+                        }`}
+                      >
+                        ⋮⋮
+                      </span>
+
+                      <input
+                        type="checkbox"
+                        checked={item.done}
+                        onChange={() => handleToggleChecklistItem(item.id)}
+                        className="h-3.5 w-3.5 shrink-0 accent-emerald-600 cursor-pointer"
+                      />
+
+                      {isEditingThis ? (
+                        <div className="flex flex-1 items-center gap-1">
+                          <input
+                            type="text"
+                            value={editingCheckText}
+                            onChange={(e) => setEditingCheckText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleCommitEditChecklistItem();
+                              } else if (e.key === "Escape") {
+                                e.preventDefault();
+                                handleCancelEditChecklistItem();
+                              }
+                            }}
+                            maxLength={200}
+                            autoFocus
+                            className="flex-1 rounded border border-[#2386D3] bg-white px-2 py-1 text-xs text-slate-900 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleCommitEditChecklistItem}
+                            title="บันทึกข้อความ"
+                            aria-label="บันทึกข้อความรายการย่อย"
+                            className="rounded bg-emerald-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-emerald-700 cursor-pointer"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelEditChecklistItem}
+                            title="ยกเลิกการแก้ไข"
+                            aria-label="ยกเลิกการแก้ไขรายการย่อย"
+                            className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 cursor-pointer"
+                          >
+                            ยกเลิก
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <span
+                            onDoubleClick={() =>
+                              handleStartEditChecklistItem(item)
+                            }
+                            title="ดับเบิลคลิกเพื่อแก้ไขข้อความ"
+                            className={`flex-1 select-text ${
+                              item.done
+                                ? "line-through text-slate-400"
+                                : "text-slate-800"
+                            }`}
+                          >
+                            {item.text}
+                          </span>
+
+                          <div className="flex shrink-0 items-center gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => handleMoveChecklistItem(idx, "up")}
+                              disabled={idx === 0}
+                              title="เลื่อนขึ้น"
+                              aria-label={`เลื่อนรายการ ${item.text} ขึ้น`}
+                              className="rounded px-1.5 py-0.5 text-[11px] font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-25 disabled:pointer-events-none cursor-pointer"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleMoveChecklistItem(idx, "down")
+                              }
+                              disabled={idx === checklist.length - 1}
+                              title="เลื่อนลง"
+                              aria-label={`เลื่อนรายการ ${item.text} ลง`}
+                              className="rounded px-1.5 py-0.5 text-[11px] font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-25 disabled:pointer-events-none cursor-pointer"
+                            >
+                              ↓
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditChecklistItem(item)}
+                              title="แก้ไขข้อความ"
+                              aria-label={`แก้ไขรายการ ${item.text}`}
+                              className="rounded px-1.5 py-0.5 text-[11px] text-slate-500 hover:bg-blue-50 hover:text-[#2386D3] cursor-pointer"
+                            >
+                              ✎
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveChecklistItem(item.id)}
+                              title="ลบรายการ"
+                              aria-label={`ลบรายการ ${item.text}`}
+                              className="rounded px-1.5 py-0.5 text-[11px] text-slate-400 hover:bg-red-50 hover:text-red-600 cursor-pointer"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
 
