@@ -295,23 +295,30 @@ export function ApplicantDetail({
     ) ??
     applicant?.documents?.find((d) => d.kind === "photo" && Boolean(d.dataUrl)) ??
     applicant?.documents?.find((d) => d.kind === "photo");
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(
+    photoDoc?.dataUrl?.startsWith("data:") ? photoDoc.dataUrl : null
+  );
+  const photoSyncKey = `${photoDoc?.id ?? ""}|${photoDoc?.name ?? ""}|${photoDoc?.dataUrl ?? ""}`;
+  const [prevPhotoKey, setPrevPhotoKey] = useState(photoSyncKey);
+  if (photoSyncKey !== prevPhotoKey) {
+    setPrevPhotoKey(photoSyncKey);
+    setPhotoUrl(photoDoc?.dataUrl?.startsWith("data:") ? photoDoc.dataUrl : null);
+  }
 
   useEffect(() => {
     let active = true;
-    if (!photoDoc) {
-      setPhotoUrl(null);
-      return;
-    }
-    if (photoDoc.dataUrl?.startsWith("data:")) {
-      setPhotoUrl(photoDoc.dataUrl);
+    if (!photoDoc || photoDoc.dataUrl?.startsWith("data:")) {
       return;
     }
     if (typeof window !== "undefined") {
       const cached = sessionStorage.getItem(`sat-doc-${photoDoc.id}`);
       if (cached) {
-        setPhotoUrl(cached);
-        return;
+        queueMicrotask(() => {
+          if (active) setPhotoUrl(cached);
+        });
+        return () => {
+          active = false;
+        };
       }
     }
     (async () => {
@@ -332,7 +339,7 @@ export function ApplicantDetail({
     return () => {
       active = false;
     };
-  }, [photoDoc?.id, photoDoc?.name, photoDoc?.dataUrl]);
+  }, [photoDoc]);
 
   useEffect(() => {
     if (!notice) return;

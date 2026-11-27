@@ -94,27 +94,31 @@ export function CourseArchiveManager() {
 
   const busyRef = useRef(false);
 
-  const loadStats = useCallback(async () => {
-    setLoadingStats(true);
-    setStatsError("");
-    try {
-      const res = await fetch("/api/admin/archive-course", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "stats" }),
-      });
-      const data = (await res.json().catch(() => ({}))) as {
-        ok?: boolean;
-        offline?: boolean;
-        error?: string;
-        courses?: CourseStorageStat[];
-        totalEstimatedBytes?: number;
-        totalActiveFiles?: number;
-        freeQuotaBytes?: number;
-      };
+  const fetchStatsPayload = useCallback(async () => {
+    const res = await fetch("/api/admin/archive-course", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "stats" }),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      offline?: boolean;
+      error?: string;
+      courses?: CourseStorageStat[];
+      totalEstimatedBytes?: number;
+      totalActiveFiles?: number;
+      freeQuotaBytes?: number;
+    };
+    return { res, data };
+  }, []);
+
+  const applyStatsResult = useCallback(
+    ({
+      res,
+      data,
+    }: Awaited<ReturnType<typeof fetchStatsPayload>>) => {
       if (res.status === 503 || data.offline) {
         setOfflineMode(true);
-        setLoadingStats(false);
         return;
       }
       if (!res.ok || !data.ok) {
@@ -126,16 +130,41 @@ export function CourseArchiveManager() {
       setTotalEstimatedBytes(data.totalEstimatedBytes || 0);
       setTotalActiveFiles(data.totalActiveFiles || 0);
       if (data.freeQuotaBytes) setFreeQuotaBytes(data.freeQuotaBytes);
+    },
+    []
+  );
+
+  const loadStats = useCallback(async () => {
+    setLoadingStats(true);
+    setStatsError("");
+    try {
+      const result = await fetchStatsPayload();
+      applyStatsResult(result);
     } catch {
       setStatsError("เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อตรวจสอบพื้นที่จัดเก็บ");
     } finally {
       setLoadingStats(false);
     }
-  }, []);
+  }, [fetchStatsPayload, applyStatsResult]);
 
   useEffect(() => {
-    void loadStats();
-  }, [loadStats]);
+    let active = true;
+    fetchStatsPayload()
+      .then((result) => {
+        if (!active) return;
+        applyStatsResult(result);
+      })
+      .catch(() => {
+        if (!active) return;
+        setStatsError("เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อตรวจสอบพื้นที่จัดเก็บ");
+      })
+      .finally(() => {
+        if (active) setLoadingStats(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [fetchStatsPayload, applyStatsResult]);
 
   const handleDownloadCourseZip = async (course: CourseStorageStat) => {
     if (busyRef.current) return;

@@ -212,6 +212,12 @@ function RegistrationContent() {
     useState<RegistrationEligibility | null>(null);
   const [showPdpaModal, setShowPdpaModal] = useState(false);
 
+  const [photoFiles, setPhotoFiles] = useState<FileItem[]>([]);
+  const [coverFiles, setCoverFiles] = useState<FileItem[]>([]);
+  const [certFiles, setCertFiles] = useState<FileItem[]>([]);
+  const [idCardFiles, setIdCardFiles] = useState<FileItem[]>([]);
+  const [sakaFiles, setSakaFiles] = useState<FileItem[]>([]);
+
   // PDPA-safe Cross-Course Profile Lookup (13-digit ID card + last 4 digits of phone)
   const [lookupStatus, setLookupStatus] = useState<
     "idle" | "checking" | "found_pending" | "found_no_phone" | "verified" | "dismissed"
@@ -240,29 +246,19 @@ function RegistrationContent() {
     traineesRef.current = trainees;
   }, [applications, trainees]);
 
-  // รีเซ็ตข้อความแจ้งเตือนสังกัดไม่ตรงเมื่อเปลี่ยนหลักสูตร (หากยืนยันตัวตนแล้วให้คง Reusable Docs ไว้และตรวจสิทธิ์ใหม่)
-  useEffect(() => {
+  // รีเซ็ตข้อความแจ้งเตือนสังกัดไม่ตรงเมื่อเปลี่ยนหลักสูตร และล็อกกลุ่มเป้าหมายให้สอดคล้องกับโควตาที่หลักสูตรเปิดรับเสมอ
+  const [prevCourseId, setPrevCourseId] = useState(course.id);
+  if (course.id !== prevCourseId) {
+    setPrevCourseId(course.id);
     setAutofillMismatchNotice(null);
-  }, [course.id]);
-
-  // ตรวจสอบและล็อกกลุ่มเป้าหมาย / สังกัดหลัก ให้สอดคล้องกับโควตาที่หลักสูตรเปิดรับเสมอ
-  useEffect(() => {
-    if (allowedTargetGroups.length === 0) return;
-    if (allowedTargetGroups.length === 1) {
-      if (affiliation !== allowedTargetGroups[0].label) {
-        setAffiliation(allowedTargetGroups[0].label);
-        setSubAffiliation("");
-      }
-      return;
-    }
-    const isCurrentAllowed = allowedTargetGroups.some(
-      (tg) => tg.label === affiliation
-    );
-    if (!isCurrentAllowed) {
-      setAffiliation(allowedTargetGroups[0].label);
-      setSubAffiliation("");
-    }
-  }, [allowedTargetGroups, affiliation]);
+  }
+  if (
+    allowedTargetGroups.length > 0 &&
+    !allowedTargetGroups.some((tg) => tg.label === affiliation)
+  ) {
+    setAffiliation(allowedTargetGroups[0].label);
+    setSubAffiliation("");
+  }
 
   // เตรียมรายการ Autocomplete สำหรับช่อง 3.1 (สมาคมกีฬาแห่งประเทศไทย / สมาคมกีฬาแห่งจังหวัด)
   const subAffiliationSuggestions = useMemo<AssociationSuggestion[] | null>(() => {
@@ -325,9 +321,10 @@ function RegistrationContent() {
     );
   }, [idCard, course.id, applications, courses]);
 
-  // ตรวจสอบประวัติเดิมแบบปลอดภัยตาม PDPA เมื่อกรอกเลขบัตรประชาชนครบ 13 หลักและถูกต้อง
-  useEffect(() => {
-    const digits = idCard.replace(/\D/g, "");
+  const handleIdCardChange = (nextValue: string) => {
+    setIdCard(nextValue);
+    const digits = nextValue.replace(/\D/g, "");
+
     if (digits.length !== 13 || !isValidThaiIdCard(digits)) {
       if (verifiedIdCardRef.current) {
         setPhotoFiles((prev) => prev.filter((f) => !f.reusedFromRef));
@@ -360,6 +357,18 @@ function RegistrationContent() {
     setExcludedDocKinds([]);
     setLookupMeta(null);
     setLookupStatus("checking");
+  };
+
+  // ตรวจสอบประวัติเดิมแบบปลอดภัยตาม PDPA เมื่อกรอกเลขบัตรประชาชนครบ 13 หลักและถูกต้อง (เฉพาะงาน Asynchronous ใน Effect)
+  useEffect(() => {
+    const digits = idCard.replace(/\D/g, "");
+    if (digits.length !== 13 || !isValidThaiIdCard(digits)) {
+      return;
+    }
+
+    if (digits === lastCheckedIdRef.current) {
+      return;
+    }
 
     const controller = new AbortController();
     const timer = setTimeout(async () => {
@@ -688,12 +697,6 @@ function RegistrationContent() {
         };
     }
   }, [affiliation]);
-
-  const [photoFiles, setPhotoFiles] = useState<FileItem[]>([]);
-  const [coverFiles, setCoverFiles] = useState<FileItem[]>([]);
-  const [certFiles, setCertFiles] = useState<FileItem[]>([]);
-  const [idCardFiles, setIdCardFiles] = useState<FileItem[]>([]);
-  const [sakaFiles, setSakaFiles] = useState<FileItem[]>([]);
 
   const docConfig = useMemo(() => getCourseDocumentConfig(course), [course]);
   const isSakaApplicable = useMemo(
@@ -1152,7 +1155,7 @@ function RegistrationContent() {
                     </span>
                   </div>
                   <div className="w-fit max-w-full overflow-x-auto">
-                    <IdCardInput value={idCard} onChange={setIdCard} showActions={true} />
+                    <IdCardInput value={idCard} onChange={handleIdCardChange} showActions={true} />
                   </div>
                   <p className="text-[10.5px] text-[#64748b]">
                     * หากเคยสมัครหลักสูตรอื่นกับ กกท. แล้ว กรอกเลขบัตรประชาชนเพื่อดึงข้อมูลเดิมมาเติมอัตโนมัติ

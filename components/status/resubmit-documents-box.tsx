@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { FileUpload, type FileItem } from "@/components/ui/file-upload";
 import {
   resubmitApplicantDocuments,
@@ -80,19 +80,14 @@ export function ResubmitDocumentsBox({
   const [error, setError] = useState("");
   const isSubmittingRef = useRef(false);
 
-  useEffect(() => {
-    if (
-      !isTargetedMode &&
-      availableDocOptions.length > 0 &&
-      !availableDocOptions.some((opt) => opt.kind === selectedKind)
-    ) {
-      setSelectedKind(availableDocOptions[0].kind);
-    }
-  }, [isTargetedMode, availableDocOptions, selectedKind]);
+  const effectiveSelectedKind: ApplicantDocumentKind =
+    availableDocOptions.some((opt) => opt.kind === selectedKind)
+      ? selectedKind
+      : (availableDocOptions[0]?.kind ?? selectedKind);
 
   const kindsToSubmit: ApplicantDocumentKind[] = isTargetedMode
     ? targetedKinds
-    : [selectedKind];
+    : [effectiveSelectedKind];
 
   const attachedSlotCount = kindsToSubmit.filter(
     (k) => (filesByKind[k]?.length ?? 0) > 0
@@ -328,7 +323,7 @@ export function ResubmitDocumentsBox({
                 1. เลือกเอกสารที่ต้องการส่งเพิ่มเติม / แก้ไข
               </label>
               <select
-                value={selectedKind}
+                value={effectiveSelectedKind}
                 onChange={(e) => {
                   const nextKind = e.target.value as ApplicantDocumentKind;
                   setSelectedKind(nextKind);
@@ -342,7 +337,7 @@ export function ResubmitDocumentsBox({
                   </option>
                 ))}
               </select>
-              {selectedKind === "saka" && (
+              {effectiveSelectedKind === "saka" && (
                 <p className="mt-1 text-[10.5px] text-[#78350f]">
                   📌 {SAKA_ASSOCIATION_HINT}
                 </p>
@@ -355,15 +350,15 @@ export function ResubmitDocumentsBox({
               </label>
               <div className="mt-1">
                 <FileUpload
-                  files={filesByKind[selectedKind] || []}
+                  files={filesByKind[effectiveSelectedKind] || []}
                   onAdd={async (file) => {
                     const optimized = await compressImageFile(
                       file,
-                      selectedKind === "photo" ? "photo" : "document"
+                      effectiveSelectedKind === "photo" ? "photo" : "document"
                     );
-                    setFilesForKind(selectedKind, [optimized]);
+                    setFilesForKind(effectiveSelectedKind, [optimized]);
                   }}
-                  onRemove={() => setFilesForKind(selectedKind, [])}
+                  onRemove={() => setFilesForKind(effectiveSelectedKind, [])}
                   emptyText="คลิกหรือลากไฟล์มาที่นี่เพื่อแนบเอกสารฉบับแก้ไข"
                   accept=".pdf,.jpg,.jpeg,.png,.webp"
                 />

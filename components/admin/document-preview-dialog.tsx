@@ -60,13 +60,7 @@ export function DocumentPreviewDialog({
   }
 
   useEffect(() => {
-    if (!file) return;
-
-    if (isArchivedDocument(file)) {
-      setActualDataUrl(null);
-      setLoading(false);
-      return;
-    }
+    if (!file || isArchivedDocument(file)) return;
 
     let isMounted = true;
     (async () => {
