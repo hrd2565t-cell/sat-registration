@@ -8,8 +8,10 @@ import { useCourses } from "@/lib/courses-store";
 import {
   WORKFLOW_PHASES,
   WORKFLOW_STATUS_META,
+  collectWorkflowFilePaths,
   computeLiveMetricForStep,
   computeWorkflowSummary,
+  countStepAttachments,
   formatThaiShortDate,
   isStepOverdue,
   moveWorkflowStep,
@@ -18,6 +20,19 @@ import {
   type WorkflowStep,
   type WorkflowStepStatus,
 } from "@/lib/workflow";
+
+function cleanupRemovedWorkflowFiles(paths: string[]) {
+  if (paths.length === 0 || typeof window === "undefined") return;
+  void fetch("/api/admin/workflow/files", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    keepalive: true,
+    body: JSON.stringify({ storagePaths: paths }),
+  }).catch(() => {
+    // Ignore best-effort cleanup error
+  });
+}
 import {
   createWorkflowFiscalYear,
   refreshWorkflowFromCloud,
@@ -205,6 +220,11 @@ export function WorkflowBoard() {
   };
 
   const handleDeleteStep = async (stepId: string) => {
+    const targetStep = orderedSteps.find((s) => s.id === stepId);
+    const filePathsToDelete = targetStep
+      ? collectWorkflowFilePaths([targetStep])
+      : [];
+
     const res = await updateWorkflowPayload((current) => {
       const fy = current.years[activeYearBE];
       if (!fy) return current;
@@ -228,6 +248,7 @@ export function WorkflowBoard() {
     if (!res.ok) {
       throw new Error(res.error || "ลบขั้นตอนไม่สำเร็จ");
     }
+    cleanupRemovedWorkflowFiles(filePathsToDelete);
     setSelectedStepId(null);
     showToast("ลบขั้นตอนออกจากผังแล้ว");
   };
@@ -268,10 +289,12 @@ export function WorkflowBoard() {
   const handleResetToDefault = async () => {
     if (mutationLockRef.current) return;
     mutationLockRef.current = true;
+    const filePathsToDelete = collectWorkflowFilePaths(orderedSteps);
     try {
       const res = await resetWorkflowFiscalYearToDefault(activeYearBE);
       setConfirmResetOpen(false);
       if (res.ok) {
+        cleanupRemovedWorkflowFiles(filePathsToDelete);
         showToast(`รีเซ็ตผังปี พ.ศ. ${activeYearBE} กลับเป็นผังมาตรฐานแล้ว`);
       } else {
         showToast(res.error || "รีเซ็ตผังไม่สำเร็จ");
@@ -596,6 +619,7 @@ export function WorkflowBoard() {
                           const doneChecklist = step.checklist.filter(
                             (c) => c.done
                           ).length;
+                          const attachCount = countStepAttachments(step);
                           const isLastInPhase =
                             stepIdx === phaseSteps.length - 1;
 
@@ -677,12 +701,22 @@ export function WorkflowBoard() {
                                     <span className="truncate">
                                       {step.assignee || "ยังไม่ระบุผู้รับผิดชอบ"}
                                     </span>
-                                    {step.checklist.length > 0 && (
-                                      <span className="shrink-0 font-bold text-slate-700">
-                                        ✓ {doneChecklist}/
-                                        {step.checklist.length}
-                                      </span>
-                                    )}
+                                    <div className="flex shrink-0 items-center gap-2 font-bold">
+                                      {attachCount > 0 && (
+                                        <span
+                                          className="text-[#2386D3]"
+                                          title={`มีเอกสารแนบ ${attachCount} รายการ`}
+                                        >
+                                          📎 {attachCount}
+                                        </span>
+                                      )}
+                                      {step.checklist.length > 0 && (
+                                        <span className="text-slate-700">
+                                          ✓ {doneChecklist}/
+                                          {step.checklist.length}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
 
                                   {(step.dueDate || step.actionHref) && (
@@ -896,6 +930,11 @@ export function WorkflowBoard() {
                           {step.checklist.length > 0
                             ? `${doneChecklist}/${step.checklist.length}`
                             : "-"}
+                          {countStepAttachments(step) > 0 && (
+                            <span className="ml-1.5 text-[10px] text-[#2386D3]">
+                              📎{countStepAttachments(step)}
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2.5 text-[11px]">
                           {metric && (
@@ -1041,6 +1080,9 @@ export function WorkflowBoard() {
                     {step.checklist.length > 0
                       ? `${doneChecklist}/${step.checklist.length}`
                       : "-"}
+                    {countStepAttachments(step) > 0
+                      ? ` (แนบ ${countStepAttachments(step)})`
+                      : ""}
                   </td>
                   <td className="border border-black px-2 py-1.5">
                     {metric ? `[${metric.badge}] ` : ""}
@@ -1071,6 +1113,7 @@ export function WorkflowBoard() {
         <WorkflowStepDrawer
           key={`${selectedStep.id}-${selectedStep.updatedAt}`}
           step={selectedStep}
+          fiscalYearBE={activeYearBE}
           liveMetric={liveMetricMap.get(selectedStep.id) ?? null}
           canMoveUp={selectedPhasePosition.canMoveUp}
           canMoveDown={selectedPhasePosition.canMoveDown}

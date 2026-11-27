@@ -24,10 +24,24 @@ export type WorkflowLiveMetricKey =
   | "budget_summary"
   | "archive_status";
 
+export type WorkflowAttachmentKind = "link" | "file";
+
+export interface WorkflowAttachment {
+  id: string;
+  kind: WorkflowAttachmentKind;
+  name: string;
+  url?: string;
+  storagePath?: string;
+  mimeType?: string;
+  size?: string;
+  uploadedAt: string;
+}
+
 export interface WorkflowChecklistItem {
   id: string;
   text: string;
   done: boolean;
+  attachments?: WorkflowAttachment[];
 }
 
 export interface WorkflowStep {
@@ -214,6 +228,102 @@ const VALID_METRIC_KEYS = new Set<WorkflowLiveMetricKey>([
 
 const MAX_STEPS_PER_YEAR = 40;
 const MAX_CHECKLIST_ITEMS = 25;
+const MAX_ATTACHMENTS_PER_ITEM = 10;
+
+export function isSafeWorkflowAttachmentUrl(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 1000) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+export function isSafeWorkflowStoragePath(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 240) return false;
+  if (trimmed.includes("..") || trimmed.includes("//")) return false;
+  return /^_private\/workflow-files\/[a-zA-Z0-9._/-]+$/.test(trimmed);
+}
+
+function normalizeAttachments(raw: unknown): WorkflowAttachment[] {
+  if (!Array.isArray(raw)) return [];
+  const result: WorkflowAttachment[] = [];
+  for (let i = 0; i < Math.min(raw.length, MAX_ATTACHMENTS_PER_ITEM); i++) {
+    const item = raw[i];
+    if (!item || typeof item !== "object") continue;
+    const a = item as Partial<WorkflowAttachment>;
+    const name = String(a.name ?? "").trim().slice(0, 140);
+    if (!name) continue;
+
+    if (a.kind === "link") {
+      if (!isSafeWorkflowAttachmentUrl(a.url)) continue;
+      result.push({
+        id: String(a.id || `att-${i + 1}`).slice(0, 64),
+        kind: "link",
+        name,
+        url: String(a.url).trim(),
+        uploadedAt:
+          typeof a.uploadedAt === "string" && a.uploadedAt
+            ? a.uploadedAt
+            : new Date().toISOString(),
+      });
+    } else if (a.kind === "file") {
+      if (!isSafeWorkflowStoragePath(a.storagePath)) continue;
+      result.push({
+        id: String(a.id || `att-${i + 1}`).slice(0, 64),
+        kind: "file",
+        name,
+        storagePath: String(a.storagePath).trim(),
+        ...(typeof a.mimeType === "string" && a.mimeType
+          ? { mimeType: a.mimeType.trim().slice(0, 80) }
+          : {}),
+        ...(typeof a.size === "string" && a.size
+          ? { size: a.size.trim().slice(0, 32) }
+          : {}),
+        uploadedAt:
+          typeof a.uploadedAt === "string" && a.uploadedAt
+            ? a.uploadedAt
+            : new Date().toISOString(),
+      });
+    }
+  }
+  return result;
+}
+
+export function countStepAttachments(
+  step: Pick<WorkflowStep, "checklist"> | null | undefined
+): number {
+  if (!step?.checklist) return 0;
+  let total = 0;
+  for (const item of step.checklist) {
+    if (Array.isArray(item.attachments)) {
+      total += item.attachments.length;
+    }
+  }
+  return total;
+}
+
+export function collectWorkflowFilePaths(
+  steps: WorkflowStep[] | null | undefined
+): string[] {
+  if (!steps) return [];
+  const paths = new Set<string>();
+  for (const step of steps) {
+    for (const item of step.checklist || []) {
+      for (const att of item.attachments || []) {
+        if (att.kind === "file" && isSafeWorkflowStoragePath(att.storagePath)) {
+          paths.add(att.storagePath!);
+        }
+      }
+    }
+  }
+  return Array.from(paths);
+}
 
 /**
  * คำนวณปีงบประมาณ พ.ศ. ไทย (1 ต.ค. – 30 ก.ย.) จากวันที่ปัจจุบัน
@@ -590,10 +700,12 @@ function normalizeStep(raw: unknown, fallbackIndex: number): WorkflowStep | null
     const c = item as Partial<WorkflowChecklistItem>;
     const text = String(c.text ?? "").trim().slice(0, 200);
     if (!text) continue;
+    const attachments = normalizeAttachments(c.attachments);
     checklist.push({
       id: String(c.id || `chk-${fallbackIndex}-${i + 1}`).slice(0, 64),
       text,
       done: Boolean(c.done),
+      ...(attachments.length > 0 ? { attachments } : {}),
     });
   }
 
